@@ -4,11 +4,8 @@ import { ChangePasswordPage } from '@/auth/ChangePasswordPage'
 import { RequireAuth } from '@/auth/RequireAuth'
 import { SessionProvider } from '@/auth/SessionProvider'
 import { SignInPage } from '@/auth/SignInPage'
+import { RequestsPage } from '@/features/requests/list/RequestsPage'
 import { AppShell } from '@/layout/AppShell'
-
-function RequestsPlaceholder() {
-  return <h1 className="p-6 text-xl font-semibold">Requests</h1>
-}
 
 // Task 7 replaces this with the real detail page.
 function RequestDetailPlaceholder() {
@@ -53,7 +50,7 @@ export const routes: RouteObject[] = [
         ),
         children: [
           { path: '/', element: <Navigate to="/requests" replace /> },
-          { path: '/requests', element: <RequestsPlaceholder /> },
+          { path: '/requests', element: <RequestsPage /> },
           { path: '/requests/:id', element: <RequestDetailPlaceholder /> },
         ],
       },
