@@ -98,8 +98,8 @@ describe('unreadable payloads', () => {
     expect(cell.closest('tr')).toHaveAttribute('data-problem', 'true')
   })
 
-  test('non-array transactions shows raw JSON with the read errors above', async () => {
-    open(4)
+  test('non-array transactions shows raw JSON with the read errors above (read-only for a viewer)', async () => {
+    open(4, 'u-viewer')
     const raw = await screen.findByTestId('raw-json')
     expect(raw.tagName).toBe('PRE')
     expect(raw).toHaveTextContent('"not-an-array"')

@@ -37,7 +37,7 @@ function stale(r: RequestRecord) {
 }
 
 const invalidState = (r: RequestRecord, what: string) =>
-  problem(409, 'invalid-state', 'Not allowed in this status', `A ${r.status} request cannot be ${what}.`, { status: r.status })
+  problem(409, 'invalid-state', 'Not allowed in this status', `A ${r.status} request cannot be ${what}.`, { requestStatus: r.status })
 
 // ---- posting ----
 
@@ -200,7 +200,7 @@ export const requestHandlers = [
     const ifMatch = parseIfMatch(request)
     if (ifMatch === undefined) return precondition()
     if (f.r.status !== 'pending') {
-      return problem(409, 'not-editable', 'Not editable', `A ${f.r.status} request cannot be edited.`, { status: f.r.status })
+      return problem(409, 'not-editable', 'Not editable', `A ${f.r.status} request cannot be edited.`, { requestStatus: f.r.status })
     }
     if (ifMatch !== f.r.rowVersion) return stale(f.r)
     const body = await readJson(request)

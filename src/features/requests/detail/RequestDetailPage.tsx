@@ -39,7 +39,7 @@ export function RequestDetailPage() {
     )
   }
 
-  const { request } = q.data
+  const { request, etag } = q.data
   const requested = params.get('tab')
   const tab = TABS.find((t) => t.value === requested)?.value ?? 'transactions'
 
@@ -71,9 +71,15 @@ export function RequestDetailPage() {
           ))}
         </TabsList>
         {TABS.map((t) => (
-          <TabsContent key={t.value} value={t.value}>
+          // The transactions tab stays mounted (hidden) so unsaved edits survive a tab switch.
+          <TabsContent
+            key={t.value}
+            value={t.value}
+            forceMount={t.value === 'transactions' ? true : undefined}
+            hidden={t.value !== tab}
+          >
             {t.value === 'transactions' ? (
-              <TransactionsTab request={request} />
+              <TransactionsTab request={request} etag={etag} />
             ) : (
               <p className="text-sm text-muted-foreground">Coming soon</p>
             )}

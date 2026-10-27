@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { Page, RequestDetail, RequestSummary, Stats } from '../schema'
+import type { Page, Payload, RequestDetail, RequestSummary, Stats } from '../schema'
 import { useDraftDirty } from '@/features/requests/transactions/draftDirtyStore'
 import { api } from '../client'
 import type { ListParams } from '@/features/requests/list/queue'
@@ -81,6 +81,29 @@ export function useValidate(id: string) {
   return useMutation({
     mutationFn: async (): Promise<RequestWithEtag> => {
       const r = await api.post<RequestDetail>(`/saved-requests/${id}/validate`)
+      return { request: r.data, etag: r.headers.get('ETag') ?? '' }
+    },
+    onSuccess: (data) => {
+      if (data.etag) qc.setQueryData(requestKeys.detail(id), data)
+      else void qc.invalidateQueries({ queryKey: requestKeys.detail(id), exact: true })
+    },
+  })
+}
+
+export interface SaveVars {
+  payload: Payload
+  note?: string
+  /** The ETag of what is on screen. The caller refuses to save without one. */
+  etag: string
+}
+
+/** `PUT /saved-requests/{id}` with If-Match. The returned record replaces the detail cache. */
+export function useSaveRequest(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ payload, note, etag }: SaveVars): Promise<RequestWithEtag> => {
+      const body = note ? { payload, note } : { payload }
+      const r = await api.put<RequestDetail>(`/saved-requests/${id}`, body, { headers: { 'If-Match': etag } })
       return { request: r.data, etag: r.headers.get('ETag') ?? '' }
     },
     onSuccess: (data) => {

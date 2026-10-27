@@ -172,7 +172,8 @@ describe('PUT /saved-requests/{id}', () => {
       body: JSON.stringify({ payload: {} }),
     })
     expect(res.status).toBe(409)
-    expect(((await res.json()) as { code: string }).code).toBe('not-editable')
+    const body = (await res.json()) as { code: string; status: number; requestStatus: string }
+    expect(body).toMatchObject({ code: 'not-editable', status: 409, requestStatus: 'posted' })
   })
 
   it('creates a version with a change list and bumps the ETag', async () => {

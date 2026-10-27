@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components -- column definitions, not a component module */
 import type { ReactNode } from 'react'
-import type { Txn } from '@/api/schema'
+import { TXN_KINDS, type Txn } from '@/api/schema'
 import { Money } from '@/components/Money'
 
 export type TxField = 'kind' | 'date' | 'amount' | 'account' | 'lineAccount' | 'payee' | 'checkNo' | 'refNumber' | 'memo' | 'last4' | 'externalId'
@@ -25,6 +25,11 @@ export function cellText(v: unknown): string {
   if (typeof v === 'number' || typeof v === 'boolean') return String(v)
   return JSON.stringify(v)
 }
+
+export const isKnownKind = (v: unknown): v is string => typeof v === 'string' && (TXN_KINDS as readonly string[]).includes(v)
+
+/** Columns the dashboard edits: every payload field except the external id. */
+export const isEditableField = (f: TxField | undefined): f is TxField => f !== undefined && f !== 'externalId'
 
 const text = (id: TxField, header: string, width: string, narrow = false): TxColumn => ({
   id,
