@@ -18,9 +18,19 @@ function toNodeSignal(signal: AbortSignal): AbortSignal {
 }
 
 let unbridgedFetch: typeof fetch
+let unbridgedRequest: typeof Request
+
+// react-router builds a `new Request(url, { signal })` with jsdom's signal on every client-side navigation.
+class BridgedRequest extends Request {
+  constructor(input: RequestInfo | URL, init?: RequestInit) {
+    super(input, init?.signal ? { ...init, signal: toNodeSignal(init.signal) } : init)
+  }
+}
 
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' })
+  unbridgedRequest = globalThis.Request
+  globalThis.Request = BridgedRequest
   unbridgedFetch = globalThis.fetch
   globalThis.fetch = (input, init) =>
     unbridgedFetch(input, init?.signal ? { ...init, signal: toNodeSignal(init.signal) } : init)
@@ -31,5 +41,29 @@ afterEach(() => {
 })
 afterAll(() => {
   globalThis.fetch = unbridgedFetch
+  globalThis.Request = unbridgedRequest
   server.close()
 })
+
+// jsdom has no matchMedia; next-themes reads it to resolve the "system" theme.
+if (typeof window !== 'undefined' && !window.matchMedia) {
+  window.matchMedia = (query: string) =>
+    ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }) as MediaQueryList
+}
+
+// next-themes renders an inline <script> (flash-of-theme guard); React 19 warns about it on the client.
+// It is harmless here, so drop exactly that message and nothing else.
+const consoleError = console.error
+console.error = (...args: unknown[]) => {
+  if (typeof args[0] === 'string' && args[0].startsWith('Encountered a script tag while rendering React component')) return
+  consoleError(...args)
+}
