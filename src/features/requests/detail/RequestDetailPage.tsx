@@ -20,7 +20,7 @@ export function RequestDetailPage() {
   const q = useRequest(id)
 
   if (q.isPending) return <Skeleton className="m-6 h-40" />
-  if (q.error) {
+  if (q.data === undefined) {
     if (q.error instanceof ApiError && q.error.problem.status === 404) {
       return (
         <div className="p-6">
@@ -44,6 +44,7 @@ export function RequestDetailPage() {
 
   return (
     <div className="space-y-4 p-6">
+      {q.error && <ProblemAlert error={q.error} />}
       {/* Tasks 10/11 wire the dialogs. */}
       <RequestHeader request={request} onAction={() => {}} />
       <StatusBanner request={request} />

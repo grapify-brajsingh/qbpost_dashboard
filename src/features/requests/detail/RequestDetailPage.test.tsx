@@ -223,3 +223,24 @@ describe('polling while posting', () => {
     expect(gets).toBe(settled)
   })
 })
+
+describe('failed background refetch', () => {
+  test('keeps the page and shows an alert when a poll fails', async () => {
+    let gets = 0
+    server.use(
+      http.get(`${API}/6`, () => {
+        gets++
+        if (gets > 1) return HttpResponse.json({ title: 'Server error', status: 500 }, { status: 500 })
+        return HttpResponse.json(detail(), { headers: { ETag: '"2"' } })
+      }),
+    )
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    open(6)
+    await screen.findByRole('heading', { name: 'SR-000006' })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000)
+    })
+    expect(await screen.findByRole('alert')).toHaveTextContent('Server error')
+    expect(screen.getByRole('heading', { name: 'SR-000006' })).toBeInTheDocument()
+  })
+})
