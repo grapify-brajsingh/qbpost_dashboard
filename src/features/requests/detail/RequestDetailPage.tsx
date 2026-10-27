@@ -4,6 +4,7 @@ import { useRequest } from '@/api/queries/requests'
 import { ProblemAlert } from '@/components/ProblemAlert'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { TransactionsTab } from '../transactions/TransactionsTab'
 import { RequestHeader } from './RequestHeader'
 import { StatusBanner } from './StatusBanner'
 
@@ -71,7 +72,11 @@ export function RequestDetailPage() {
         </TabsList>
         {TABS.map((t) => (
           <TabsContent key={t.value} value={t.value}>
-            <p className="text-sm text-muted-foreground">Coming soon</p>
+            {t.value === 'transactions' ? (
+              <TransactionsTab request={request} />
+            ) : (
+              <p className="text-sm text-muted-foreground">Coming soon</p>
+            )}
           </TabsContent>
         ))}
       </Tabs>

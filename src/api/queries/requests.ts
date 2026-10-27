@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Page, RequestDetail, RequestSummary, Stats } from '../schema'
 import { useDraftDirty } from '@/features/requests/transactions/draftDirtyStore'
 import { api } from '../client'
@@ -72,5 +72,20 @@ export function useRequest(id: string, opts: { pollWhilePosting?: boolean } = {}
     },
     refetchOnWindowFocus: !dirty,
     refetchInterval: (q) => (poll && q.state.data?.request.status === 'posting' ? POSTING_POLL_MS : false),
+  })
+}
+
+/** Re-runs validation. The response is the full record: it replaces the detail cache (invalidates if no ETag came back). */
+export function useValidate(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (): Promise<RequestWithEtag> => {
+      const r = await api.post<RequestDetail>(`/saved-requests/${id}/validate`)
+      return { request: r.data, etag: r.headers.get('ETag') ?? '' }
+    },
+    onSuccess: (data) => {
+      if (data.etag) qc.setQueryData(requestKeys.detail(id), data)
+      else void qc.invalidateQueries({ queryKey: requestKeys.detail(id), exact: true })
+    },
   })
 }
