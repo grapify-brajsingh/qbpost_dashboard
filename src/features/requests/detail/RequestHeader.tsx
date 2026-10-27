@@ -14,7 +14,14 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-export function RequestHeader({ request, onAction }: { request: RequestDetail; onAction: (a: Action) => void }) {
+interface Props {
+  request: RequestDetail
+  onAction: (a: Action) => void
+  /** Passed to the action bar: a reason disables that button and shows as its tooltip. */
+  disabled?: Partial<Record<Action, string>>
+}
+
+export function RequestHeader({ request, onAction, disabled }: Props) {
   const dup = request.duplicate
   return (
     <header className="space-y-3">
@@ -26,7 +33,7 @@ export function RequestHeader({ request, onAction }: { request: RequestDetail; o
           <span className="text-sm text-muted-foreground">Other request is {dup.ofStatus}</span>
         )}
         <div className="ml-auto">
-          <ActionBar request={request} onAction={onAction} />
+          <ActionBar request={request} onAction={onAction} disabled={disabled} />
         </div>
       </div>
       <p className="text-lg">{request.email?.subject ?? <span className="text-muted-foreground">No subject</span>}</p>

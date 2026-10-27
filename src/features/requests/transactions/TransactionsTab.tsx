@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQbLists } from '@/api/queries/lists'
-import type { RequestDetail, Txn } from '@/api/schema'
+import type { Finding, RequestDetail, Txn } from '@/api/schema'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
@@ -20,10 +20,16 @@ interface Props {
   etag: string
 }
 
-export function TransactionsTab({ request, etag }: Props) {
+interface TabProps extends Props {
+  /** Findings that replace the snapshot's, for example from a 422 post answer (same display as validation). */
+  findingsOverride?: Finding[]
+}
+
+export function TransactionsTab({ request, etag, findingsOverride }: TabProps) {
   const shape = tableShape(request.payload)
   const baseRows = useMemo(() => (shape === 'table' ? (request.payload.transactions as Txn[]) : []), [shape, request.payload])
-  const findings = useMemo(() => findingsByRow(baseRows, request.validation.validation ?? []), [baseRows, request.validation.validation])
+  const shown = findingsOverride ?? request.validation.validation
+  const findings = useMemo(() => findingsByRow(baseRows, shown ?? []), [baseRows, shown])
 
   return (
     <div className="space-y-4">
