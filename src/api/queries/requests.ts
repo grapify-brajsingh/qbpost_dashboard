@@ -1,5 +1,15 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { Page, Payload, RequestDetail, RequestSummary, Stats } from '../schema'
+import type {
+  Attempt,
+  Page,
+  Payload,
+  RequestDetail,
+  RequestEvent,
+  RequestSummary,
+  Stats,
+  Version,
+  VersionSummary,
+} from '../schema'
 import { useDraftDirty } from '@/features/requests/transactions/draftDirtyStore'
 import { api } from '../client'
 import type { ListParams } from '@/features/requests/list/queue'
@@ -126,3 +136,43 @@ export function useSaveRequest(id: string) {
     },
   })
 }
+
+export const useVersions = (id: string) =>
+  useQuery({
+    queryKey: requestKeys.versions(id),
+    queryFn: ({ signal }) => api.get<VersionSummary[]>(`/saved-requests/${id}/versions`, { signal }).then((r) => r.data),
+  })
+
+export const useVersion = (id: string, n: number | null) =>
+  useQuery({
+    queryKey: requestKeys.version(id, n ?? 0),
+    queryFn: ({ signal }) => api.get<Version>(`/saved-requests/${id}/versions/${n}`, { signal }).then((r) => r.data),
+    enabled: n !== null,
+  })
+
+/** The original n8n body as exact text (whitespace preserved); `enabled` defers the fetch until it is viewed. */
+export const useOriginal = (id: string, enabled = true) =>
+  useQuery({
+    queryKey: requestKeys.original(id),
+    queryFn: ({ signal }) => api.getText(`/saved-requests/${id}/original`, { signal }),
+    enabled,
+  })
+
+export const useAttempts = (id: string) =>
+  useQuery({
+    queryKey: requestKeys.attempts(id),
+    queryFn: ({ signal }) => api.get<Attempt[]>(`/saved-requests/${id}/attempts`, { signal }).then((r) => r.data),
+  })
+
+export const useAttempt = (id: string, attemptId: number, enabled = true) =>
+  useQuery({
+    queryKey: requestKeys.attempt(id, attemptId),
+    queryFn: ({ signal }) => api.get<Attempt>(`/saved-requests/${id}/attempts/${attemptId}`, { signal }).then((r) => r.data),
+    enabled,
+  })
+
+export const useEvents = (id: string) =>
+  useQuery({
+    queryKey: requestKeys.events(id),
+    queryFn: ({ signal }) => api.get<RequestEvent[]>(`/saved-requests/${id}/events`, { signal }).then((r) => r.data),
+  })

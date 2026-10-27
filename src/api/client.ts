@@ -20,6 +20,8 @@ export type ApiInit = RequestInit & {
   /** On 401, refresh the session but re-throw the 401 instead of re-sending the request. */
   noAuthRetry?: boolean
   timeoutMs?: number
+  /** Return the body as the exact response text instead of parsing it as JSON. */
+  asText?: boolean
 }
 
 export interface ApiResponse<T> {
@@ -29,7 +31,7 @@ export interface ApiResponse<T> {
 }
 
 export async function apiFetch<T>(path: string, init: ApiInit = {}): Promise<ApiResponse<T>> {
-  const { noAuthRetry, timeoutMs, ...requestInit } = init
+  const { noAuthRetry, timeoutMs, asText, ...requestInit } = init
 
   let res = await send(path, requestInit, timeoutMs, getAccessToken())
   if (res.status === 401 && !NO_REFRESH_PATHS.has(path.split('?')[0])) {
@@ -39,7 +41,7 @@ export async function apiFetch<T>(path: string, init: ApiInit = {}): Promise<Api
     res = await send(path, requestInit, timeoutMs, token)
   }
   if (!res.ok) throw await toApiError(res)
-  return { data: (await readBody(res, timeoutMs)) as T, headers: res.headers, status: res.status }
+  return { data: (asText ? await res.text() : await readBody(res, timeoutMs)) as T, headers: res.headers, status: res.status }
 }
 
 async function send(path: string, init: RequestInit, timeoutMs: number | undefined, token: string | null) {
@@ -84,6 +86,9 @@ function withBody(method: string, body: Body, init: ApiInit = {}): ApiInit {
 
 export const api = {
   get: <T>(path: string, init?: ApiInit) => apiFetch<T>(path, { ...init, method: 'GET' }),
+  /** Raw response text, byte-for-byte (same auth and 401-refresh path as `get`). */
+  getText: (path: string, init?: ApiInit) =>
+    apiFetch<string>(path, { ...init, method: 'GET', asText: true }).then((r) => r.data),
   post: <T>(path: string, body?: Body, init?: ApiInit) => apiFetch<T>(path, withBody('POST', body, init)),
   put: <T>(path: string, body?: Body, init?: ApiInit) => apiFetch<T>(path, withBody('PUT', body, init)),
   patch: <T>(path: string, body?: Body, init?: ApiInit) => apiFetch<T>(path, withBody('PATCH', body, init)),

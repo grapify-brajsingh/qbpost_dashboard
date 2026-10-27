@@ -15,6 +15,9 @@ import { PostingProgress } from '../posting/PostingProgress'
 import { PostResultBanner } from '../posting/PostResultBanner'
 import { usePost } from '../posting/usePost'
 import { useDraftDirty } from '../transactions/draftDirtyStore'
+import { AttemptsTab } from '../attempts/AttemptsTab'
+import { HistoryTab } from '../history/HistoryTab'
+import { VersionsTab } from '../versions/VersionsTab'
 import { TransactionsTab } from '../transactions/TransactionsTab'
 import { RequestHeader } from './RequestHeader'
 import { StatusBanner } from './StatusBanner'
@@ -137,8 +140,12 @@ export function RequestDetailPage() {
           >
             {t.value === 'transactions' ? (
               <TransactionsTab key={request.id} request={request} etag={etag} findingsOverride={heldFindings} />
+            ) : t.value === 'versions' ? (
+              t.value === tab && <VersionsTab key={request.id} requestId={id} />
+            ) : t.value === 'attempts' ? (
+              t.value === tab && <AttemptsTab key={request.id} requestId={id} />
             ) : (
-              <p className="text-sm text-muted-foreground">Coming soon</p>
+              t.value === tab && <HistoryTab key={request.id} requestId={id} />
             )}
           </TabsContent>
         ))}
