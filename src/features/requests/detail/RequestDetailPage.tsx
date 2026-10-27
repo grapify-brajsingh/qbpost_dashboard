@@ -1,0 +1,79 @@
+import { Link, useParams, useSearchParams } from 'react-router'
+import { ApiError } from '@/api/problem'
+import { useRequest } from '@/api/queries/requests'
+import { ProblemAlert } from '@/components/ProblemAlert'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { RequestHeader } from './RequestHeader'
+import { StatusBanner } from './StatusBanner'
+
+const TABS = [
+  { value: 'transactions', label: 'Transactions' },
+  { value: 'versions', label: 'Versions' },
+  { value: 'attempts', label: 'Attempts' },
+  { value: 'history', label: 'History' },
+] as const
+
+export function RequestDetailPage() {
+  const { id = '' } = useParams()
+  const [params, setParams] = useSearchParams()
+  const q = useRequest(id)
+
+  if (q.isPending) return <Skeleton className="m-6 h-40" />
+  if (q.error) {
+    if (q.error instanceof ApiError && q.error.problem.status === 404) {
+      return (
+        <div className="p-6">
+          <h1 className="text-xl font-semibold">Request not found</h1>
+          <Link className="underline" to="/requests">
+            Back to Requests
+          </Link>
+        </div>
+      )
+    }
+    return (
+      <div className="p-6">
+        <ProblemAlert error={q.error} />
+      </div>
+    )
+  }
+
+  const { request } = q.data
+  const requested = params.get('tab')
+  const tab = TABS.find((t) => t.value === requested)?.value ?? 'transactions'
+
+  return (
+    <div className="space-y-4 p-6">
+      {/* Tasks 10/11 wire the dialogs. */}
+      <RequestHeader request={request} onAction={() => {}} />
+      <StatusBanner request={request} />
+      <Tabs
+        value={tab}
+        onValueChange={(v) =>
+          setParams(
+            (p) => {
+              const next = new URLSearchParams(p)
+              if (v === 'transactions') next.delete('tab')
+              else next.set('tab', v)
+              return next
+            },
+            { replace: true },
+          )
+        }
+      >
+        <TabsList>
+          {TABS.map((t) => (
+            <TabsTrigger key={t.value} value={t.value}>
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        {TABS.map((t) => (
+          <TabsContent key={t.value} value={t.value}>
+            <p className="text-sm text-muted-foreground">Coming soon</p>
+          </TabsContent>
+        ))}
+      </Tabs>
+    </div>
+  )
+}

@@ -1,17 +1,12 @@
-import { Link, Navigate, Outlet, useParams } from 'react-router'
+import { Link, Navigate, Outlet } from 'react-router'
 import type { RouteObject } from 'react-router'
 import { ChangePasswordPage } from '@/auth/ChangePasswordPage'
 import { RequireAuth } from '@/auth/RequireAuth'
 import { SessionProvider } from '@/auth/SessionProvider'
 import { SignInPage } from '@/auth/SignInPage'
+import { RequestDetailPage } from '@/features/requests/detail/RequestDetailPage'
 import { RequestsPage } from '@/features/requests/list/RequestsPage'
 import { AppShell } from '@/layout/AppShell'
-
-// Task 7 replaces this with the real detail page.
-function RequestDetailPlaceholder() {
-  const { id } = useParams()
-  return <h1 className="p-6 text-xl font-semibold">Request {id}</h1>
-}
 
 function NotFound() {
   return (
@@ -51,7 +46,7 @@ export const routes: RouteObject[] = [
         children: [
           { path: '/', element: <Navigate to="/requests" replace /> },
           { path: '/requests', element: <RequestsPage /> },
-          { path: '/requests/:id', element: <RequestDetailPlaceholder /> },
+          { path: '/requests/:id', element: <RequestDetailPage /> },
         ],
       },
       { path: '*', element: <NotFound /> },

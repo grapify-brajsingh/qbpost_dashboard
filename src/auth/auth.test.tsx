@@ -122,7 +122,7 @@ describe('session restore and guards', () => {
     await screen.findByLabelText('Email')
     expect(router.state.location.pathname + router.state.location.search).toBe('/sign-in?next=%2Frequests%2F5')
     await fillSignIn(user, 'asha@example.com')
-    expect(await screen.findByRole('heading', { name: 'Request 5' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'SR-000005' })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/requests/5')
   })
 

@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest'
 import { transferableAbortController } from 'node:util'
 import { mockDb } from '@/mocks/db'
 import { server } from '@/mocks/server'
+import { resetDraftDirty } from '@/features/requests/transactions/draftDirtyStore'
 
 // jsdom provides its own AbortController/AbortSignal (needed by jsdom's EventTarget), but fetch/Request are
 // Node's (undici), which rejects jsdom signals. Bridge at the fetch boundary only: forward a jsdom signal in
@@ -38,6 +39,7 @@ beforeAll(() => {
 afterEach(() => {
   server.resetHandlers()
   mockDb.reset()
+  resetDraftDirty()
 })
 afterAll(() => {
   globalThis.fetch = unbridgedFetch
@@ -66,4 +68,13 @@ const consoleError = console.error
 console.error = (...args: unknown[]) => {
   if (typeof args[0] === 'string' && args[0].startsWith('Encountered a script tag while rendering React component')) return
   consoleError(...args)
+}
+
+// jsdom has no ResizeObserver; Radix (tooltip, popper) measures with it.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
 }
