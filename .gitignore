@@ -25,3 +25,5 @@ dist-ssr
 
 # brainstorming companion
 .superpowers/
+test-results
+playwright-report
