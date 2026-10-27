@@ -39,9 +39,10 @@ export function RequestsPage() {
 
   // The search box is local state, written to the URL 300 ms after the last keystroke.
   const [qInput, setQInput] = useState(q)
-  useEffect(() => setQInput(q), [q])
+  // Sync from the URL only when it differs from what was typed (back/forward); the URL holds the trimmed value.
+  useEffect(() => setQInput((cur) => (cur.trim() === q ? cur : q)), [q])
   useEffect(() => {
-    if (qInput === q) return
+    if (qInput.trim() === q) return
     const t = setTimeout(() => update({ q: qInput.trim() }, { replace: true }), DEBOUNCE_MS)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only a keystroke should (re)start the timer

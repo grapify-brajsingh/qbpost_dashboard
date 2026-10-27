@@ -140,6 +140,17 @@ describe('requests list', () => {
     expect(listCalls()).toBeGreaterThan(before)
   })
 
+  test('search keeps whitespace typed before a pause', async () => {
+    const { user } = signedIn()
+    await screen.findByRole('link', { name: 'SR-000009' })
+    const box = screen.getByRole('searchbox', { name: 'Search' })
+    await user.type(box, 'a ')
+    await waitFor(() => expect(seen.some((u) => u.searchParams.get('q') === 'a')).toBe(true))
+    await user.type(box, 'b')
+    expect(box).toHaveValue('a b')
+    await waitFor(() => expect(seen.some((u) => u.searchParams.get('q') === 'a b')).toBe(true))
+  })
+
   test('received dates and source go to the API', async () => {
     const { user } = signedIn()
     await screen.findByRole('link', { name: 'SR-000009' })
