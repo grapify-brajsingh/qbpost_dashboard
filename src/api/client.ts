@@ -6,6 +6,9 @@ import { getAccessToken, refreshSession } from './session'
 
 const BASE = '/api/v1'
 
+/** A 401 from these means the credentials or session were rejected: never refresh, never re-send. */
+const NO_REFRESH_PATHS = new Set(['/auth/login', '/auth/refresh', '/auth/logout', '/auth/change-password'])
+
 export class ApiTimeoutError extends Error {
   constructor() {
     super('The request timed out.')
@@ -29,7 +32,7 @@ export async function apiFetch<T>(path: string, init: ApiInit = {}): Promise<Api
   const { noAuthRetry, timeoutMs, ...requestInit } = init
 
   let res = await send(path, requestInit, timeoutMs, getAccessToken())
-  if (res.status === 401) {
+  if (res.status === 401 && !NO_REFRESH_PATHS.has(path.split('?')[0])) {
     const first = await toApiError(res)
     const token = await refreshSession()
     if (noAuthRetry || token === null) throw first

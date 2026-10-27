@@ -75,6 +75,32 @@ describe('apiFetch', () => {
     expect(count('POST', '/api/v1/auth/refresh')).toBe(1)
   })
 
+  it('login with invalid credentials is sent once and never triggers a refresh', async () => {
+    const ended = vi.fn()
+    const off = onSessionEnded(ended)
+    const count = countRequests()
+    const err = await api
+      .post('/auth/login', { email: 'asha@example.com', password: 'wrong-password' })
+      .catch((e: unknown) => e)
+    off()
+    expect(err).toBeInstanceOf(ApiError)
+    expect((err as ApiError).problem.status).toBe(401)
+    expect(count('POST', '/api/v1/auth/login')).toBe(1)
+    expect(count('POST', '/api/v1/auth/refresh')).toBe(0)
+    expect(ended).not.toHaveBeenCalled()
+  })
+
+  it('change-password 401 is sent once and never triggers a refresh', async () => {
+    const count = countRequests()
+    const err = await api
+      .post('/auth/change-password', { currentPassword: 'x', newPassword: 'y'.repeat(12) })
+      .catch((e: unknown) => e)
+    expect((err as ApiError).problem.status).toBe(401)
+    expect(count('POST', '/api/v1/auth/change-password')).toBe(1)
+    expect(count('POST', '/api/v1/auth/refresh')).toBe(0)
+    expect(getAccessToken()).toBe(STALE)
+  })
+
   it('refresh failure ends session', async () => {
     mockControl.endSession()
     const ended = vi.fn()
