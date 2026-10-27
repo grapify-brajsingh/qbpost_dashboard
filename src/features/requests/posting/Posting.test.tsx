@@ -5,7 +5,7 @@ import { makeQueryClient } from '@/api/queryClient'
 import { setAccessToken } from '@/api/session'
 import { http, HttpResponse } from 'msw'
 import { afterEach, vi } from 'vitest'
-import { requestKeys } from '@/api/queries/requests'
+import { requestKeys, type RequestWithEtag } from '@/api/queries/requests'
 import type { Txn } from '@/api/schema'
 import { mockControl, mockDb } from '@/mocks/db'
 import { toDetail } from '@/mocks/handlers/requestHelpers'
@@ -130,9 +130,10 @@ test('the guard is synchronous: two post() calls in the same tick send 1 POST', 
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   const { result: hook } = renderHook(() => usePost('1'), { wrapper })
   await waitFor(() => expect(qc.getQueryData(requestKeys.detail('1'))).toBeDefined())
+  const etag = qc.getQueryData<RequestWithEtag>(requestKeys.detail('1'))!.etag
   act(() => {
-    hook.current.post({})
-    hook.current.post({})
+    hook.current.post({ etag })
+    hook.current.post({ etag })
   })
   await waitFor(() => expect(hook.current.outcome?.kind).toBe('posted'))
   expect(reqs.count('POST', `${API}/1/post`)).toBe(1)
@@ -279,5 +280,96 @@ describe('recovery', () => {
     await waitFor(() => expect(result()).toHaveTextContent('Posted'))
     expect(result()).toHaveTextContent('api-visa-8890-2026-08')
     expect(screen.queryByRole('status', { name: 'Posting progress' })).not.toBeInTheDocument()
+  })
+})
+
+describe('isolation between requests', () => {
+  test('a held post on one request leaves no banner or marked rows on the duplicate it links to', async () => {
+    // 12 and 5 are both pending at version 1; make 12 point at 5 as its duplicate.
+    record(12).duplicate = { of: 5, reasons: ['same-reference'], acknowledgedBy: null }
+    const rows = payloadOf(12).transactions as Txn[]
+    const validation = [0, 1].map((i) => ({ index: i, externalId: rows[i].externalId, reason: 'unknown-vendor' }))
+    mockControl.nextPost = { status: 422, body: { code: 'validation-held', title: 'Rows held', validation }, delayMs: 0 }
+    const { user } = await open(12)
+    await user.click(postButton())
+    const d = await screen.findByRole('dialog')
+    await user.click(within(d).getByRole('checkbox', { name: 'Yes, post anyway' }))
+    await user.click(within(d).getByRole('button', { name: 'Confirm' }))
+    await waitFor(() => expect(result()).toHaveTextContent('Nothing was sent'))
+    await waitFor(() => expect(document.querySelectorAll('tr[data-problem="true"]')).toHaveLength(2))
+
+    await user.click(screen.getByRole('link', { name: 'Possible duplicate of SR-000005' }))
+    await screen.findByRole('heading', { name: 'SR-000005' })
+    await waitFor(() => expect(document.querySelector('tr[data-row="11"]')).not.toBeNull())
+    expect(screen.queryByRole('status', { name: 'Post result' })).not.toBeInTheDocument()
+    expect(document.querySelectorAll('tr[data-problem="true"]')).toHaveLength(0)
+    expect(postButton()).toBeEnabled()
+  })
+
+  test('leaving and coming back while the post is in flight keeps Post blocked and sends nothing more', async () => {
+    mockControl.nextPost = { status: 200, body: { status: 'posted' }, delayMs: 800 }
+    const reqs = countRequests()
+    const { user, router } = await open(1)
+    // The server below keeps answering with the record as it was before the post (a slow status flip).
+    const before = toDetail(structuredClone(record(1)), 'admin')
+    await confirmPost(user)
+    await waitFor(() => expect(reqs.count('POST', `${API}/1/post`)).toBe(1))
+    server.use(http.get(`${API}/1`, () => HttpResponse.json(before, { headers: { ETag: '"4"' } })))
+    act(() => {
+      void router.navigate('/requests')
+    })
+    await screen.findByRole('heading', { name: 'Requests' })
+    act(() => {
+      void router.navigate('/requests/1')
+    })
+    await screen.findByRole('heading', { name: 'SR-000001' })
+    await waitFor(() => expect(reqs.count('GET', `${API}/1`)).toBeGreaterThan(1))
+    expect(postButton()).toBeDisabled()
+    expect(screen.getByRole('status', { name: 'Posting progress' })).toBeInTheDocument()
+    await user.click(postButton()).catch(() => {})
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    // The first post finishes; nothing else was sent.
+    await waitFor(() => expect(screen.queryByRole('status', { name: 'Posting progress' })).not.toBeInTheDocument(), { timeout: 3000 })
+    expect(reqs.count('POST', `${API}/1/post`)).toBe(1)
+  })
+})
+
+describe('the version the dialog showed', () => {
+  test('a reload while the dialog is open: the dialog says so and Confirm sends the ETag it showed (412)', async () => {
+    const reqs = countRequests()
+    const { user, queryClient } = await open(1)
+    await user.click(postButton())
+    const d = await screen.findByRole('dialog')
+    // A colleague saves version N+1; a focus refetch brings it in under the open dialog.
+    const r = record(1)
+    r.versions.push({ ...structuredClone(r.versions[r.versions.length - 1]), number: r.versions[r.versions.length - 1].number + 1 })
+    r.rowVersion++
+    await act(() => queryClient.invalidateQueries({ queryKey: requestKeys.detail('1'), exact: true }))
+    expect(await within(d).findByText('This request changed while this dialog was open.')).toBeInTheDocument()
+    await user.click(within(d).getByRole('button', { name: 'Confirm' }))
+    await waitFor(() => expect(result()).toHaveTextContent('This changed since you opened it.'))
+    expect(reqs.count('POST', `${API}/1/post`)).toBe(1)
+    expect(reqs.of('POST', `${API}/1/post`)[0].ifMatch).toBe('"4"')
+  })
+})
+
+describe('watching after a timeout', () => {
+  test('the first reload fails and the next succeeds: the outcome shows and only 1 POST was sent', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    postConfig.timeoutMs = 100
+    mockControl.nextPost = { status: 200, body: { status: 'posted' }, delayMs: 700 }
+    const reqs = countRequests()
+    const { user } = await open(1)
+    const getsBefore = reqs.count('GET', `${API}/1`)
+    server.use(http.get(`${API}/1`, () => HttpResponse.error(), { once: true }))
+    await confirmPost(user)
+    await waitFor(() => expect(reqs.count('GET', `${API}/1`)).toBe(getsBefore + 1))
+    expect(screen.getByRole('status', { name: 'Posting progress' })).toBeInTheDocument()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3500)
+    })
+    await waitFor(() => expect(result()).toHaveTextContent('Posted'))
+    expect(screen.queryByRole('status', { name: 'Posting progress' })).not.toBeInTheDocument()
+    expect(reqs.count('POST', `${API}/1/post`)).toBe(1)
   })
 })

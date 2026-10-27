@@ -70,10 +70,13 @@ export interface RequestWithEtag {
   etag: string
 }
 
-/** Polls every 3 s while posting. Focus refetch is off while the user has unsaved edits. */
-export function useRequest(id: string, opts: { pollWhilePosting?: boolean } = {}) {
+/**
+ * Polls every 3 s while posting, or always with `forcePoll` (a post is being watched: a failed reload must not end
+ * the polling). Focus refetch is off while the user has unsaved edits.
+ */
+export function useRequest(id: string, opts: { forcePoll?: boolean } = {}) {
   const dirty = useDraftDirty(id)
-  const poll = opts.pollWhilePosting !== false
+  const force = opts.forcePoll === true
   return useQuery<RequestWithEtag>({
     queryKey: requestKeys.detail(id),
     queryFn: async ({ signal }) => {
@@ -81,7 +84,7 @@ export function useRequest(id: string, opts: { pollWhilePosting?: boolean } = {}
       return { request: r.data, etag: r.headers.get('ETag') ?? '' }
     },
     refetchOnWindowFocus: !dirty,
-    refetchInterval: (q) => (poll && q.state.data?.request.status === 'posting' ? POSTING_POLL_MS : false),
+    refetchInterval: (q) => (force || q.state.data?.request.status === 'posting' ? POSTING_POLL_MS : false),
   })
 }
 

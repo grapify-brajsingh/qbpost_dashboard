@@ -26,6 +26,8 @@ interface Props {
   request: RequestDetail
   /** The other request when this one may be a duplicate (flagged, or named by a 409 duplicate-unconfirmed). */
   duplicate: DuplicateInfo | null
+  /** A newer version arrived while the dialog was open; Confirm still posts the one it opened on (the API answers 412). */
+  changed?: boolean
   onConfirm: (opts: { confirmDuplicate?: boolean }) => void
 }
 
@@ -37,7 +39,7 @@ export function PostDialog({ open, onOpenChange, ...rest }: Props) {
   )
 }
 
-function Body({ request, duplicate, onConfirm, onCancel }: Omit<Props, 'open' | 'onOpenChange'> & { onCancel: () => void }) {
+function Body({ request, duplicate, changed, onConfirm, onCancel }: Omit<Props, 'open' | 'onOpenChange'> & { onCancel: () => void }) {
   const [anyway, setAnyway] = useState(false)
   const [sent, setSent] = useState(false)
   const v = request.validation
@@ -63,6 +65,11 @@ function Body({ request, duplicate, onConfirm, onCancel }: Omit<Props, 'open' | 
         {v.state !== 'ok' && <p className="text-amber-700 dark:text-amber-400">Validation found problems. The API checks again before posting.</p>}
         {outdated && <p className="font-medium text-amber-700 dark:text-amber-400">Validation is out of date</p>}
       </div>
+      {changed && (
+        <p role="alert" className="text-sm font-medium text-amber-700 dark:text-amber-400">
+          This request changed while this dialog was open.
+        </p>
+      )}
       {duplicate && <DuplicateBlock duplicate={duplicate} anyway={anyway} onAnyway={setAnyway} />}
       <DialogFooter>
         <Button variant="outline" onClick={onCancel}>

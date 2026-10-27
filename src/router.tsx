@@ -1,4 +1,4 @@
-import { Link, Navigate, Outlet } from 'react-router'
+import { Link, Navigate, Outlet, useParams } from 'react-router'
 import type { ReactNode } from 'react'
 import type { RouteObject } from 'react-router'
 import { ChangePasswordPage } from '@/auth/ChangePasswordPage'
@@ -28,6 +28,12 @@ function RequireAdmin({ children }: { children: ReactNode }) {
   return hasScope(me, 'users:manage') ? children : <NotFound />
 }
 
+/** Keyed by id: nothing on the page (post state, dialogs) carries over to another request. */
+function RequestDetailRoute() {
+  const { id } = useParams()
+  return <RequestDetailPage key={id} />
+}
+
 export const routes: RouteObject[] = [
   {
     // The session provider navigates, so it lives inside the data router.
@@ -55,7 +61,7 @@ export const routes: RouteObject[] = [
         children: [
           { path: '/', element: <Navigate to="/requests" replace /> },
           { path: '/requests', element: <RequestsPage /> },
-          { path: '/requests/:id', element: <RequestDetailPage /> },
+          { path: '/requests/:id', element: <RequestDetailRoute /> },
           { path: '/users', element: <RequireAdmin><UsersPage /></RequireAdmin> },
           { path: '/users/:id', element: <RequireAdmin><UserPage /></RequireAdmin> },
         ],

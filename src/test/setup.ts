@@ -3,6 +3,7 @@ import { transferableAbortController } from 'node:util'
 import { mockDb } from '@/mocks/db'
 import { server } from '@/mocks/server'
 import { resetDraftDirty } from '@/features/requests/transactions/draftDirtyStore'
+import { resetPostFlights } from '@/features/requests/posting/postFlightStore'
 
 // jsdom provides its own AbortController/AbortSignal (needed by jsdom's EventTarget), but fetch/Request are
 // Node's (undici), which rejects jsdom signals. Bridge at the fetch boundary only: forward a jsdom signal in
@@ -40,6 +41,7 @@ afterEach(() => {
   server.resetHandlers()
   mockDb.reset()
   resetDraftDirty()
+  resetPostFlights()
 })
 afterAll(() => {
   globalThis.fetch = unbridgedFetch

@@ -22,6 +22,12 @@ import { TransactionsTab } from '../transactions/TransactionsTab'
 import { RequestHeader } from './RequestHeader'
 import { StatusBanner } from './StatusBanner'
 
+/** The version a post dialog opened on. */
+interface Seen {
+  etag: string
+  version: number
+}
+
 const TABS = [
   { value: 'transactions', label: 'Transactions' },
   { value: 'versions', label: 'Versions' },
@@ -35,15 +41,17 @@ export function RequestDetailPage() {
   const q = useRequest(id)
   const dirty = useDraftDirty(id)
   const post = usePost(id)
-  // The post dialog; `dup` is the other request when this one may be a duplicate.
-  const [dialog, setDialog] = useState<{ dup: DuplicateInfo | null } | null>(null)
-  // The version the last post sent: held findings (422 or 200 partial) apply to the table only while that version is on screen.
-  const [sentVersion, setSentVersion] = useState<number | null>(null)
+  // The post dialog; `dup` is the other request when this one may be a duplicate. `seen` is the version the dialog
+  // opened on: Confirm posts that ETag, never one a reload brought in under the open dialog.
+  const [dialog, setDialog] = useState<{ dup: DuplicateInfo | null; seen: Seen } | null>(null)
+  // The version the last post sent: held findings (422 or 200 partial) apply to the table only while that version is
+  // on screen. A 409 duplicate-unconfirmed reopens the dialog on the same version.
+  const [sent, setSent] = useState<Seen | null>(null)
   const [other, setOther] = useState<'discard' | 'restore' | 'resolve' | null>(null)
   const outcome = post.outcome
   useEffect(() => {
-    if (outcome?.kind === 'duplicate') setDialog({ dup: outcome.duplicate ?? { of: null } })
-  }, [outcome])
+    if (outcome?.kind === 'duplicate' && sent) setDialog({ dup: outcome.duplicate ?? { of: null }, seen: sent })
+  }, [outcome, sent])
 
   if (q.isPending) return <Skeleton className="m-6 h-40" />
   if (q.data === undefined) {
@@ -72,7 +80,10 @@ export function RequestDetailPage() {
     if (a === 'discard' || a === 'restore' || a === 'resolve') return setOther(a)
     if (a !== 'post') return
     const d = request.duplicate
-    setDialog({ dup: d.flagged ? { of: d.of, ofRef: d.ofRef, ofStatus: d.ofStatus } : null })
+    setDialog({
+      dup: d.flagged ? { of: d.of, ofRef: d.ofRef, ofStatus: d.ofStatus } : null,
+      seen: { etag, version: request.currentVersion },
+    })
   }
   const postBlocked = post.isPosting
     ? 'Posting…'
@@ -82,7 +93,7 @@ export function RequestDetailPage() {
         ? 'Save first'
         : undefined
   const heldFindings =
-    (outcome?.kind === 'held' || outcome?.kind === 'partial') && sentVersion === request.currentVersion
+    (outcome?.kind === 'held' || outcome?.kind === 'partial') && sent?.version === request.currentVersion
       ? outcome.findings
       : undefined
   const showResult = outcome && outcome.kind !== 'timeout' && outcome.kind !== 'duplicate'
@@ -99,10 +110,12 @@ export function RequestDetailPage() {
         onOpenChange={(o) => !o && setDialog(null)}
         request={request}
         duplicate={dialog?.dup ?? null}
+        changed={dialog !== null && dialog.seen.version !== request.currentVersion}
         onConfirm={(opts) => {
+          if (!dialog) return
           setDialog(null)
-          setSentVersion(request.currentVersion)
-          post.post(opts)
+          setSent(dialog.seen)
+          post.post({ ...opts, etag: dialog.seen.etag })
         }}
       />
       <DiscardDialog open={other === 'discard'} onOpenChange={(o) => !o && setOther(null)} requestId={id} />

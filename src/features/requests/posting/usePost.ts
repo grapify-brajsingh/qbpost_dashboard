@@ -6,6 +6,7 @@ import { api, ApiTimeoutError } from '@/api/client'
 import { ApiError } from '@/api/problem'
 import { requestKeys, useRequest } from '@/api/queries/requests'
 import { interpretPost, outcomeFromRequest, type PostOutcome } from './outcome'
+import { endFlight, getFlight, startFlight, usePostInFlight } from './postFlightStore'
 
 /** Client timeout for the post (10 minutes). Tests lower it and restore it afterwards. */
 export const postConfig = { timeoutMs: 600_000 }
@@ -25,21 +26,22 @@ const TOAST: Partial<Record<PostOutcome['kind'], 'success' | 'warning' | 'error'
 
 export function usePost(id: string) {
   const qc = useQueryClient()
-  const q = useRequest(id)
+  const updateCount = () => qc.getQueryState(requestKeys.detail(id))?.dataUpdateCount ?? 0
+  // A post already in flight for this request (this page was left and reopened): keep watching it.
+  const [phase, setPhase] = useState<Phase>(() => (getFlight(id) ? 'watching' : 'idle'))
+  // While watching, poll even if a reload failed and the cache does not say posting.
+  const q = useRequest(id, { forcePoll: phase === 'watching' })
   const data = q.data
-  const [phase, setPhase] = useState<Phase>('idle')
   const [outcome, setOutcome] = useState<PostOutcome | null>(null)
   /** Seconds Post stays disabled after a busy answer; the object identity restarts the timer. */
   const [busy, setBusy] = useState<{ seconds: number } | null>(null)
-  // Synchronous guard: set before the request starts, cleared only when the outcome is final.
-  const inFlight = useRef(false)
+  // Synchronous guard, module-level so a remount cannot reset it: set before the request starts, cleared only when
+  // the outcome is final.
+  const inFlight = usePostInFlight(id)
   // Watching: wait for a detail load newer than `watchFrom` (dataUpdateCount) whose status is not posting.
-  const watchFrom = useRef(0)
-  const attemptBefore = useRef<number | null | undefined>(undefined)
+  const watchFrom = useRef(updateCount())
   // Detail loads up to this count belong to an outcome already shown; a stale "posting" there starts no watch.
   const settledAt = useRef(0)
-
-  const updateCount = () => qc.getQueryState(requestKeys.detail(id))?.dataUpdateCount ?? 0
 
   const invalidateAll = useCallback(() => {
     void qc.invalidateQueries({ queryKey: requestKeys.detail(id) })
@@ -51,11 +53,11 @@ export function usePost(id: string) {
 
   const finish = useCallback(
     (o: PostOutcome) => {
-      inFlight.current = false
       settledAt.current = qc.getQueryState(requestKeys.detail(id))?.dataUpdateCount ?? 0
       setPhase('idle')
       setOutcome(o)
       if (o.kind === 'busy' && o.retryAfter) setBusy({ seconds: o.retryAfter })
+      endFlight(id)
       invalidateAll()
       if (o.kind !== 'duplicate') {
         const tone = TOAST[o.kind] ?? 'error'
@@ -66,21 +68,21 @@ export function usePost(id: string) {
   )
 
   const startWatching = useCallback(() => {
-    inFlight.current = true
+    if (!getFlight(id)) startFlight(id, { sending: false, attemptBefore: undefined })
     watchFrom.current = qc.getQueryState(requestKeys.detail(id))?.dataUpdateCount ?? 0
     setPhase('watching')
   }, [qc, id])
 
+  /** `etag` is the version the person confirmed (pinned when the dialog opened), never whatever is cached now. */
   const post = useCallback(
-    (opts: { confirmDuplicate?: boolean } = {}) => {
-      if (inFlight.current) return
-      const etag = data?.etag ?? ''
+    (opts: { etag: string; confirmDuplicate?: boolean }) => {
+      if (getFlight(id)) return
+      const etag = opts.etag
       if (!etag) {
         setOutcome({ kind: 'error', title: NO_ETAG })
         return
       }
-      inFlight.current = true
-      attemptBefore.current = data?.request.lastAttempt?.id ?? null
+      startFlight(id, { sending: true, attemptBefore: data?.request.lastAttempt?.id ?? null })
       setPhase('sending')
       setOutcome(null)
       const body = opts.confirmDuplicate ? { confirmDuplicate: true } : {}
@@ -98,6 +100,8 @@ export function usePost(id: string) {
               return
             }
             // Timeout or network error: the post may be running. Do not re-send; reload and watch the status.
+            const flight = getFlight(id)
+            if (flight) flight.sending = false
             setOutcome(
               e instanceof ApiTimeoutError
                 ? interpretPost(e)
@@ -115,16 +119,21 @@ export function usePost(id: string) {
   // newer load that is no longer posting ends it with the outcome of the latest attempt.
   const status = data?.request.status
   useEffect(() => {
+    // The page that sent the post finished it (this one was reopened meanwhile): its toast was the outcome.
+    if (phase === 'watching' && !inFlight) {
+      setPhase('idle')
+      return
+    }
     if (!data) return
     const count = updateCount()
-    if (phase === 'idle' && status === 'posting' && count > settledAt.current) {
-      attemptBefore.current = undefined
+    const flight = getFlight(id)
+    if (phase === 'idle' && status === 'posting' && count > settledAt.current && !flight) {
       startWatching()
-    } else if (phase === 'watching' && status !== 'posting' && count > watchFrom.current) {
-      finish(outcomeFromRequest(data.request, attemptBefore.current))
+    } else if (phase === 'watching' && status !== 'posting' && count > watchFrom.current && !flight?.sending) {
+      finish(outcomeFromRequest(data.request, flight?.attemptBefore))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-check on every detail load
-  }, [data, q.dataUpdatedAt, phase])
+  }, [data, q.dataUpdatedAt, phase, inFlight])
 
   useEffect(() => {
     if (!busy) return
@@ -134,7 +143,7 @@ export function usePost(id: string) {
 
   return {
     post,
-    isPosting: phase !== 'idle',
+    isPosting: phase !== 'idle' || inFlight,
     outcome,
     /** Seconds Post is disabled after a busy answer, or null. */
     busyFor: busy?.seconds ?? null,
