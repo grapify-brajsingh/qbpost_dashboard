@@ -17,4 +17,10 @@ describe('dates', () => {
     expect(formatRelative('2026-10-27T07:00:00Z', new Date('2026-10-27T10:00:00Z'))).toBe('3 hours ago')
     expect(formatRelative('2026-10-25T10:00:00Z', new Date('2026-10-27T10:00:00Z'))).toBe('2 days ago')
   })
+  test('invalid input does not throw', () => {
+    for (const bad of ['garbage', '']) {
+      expect(formatTimestamp(bad)).toBe('—')
+      expect(formatRelative(bad)).toBe('')
+    }
+  })
 })

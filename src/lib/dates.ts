@@ -2,6 +2,7 @@ const pad = (n: number) => String(n).padStart(2, '0')
 
 export function formatTimestamp(utcIso: string): string {
   const d = new Date(utcIso)
+  if (Number.isNaN(d.getTime())) return '—'
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
@@ -17,7 +18,9 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
 ]
 
 export function formatRelative(utcIso: string, now: Date = new Date()): string {
-  const diffSec = Math.round((new Date(utcIso).getTime() - now.getTime()) / 1000)
+  const t = new Date(utcIso).getTime()
+  if (Number.isNaN(t)) return ''
+  const diffSec = Math.round((t - now.getTime()) / 1000)
   const abs = Math.abs(diffSec)
   for (const [unit, secs] of UNITS) {
     if (abs >= secs || unit === 'second') return rtf.format(Math.trunc(diffSec / secs), unit)
