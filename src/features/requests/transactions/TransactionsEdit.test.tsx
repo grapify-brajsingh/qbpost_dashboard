@@ -33,10 +33,10 @@ const cell = (row: number, field: string) => {
 
 /** Captures the next PUT to /saved-requests/:id, then lets the mock API answer it. */
 function capturePut() {
-  const seen: { ifMatch: string | null; body: { payload: Payload; note?: string } }[] = []
+  const seen: { url: string; ifMatch: string | null; body: { payload: Payload; note?: string } }[] = []
   server.use(
     http.put(`${API}/:id`, async ({ request }) => {
-      seen.push({ ifMatch: request.headers.get('If-Match'), body: (await request.clone().json()) as never })
+      seen.push({ url: new URL(request.url).pathname, ifMatch: request.headers.get('If-Match'), body: (await request.clone().json()) as never })
       return undefined
     }),
   )
@@ -392,5 +392,57 @@ describe('raw JSON editor', () => {
     await open(4, 'u-viewer')
     expect(screen.getByTestId('raw-json').tagName).toBe('PRE')
     expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument()
+  })
+})
+
+describe('moving between requests', () => {
+  test('following the duplicate link to a cached request at the same version shows and saves that request', async () => {
+    // 12 and 5 are both pending at version 1; make 12 point at 5 as its duplicate.
+    record(12).duplicate = { of: 5, reasons: ['same-reference'], acknowledgedBy: null }
+    const payload5 = structuredClone(payloadOf(5))
+    const { user, router } = await open(5)
+    expect(document.querySelector('tr[data-row="11"]')).not.toBeNull()
+    act(() => {
+      void router.navigate('/requests/12')
+    })
+    await screen.findByRole('heading', { name: 'SR-000012' })
+    await waitFor(() => expect(document.querySelector('tr[data-row="11"]')).toBeNull())
+    await user.click(screen.getByRole('link', { name: 'Possible duplicate of SR-000005' }))
+    await screen.findByRole('heading', { name: 'SR-000005' })
+    await waitFor(() => expect(document.querySelector('tr[data-row="11"]')).not.toBeNull())
+
+    await choosePayee(user, 1, 'ABC Plumbing LLC')
+    const seen = capturePut()
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => expect(seen).toHaveLength(1))
+    expect(seen[0].url).toBe(`${API}/5`)
+    expect(seen[0].body.payload).toEqual(draftToPayload(setCell(createDraft(payload5), '1', 'payee', 'ABC Plumbing LLC')))
+  })
+
+  test('after leaving once, Stay on the next blocked navigation closes the dialog and stays', async () => {
+    // Visit 12 first so it is cached: going back to it keeps the detail page mounted.
+    const { user, router } = await open(12)
+    act(() => {
+      void router.navigate('/requests/1')
+    })
+    await screen.findByRole('heading', { name: 'SR-000001' })
+    await waitFor(() => expect(document.querySelector('tr[data-row="11"]')).not.toBeNull())
+    await choosePayee(user, 1, 'ABC Plumbing LLC')
+    act(() => {
+      void router.navigate('/requests/12')
+    })
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Leave' }))
+    await screen.findByRole('heading', { name: 'SR-000012' })
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+    expect(screen.queryByText(/unsaved change/)).not.toBeInTheDocument()
+
+    await choosePayee(user, 1, 'ABC Plumbing LLC')
+    act(() => {
+      void router.navigate('/requests')
+    })
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Stay' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+    expect(router.state.location.pathname).toBe('/requests/12')
+    expect(cell(1, 'payee')).toHaveAttribute('data-dirty', 'true')
   })
 })

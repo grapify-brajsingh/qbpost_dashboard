@@ -71,7 +71,8 @@ export function RequestDetailPage() {
           ))}
         </TabsList>
         {TABS.map((t) => (
-          // The transactions tab stays mounted (hidden) so unsaved edits survive a tab switch.
+          // The transactions tab stays mounted (hidden) so unsaved edits survive a tab switch; keyed by request so
+          // nothing (draft, note, dialogs) carries over to another request.
           <TabsContent
             key={t.value}
             value={t.value}
@@ -79,7 +80,7 @@ export function RequestDetailPage() {
             hidden={t.value !== tab}
           >
             {t.value === 'transactions' ? (
-              <TransactionsTab request={request} etag={etag} />
+              <TransactionsTab key={request.id} request={request} etag={etag} />
             ) : (
               <p className="text-sm text-muted-foreground">Coming soon</p>
             )}

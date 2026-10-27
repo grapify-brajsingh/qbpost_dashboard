@@ -17,6 +17,10 @@ export function UnsavedGuard({ dirty }: { dirty: boolean }) {
 
   // Leave also closes the dialog; that close must not reset the blocker it just proceeded.
   const leaving = useRef(false)
+  // Each new block starts fresh, so Stay works after an earlier Leave.
+  useEffect(() => {
+    if (blocker.state === 'blocked') leaving.current = false
+  }, [blocker.state])
 
   useEffect(() => {
     if (!dirty) return

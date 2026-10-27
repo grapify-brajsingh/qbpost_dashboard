@@ -4,19 +4,20 @@ import { createDraft, isDirty, type Draft } from './draft'
 import { setDraftDirty } from './draftDirtyStore'
 
 /**
- * The draft for one request. It is recreated from the server payload whenever `version` changes (a save, or a
- * reload that brought someone else's version); edits are never merged. Keeps the module-level dirty store in sync.
+ * The draft for one request. It is recreated from the server payload whenever the request id or `version` changes
+ * (another request, a save, or a reload that brought someone else's version); edits are never merged. Keeps the module-level dirty store in sync.
  */
 export function useDraft(id: string, version: string, payload: Payload) {
-  const [state, setState] = useState(() => ({ version, draft: createDraft(payload) }))
+  const key = `${id}:${version}`
+  const [state, setState] = useState(() => ({ key, draft: createDraft(payload) }))
   let draft = state.draft
-  if (state.version !== version) {
+  if (state.key !== key) {
     draft = createDraft(payload)
-    setState({ version, draft })
+    setState({ key, draft })
   }
 
   const update = useCallback((fn: (d: Draft) => Draft) => setState((s) => ({ ...s, draft: fn(s.draft) })), [])
-  const reset = useCallback(() => setState({ version, draft: createDraft(payload) }), [version, payload])
+  const reset = useCallback(() => setState({ key, draft: createDraft(payload) }), [key, payload])
 
   const dirty = isDirty(draft)
   useEffect(() => setDraftDirty(id, dirty), [id, dirty])

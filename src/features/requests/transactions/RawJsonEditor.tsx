@@ -32,7 +32,8 @@ function ReadErrors({ errors }: { errors: string[] }) {
 export function RawJsonEditor({ request, etag }: { request: RequestDetail; etag: string }) {
   const id = String(request.id)
   const editable = request.allowedActions.includes('edit')
-  const version = `${request.currentVersion}:${request.status}`
+  // Keyed by request too: another request at the same version must never inherit this text.
+  const version = `${id}:${request.currentVersion}:${request.status}`
   const loaded = JSON.stringify(request.payload, null, 2)
   const [state, setState] = useState({ version, text: loaded })
   let text = state.text
