@@ -34,7 +34,18 @@ function Evidence({ request }: { request: RequestDetail }) {
   return (
     <div className="space-y-1 rounded-md border p-3 text-sm" aria-label="Evidence" role="group">
       <p>Post ID: {postId ? <span className="font-mono">{postId}</span> : 'none recorded'}</p>
-      {attempt && <p>Last attempt: {attempt.outcome}</p>}
+      {attempt && (
+        <p>
+          Last attempt: {attempt.outcome}
+          {attempt.httpStatus !== null && ` · HTTP ${attempt.httpStatus}`}
+          {attempt.finishedUtc && (
+            <>
+              {' · finished '}
+              <Timestamp utc={attempt.finishedUtc} />
+            </>
+          )}
+        </p>
+      )}
       {batch && (
         <p>
           Ledger batch: {batch.status}, {countsText(batch.counts)}, created <Timestamp utc={batch.createdUtc} />

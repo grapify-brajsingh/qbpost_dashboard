@@ -1,10 +1,21 @@
 import { screen, waitFor, within } from '@testing-library/react'
-import { afterEach } from 'vitest'
+import { http, HttpResponse } from 'msw'
+import { afterEach, vi } from 'vitest'
+import { toast } from 'sonner'
+import { formatTimestamp } from '@/lib/dates'
 import { mockControl, mockDb } from '@/mocks/db'
 import { server } from '@/mocks/server'
 import { renderApp } from '@/test/render'
 
-afterEach(() => server.events.removeAllListeners())
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }))
+
+afterEach(() => {
+  server.events.removeAllListeners()
+  vi.mocked(toast.success).mockClear()
+})
+
+const problemResponse = (status: number, title: string, detail: string) =>
+  HttpResponse.json({ type: 'about:blank', title, status, detail }, { status, headers: { 'Content-Type': 'application/problem+json' } })
 
 async function open(id: number, as = 'u-admin') {
   mockControl.signInAs(as)
@@ -52,6 +63,20 @@ describe('Discard', () => {
   })
 })
 
+describe('Discard failure', () => {
+  test('a 500 keeps the dialog open, shows the problem and sends no success toast', async () => {
+    server.use(http.post('/api/v1/saved-requests/2/discard', () => problemResponse(500, 'Server error', 'Try again later.')))
+    const { user } = await open(2)
+    await user.click(actionButton('Discard'))
+    await user.type(screen.getByLabelText('Reason'), 'dup')
+    await user.click(confirm())
+    const d = screen.getByRole('dialog')
+    expect(await within(d).findByText('Server error')).toBeInTheDocument()
+    expect(within(d).getByLabelText('Reason')).toHaveValue('dup')
+    expect(toast.success).not.toHaveBeenCalled()
+  })
+})
+
 describe('Restore', () => {
   test('confirming moves the request back to pending', async () => {
     const { user } = await open(10)
@@ -73,6 +98,7 @@ describe('Resolve', () => {
     expect(within(evidence).getByText('api-checking-4521-2026-07')).toBeInTheDocument()
     expect(within(evidence).getByText(/Ledger batch: partial, submitted 6, posted 4/)).toBeInTheDocument()
     expect(within(evidence).getByText(/Last attempt: unknown/)).toBeInTheDocument()
+    expect(within(evidence).getByText(formatTimestamp('2026-10-19T09:00:12Z'))).toBeInTheDocument()
     expect(within(d).getByText('Check QuickBooks before you choose')).toBeInTheDocument()
     expect(within(d).getByRole('radio', { name: 'Posted' })).toBeInTheDocument()
     const notPosted = within(d).getByRole('radio', { name: 'Not posted' })
@@ -110,5 +136,21 @@ describe('Resolve', () => {
     expect(within(d).getByRole('radio', { name: 'Posted (accept as is)' })).toBeChecked()
     expect(within(d).queryByRole('radio', { name: 'Not posted' })).not.toBeInTheDocument()
     expect(within(d).getByText(/post any remaining rows outside the dashboard/)).toBeInTheDocument()
+    expect(within(d).getByText(/Last attempt: partial · HTTP 200 · finished/)).toBeInTheDocument()
+    expect(within(d).getAllByText(formatTimestamp('2026-10-18T09:00:31Z')).length).toBeGreaterThan(1)
+  })
+
+  test('a failed resolve keeps the dialog open, shows the problem and sends no success toast', async () => {
+    server.use(http.post('/api/v1/saved-requests/8/resolve', () => problemResponse(409, 'Already resolved', 'Someone else resolved this request.')))
+    const { user } = await open(8)
+    await user.click(actionButton('Resolve'))
+    const d = await screen.findByRole('dialog')
+    await user.click(within(d).getByRole('radio', { name: 'Posted' }))
+    await user.type(within(d).getByLabelText('Note'), 'checked')
+    await user.click(confirm())
+    expect(await within(d).findByText('Already resolved')).toBeInTheDocument()
+    expect(within(d).getByText('Someone else resolved this request.')).toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(toast.success).not.toHaveBeenCalled()
   })
 })
