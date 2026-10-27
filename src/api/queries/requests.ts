@@ -97,6 +97,20 @@ export interface SaveVars {
   etag: string
 }
 
+/** Discard, restore and resolve change status, so everything derived from the request is refetched. */
+function useStatusMutation<V extends object | undefined>(id: string, path: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (vars: V) => api.post<RequestDetail>(`/saved-requests/${id}/${path}`, vars),
+    onSuccess: () => qc.invalidateQueries({ queryKey: requestKeys.all }),
+  })
+}
+
+export const useDiscard = (id: string) => useStatusMutation<{ reason: string }>(id, 'discard')
+export const useRestore = (id: string) => useStatusMutation<undefined>(id, 'restore')
+export const useResolve = (id: string) =>
+  useStatusMutation<{ outcome: 'posted' | 'not-posted'; note: string }>(id, 'resolve')
+
 /** `PUT /saved-requests/{id}` with If-Match. The returned record replaces the detail cache. */
 export function useSaveRequest(id: string) {
   const qc = useQueryClient()

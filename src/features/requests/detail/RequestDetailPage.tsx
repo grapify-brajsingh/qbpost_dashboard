@@ -7,6 +7,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { Action } from '@/api/schema'
 import { busyTitle, type DuplicateInfo } from '../posting/outcome'
+import { DiscardDialog } from '../dialogs/DiscardDialog'
+import { ResolveDialog } from '../dialogs/ResolveDialog'
+import { RestoreDialog } from '../dialogs/RestoreDialog'
 import { PostDialog } from '../posting/PostDialog'
 import { PostingProgress } from '../posting/PostingProgress'
 import { PostResultBanner } from '../posting/PostResultBanner'
@@ -33,6 +36,7 @@ export function RequestDetailPage() {
   const [dialog, setDialog] = useState<{ dup: DuplicateInfo | null } | null>(null)
   // The version the last post sent: held findings (422 or 200 partial) apply to the table only while that version is on screen.
   const [sentVersion, setSentVersion] = useState<number | null>(null)
+  const [other, setOther] = useState<'discard' | 'restore' | 'resolve' | null>(null)
   const outcome = post.outcome
   useEffect(() => {
     if (outcome?.kind === 'duplicate') setDialog({ dup: outcome.duplicate ?? { of: null } })
@@ -62,7 +66,8 @@ export function RequestDetailPage() {
   const tab = TABS.find((t) => t.value === requested)?.value ?? 'transactions'
 
   const onAction = (a: Action) => {
-    if (a !== 'post') return // Task 11 wires the other dialogs.
+    if (a === 'discard' || a === 'restore' || a === 'resolve') return setOther(a)
+    if (a !== 'post') return
     const d = request.duplicate
     setDialog({ dup: d.flagged ? { of: d.of, ofRef: d.ofRef, ofStatus: d.ofStatus } : null })
   }
@@ -97,6 +102,9 @@ export function RequestDetailPage() {
           post.post(opts)
         }}
       />
+      <DiscardDialog open={other === 'discard'} onOpenChange={(o) => !o && setOther(null)} requestId={id} />
+      <RestoreDialog open={other === 'restore'} onOpenChange={(o) => !o && setOther(null)} requestId={id} />
+      <ResolveDialog open={other === 'resolve'} onOpenChange={(o) => !o && setOther(null)} request={request} />
       <Tabs
         value={tab}
         onValueChange={(v) =>
