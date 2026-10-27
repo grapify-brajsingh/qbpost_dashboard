@@ -31,7 +31,7 @@ export function RequestDetailPage() {
   const post = usePost(id)
   // The post dialog; `dup` is the other request when this one may be a duplicate.
   const [dialog, setDialog] = useState<{ dup: DuplicateInfo | null } | null>(null)
-  // The version the last post sent: a 422's findings apply to the table only while that version is on screen.
+  // The version the last post sent: held findings (422 or 200 partial) apply to the table only while that version is on screen.
   const [sentVersion, setSentVersion] = useState<number | null>(null)
   const outcome = post.outcome
   useEffect(() => {
@@ -74,7 +74,9 @@ export function RequestDetailPage() {
         ? 'Save first'
         : undefined
   const heldFindings =
-    outcome?.kind === 'held' && sentVersion === request.currentVersion ? outcome.findings : undefined
+    (outcome?.kind === 'held' || outcome?.kind === 'partial') && sentVersion === request.currentVersion
+      ? outcome.findings
+      : undefined
   const showResult = outcome && outcome.kind !== 'timeout' && outcome.kind !== 'duplicate'
 
   return (

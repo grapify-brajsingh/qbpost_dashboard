@@ -163,6 +163,24 @@ describe('outcomes', () => {
     for (const i of [1, 4, 7]) expect(document.querySelector(`tr[data-row="${i}"]`)).toHaveAttribute('data-problem', 'true')
   })
 
+  test('200 partial → the banner lists the held rows and those rows get data-problem', async () => {
+    const validation = [
+      { index: 4, externalId: 'row-5', reason: 'quickbooks-rejected', detail: 'QuickBooks rejected the row' },
+      { index: 9, externalId: 'row-10', reason: 'quickbooks-rejected' },
+    ]
+    mockControl.nextPost = { status: 200, body: { status: 'partial', postId: 'api-p', validation }, delayMs: 0 }
+    const { user } = await open(1)
+    await confirmPost(user)
+    await waitFor(() => expect(result()).toHaveTextContent("Some rows posted, some didn't."))
+    const items = within(within(result()).getByRole('list', { name: 'Held rows' })).getAllByRole('listitem')
+    expect(items.map((li) => li.textContent)).toEqual([
+      'Row 5 (row-5): quickbooks-rejected — QuickBooks rejected the row',
+      'Row 10 (row-10): quickbooks-rejected',
+    ])
+    await waitFor(() => expect(document.querySelectorAll('tr[data-problem="true"]')).toHaveLength(2))
+    for (const i of [4, 9]) expect(document.querySelector(`tr[data-row="${i}"]`)).toHaveAttribute('data-problem', 'true')
+  })
+
   test('409 busy with Retry-After: 5 → disabled for 5 s, then re-enabled', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     mockControl.nextPost = { status: 409, body: { code: 'busy', title: 'QuickBooks is busy', retryAfterSeconds: 5 }, delayMs: 0 }

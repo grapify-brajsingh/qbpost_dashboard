@@ -46,9 +46,20 @@ export function PostResultBanner({ outcome, requestId }: { outcome: PostOutcome;
         </ul>
       )}
       {(o.kind === 'held' || o.kind === 'partial') && rows > 0 && (
-        <p>
-          {rows} {rows === 1 ? 'row is' : 'rows are'} held. They are marked in the table below.
-        </p>
+        <div>
+          <p>
+            {rows} {rows === 1 ? 'row is' : 'rows are'} held. They are marked in the table below.
+          </p>
+          <ul aria-label="Held rows" className="list-disc pl-5">
+            {o.findings!.map((f, i) => (
+              <li key={i}>
+                Row {f.index + 1}
+                {f.externalId ? ` (${f.externalId})` : ''}: {f.reason}
+                {f.detail ? ` — ${f.detail}` : ''}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       {o.kind === 'conflict' && o.attemptId !== undefined && (
         <Link className="underline" to={`/requests/${requestId}?tab=attempts`}>
