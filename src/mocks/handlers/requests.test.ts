@@ -331,3 +331,32 @@ describe('POST /saved-requests/{id}/post', () => {
     expect(res.status).toBe(403)
   })
 })
+
+describe('fixtures stay independent', () => {
+  it('editing or restoring seeded requests does not flag them as duplicates', async () => {
+    const d = await call('/saved-requests/10/restore', { method: 'POST' })
+    expect(((await d.json()) as RequestDetail).duplicate.flagged).toBe(false)
+    for (const id of [2, 3, 6, 7, 8, 9, 11, 12]) {
+      const res = await call(`/saved-requests/${id}`)
+      expect(((await res.json()) as RequestDetail).duplicate.flagged).toBe(false)
+    }
+    const res = await call('/saved-requests/11')
+    const body = (await res.json()) as RequestDetail
+    const payload = structuredClone(body.payload) as { transactions: { memo?: string }[] }
+    payload.transactions[0].memo = 'edited'
+    const put = await call('/saved-requests/11', {
+      method: 'PUT',
+      headers: { 'If-Match': res.headers.get('ETag')! },
+      body: JSON.stringify({ payload }),
+    })
+    expect(((await put.json()) as RequestDetail).duplicate.flagged).toBe(false)
+  })
+
+  it('keeps event ids unique within a request after restore then post', async () => {
+    await call('/saved-requests/10/restore', { method: 'POST' })
+    mockControl.nextPost = { status: 200, body: { status: 'posted' }, delayMs: 0 }
+    expect((await call('/saved-requests/10/post', { method: 'POST', body: '{}' })).status).toBe(200)
+    const events = (await (await call('/saved-requests/10/events')).json()) as { id: number }[]
+    expect(new Set(events.map((e) => e.id)).size).toBe(events.length)
+  })
+})

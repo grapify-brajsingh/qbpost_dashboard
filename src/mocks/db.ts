@@ -62,11 +62,12 @@ export const mockDb = {
   counters: { attempt: 100, event: 1000, audit: 1, password: 1 },
   reset() {
     mockDb.requests = buildRequests()
+    const maxEvent = Math.max(0, ...mockDb.requests.flatMap((r) => r.events.map((e) => e.id)))
     mockDb.users = buildUsers()
     mockDb.userAudit = {}
     mockDb.lists = structuredClone(QB_LISTS)
     mockDb.session = null
-    mockDb.counters = { attempt: 100, event: 1000, audit: 1, password: 1 }
+    mockDb.counters = { attempt: 100, event: maxEvent + 1, audit: 1, password: 1 }
     mockControl.reset()
   },
 }

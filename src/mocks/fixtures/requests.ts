@@ -14,9 +14,11 @@ const SOURCE = { kind: 'api-client', id: 'n8n-mailbox', name: 'n8n mailbox workf
 
 const EXPENSE = ['Repairs and Maintenance', 'Utilities', 'Office Supplies', 'Insurance', 'Professional Fees']
 
-export function makeRows(n: number): Txn[] {
+/** `seed` shifts amounts and check numbers so different requests do not share row fingerprints. */
+export function makeRows(n: number, seed = 0): Txn[] {
   return Array.from({ length: n }, (_, i): Txn => {
-    const amount = Math.round(((i * 7919) % 90000) + 1234) / 100
+    const j = i + seed * 1000
+    const amount = Math.round(((j * 7919) % 90000) + 1234) / 100
     const base: Txn = {
       externalId: `row-${i + 1}`,
       date: `2026-08-${String(1 + (i % 28)).padStart(2, '0')}`,
@@ -32,7 +34,7 @@ export function makeRows(n: number): Txn[] {
       case 3:
         return { ...base, kind: 'CcCredit', account: 'Chase Visa 8890', payee: vendor, lineAccount: EXPENSE[i % 5], last4: '8890' }
       default:
-        return { ...base, kind: 'Check', account: 'Chase Checking 4521', payee: vendor, lineAccount: EXPENSE[i % 5], checkNo: String(1000 + i), refNumber: String(1000 + i), last4: '4521' }
+        return { ...base, kind: 'Check', account: 'Chase Checking 4521', payee: vendor, lineAccount: EXPENSE[i % 5], checkNo: String(1000 + j), refNumber: String(1000 + j), last4: '4521' }
     }
   })
 }
@@ -134,7 +136,7 @@ export function buildRequests(): RequestRecord[] {
   })
 
   // 2: 210 rows, three findings, control total off by 10.00
-  const rows2 = makeRows(210)
+  const rows2 = makeRows(210, 2)
   rows2[16].payee = 'Acme Roofing Inc'
   delete rows2[88].lineAccount
   rows2[139].date = '2019-12-30'
@@ -143,7 +145,7 @@ export function buildRequests(): RequestRecord[] {
   const r2 = build({ id: 2, payload: p2, createdUtc: '2026-10-27T06:40:00Z', email: email('Zemen Bank statement – 2026-08', '2026-10-27T06:31:00Z', 'statements@zemenbank.example') })
 
   // 3: unreadable kind
-  const rows3 = makeRows(6)
+  const rows3 = makeRows(6, 3)
   rows3[3].kind = 'Cheque'
   const r3 = build({ id: 3, payload: payloadOf('legacy-import-3', rows3), createdUtc: '2026-10-26T15:20:00Z', email: email('Old format statement', '2026-10-26T15:11:00Z', 'noreply@legacy.example') })
 
@@ -160,7 +162,7 @@ export function buildRequests(): RequestRecord[] {
   })
 
   // 6: posting
-  const p6 = payloadOf('visa-8890-2026-08', makeRows(8))
+  const p6 = payloadOf('visa-8890-2026-08', makeRows(8, 6))
   const r6 = build({
     id: 6,
     status: 'posting',
@@ -173,7 +175,7 @@ export function buildRequests(): RequestRecord[] {
   })
 
   // 7: posted
-  const p7 = payloadOf('savings-1177-2026-07', makeRows(8))
+  const p7 = payloadOf('savings-1177-2026-07', makeRows(8, 7))
   const rows7 = toPostedRows(p7, 2)
   const r7 = build({
     id: 7,
@@ -202,7 +204,7 @@ export function buildRequests(): RequestRecord[] {
   })
 
   // 8: unknown (server restarted mid-post)
-  const p8 = payloadOf('checking-4521-2026-07', makeRows(6))
+  const p8 = payloadOf('checking-4521-2026-07', makeRows(6, 8))
   const r8 = build({
     id: 8,
     status: 'unknown',
@@ -224,7 +226,7 @@ export function buildRequests(): RequestRecord[] {
   })
 
   // 9: partial
-  const p9 = payloadOf('visa-8890-2026-07', makeRows(6))
+  const p9 = payloadOf('visa-8890-2026-07', makeRows(6, 9))
   const r9 = build({
     id: 9,
     status: 'partial',
@@ -265,7 +267,7 @@ export function buildRequests(): RequestRecord[] {
   const r10 = build({
     id: 10,
     status: 'discarded',
-    payload: payloadOf('test-statement', makeRows(5)),
+    payload: payloadOf('test-statement', makeRows(5, 10)),
     createdUtc: '2026-10-17T07:00:00Z',
     email: email('Test statement', '2026-10-17T06:00:00Z', 'qa@example.com'),
     rowVersion: 2,
@@ -276,7 +278,7 @@ export function buildRequests(): RequestRecord[] {
   // 11: hostile subject, last attempt busy
   const r11 = build({
     id: 11,
-    payload: payloadOf('savings-1177-2026-08', makeRows(5)),
+    payload: payloadOf('savings-1177-2026-08', makeRows(5, 11)),
     createdUtc: '2026-10-27T06:00:00Z',
     email: email('<img src=x onerror=alert(1)> Savings statement', '2026-10-27T05:55:00Z', 'statements@bank.example'),
     rowVersion: 2,
@@ -298,7 +300,7 @@ export function buildRequests(): RequestRecord[] {
   })
 
   // 12: no email metadata (older n8n workflow)
-  const r12 = build({ id: 12, payload: payloadOf('manual-entry-12', makeRows(4)), createdUtc: '2026-10-25T10:00:00Z', email: null })
+  const r12 = build({ id: 12, payload: payloadOf('manual-entry-12', makeRows(4, 12)), createdUtc: '2026-10-25T10:00:00Z', email: null })
 
   return [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12]
 }
