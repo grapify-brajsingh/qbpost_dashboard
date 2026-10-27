@@ -1,11 +1,15 @@
 import { Link, Navigate, Outlet } from 'react-router'
+import type { ReactNode } from 'react'
 import type { RouteObject } from 'react-router'
 import { ChangePasswordPage } from '@/auth/ChangePasswordPage'
 import { RequireAuth } from '@/auth/RequireAuth'
 import { SessionProvider } from '@/auth/SessionProvider'
 import { SignInPage } from '@/auth/SignInPage'
+import { hasScope, useSession } from '@/auth/useSession'
 import { RequestDetailPage } from '@/features/requests/detail/RequestDetailPage'
 import { RequestsPage } from '@/features/requests/list/RequestsPage'
+import { UserPage } from '@/features/users/UserPage'
+import { UsersPage } from '@/features/users/UsersPage'
 import { AppShell } from '@/layout/AppShell'
 
 function NotFound() {
@@ -17,6 +21,11 @@ function NotFound() {
       </Link>
     </div>
   )
+}
+
+function RequireAdmin({ children }: { children: ReactNode }) {
+  const { me } = useSession()
+  return hasScope(me, 'users:manage') ? children : <NotFound />
 }
 
 export const routes: RouteObject[] = [
@@ -47,6 +56,8 @@ export const routes: RouteObject[] = [
           { path: '/', element: <Navigate to="/requests" replace /> },
           { path: '/requests', element: <RequestsPage /> },
           { path: '/requests/:id', element: <RequestDetailPage /> },
+          { path: '/users', element: <RequireAdmin><UsersPage /></RequireAdmin> },
+          { path: '/users/:id', element: <RequireAdmin><UserPage /></RequireAdmin> },
         ],
       },
       { path: '*', element: <NotFound /> },
