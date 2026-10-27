@@ -75,7 +75,7 @@ reached QuickBooks.
 
 | Concern | Choice |
 |---|---|
-| Build | Vite + React 18 + TypeScript (strict) |
+| Build | Vite + React 19 + TypeScript (strict) |
 | UI | shadcn/ui on Tailwind CSS (owner), with light and dark mode following the OS, and a toggle |
 | Routing | React Router (data-router not required) |
 | Server state | TanStack Query: caching, polling, invalidation |
