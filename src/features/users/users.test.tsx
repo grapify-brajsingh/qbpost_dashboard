@@ -202,3 +202,20 @@ describe('User page', () => {
     expect(within(audit).getByText('(from: viewer, to: editor)')).toBeInTheDocument()
   })
 })
+
+describe('Temporary password dialog', () => {
+  test('Escape and a click outside keep the password on screen; only Done closes it', async () => {
+    const { user } = open('/users')
+    await createUser(user, 'nina@example.com')
+    const dialog = await screen.findByRole('dialog', { name: 'Temporary password' })
+    const password = within(dialog).getByLabelText('Temporary password').textContent!
+    await user.keyboard('{Escape}')
+    expect(screen.getByRole('dialog', { name: 'Temporary password' })).toHaveTextContent(password)
+    // A click outside, on the overlay (the modal makes the page itself unclickable).
+    await user.pointer({ keys: '[MouseLeft]', target: document.querySelector<HTMLElement>('[data-slot="dialog-overlay"]')! })
+    expect(screen.getByRole('dialog', { name: 'Temporary password' })).toHaveTextContent(password)
+    expect(within(dialog).queryByRole('button', { name: 'Close' })).not.toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Done' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+})

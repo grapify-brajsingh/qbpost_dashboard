@@ -54,6 +54,16 @@ describe('Versions tab', () => {
 })
 
 describe('Attempts tab', () => {
+  test('an older result that lists its rows as `rows` still shows the TxnID table', async () => {
+    const a = mockDb.requests.find((r) => r.id === 7)!.attempts.find((x) => x.id === 2)!
+    const { posted, ...rest } = a.result as { posted: unknown[] }
+    a.result = { ...rest, rows: posted }
+    const { user } = await open(7, 'attempts')
+    await user.click(await screen.findByRole('button', { name: 'Attempt 2' }))
+    const table = await screen.findByRole('table', { name: 'Posted rows for attempt 2' })
+    expect(within(table).getAllByRole('row')).toHaveLength(9)
+  })
+
   test('a posted attempt expands to the TxnID table', async () => {
     const { user } = await open(7, 'attempts')
     await user.click(await screen.findByRole('button', { name: 'Attempt 2' }))

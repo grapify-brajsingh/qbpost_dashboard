@@ -18,13 +18,15 @@ interface Props {
   /** False disables Save (for example invalid JSON). */
   canSave?: boolean
   getPayload: () => Payload
+  /** What "Copy my edits" copies; defaults to the payload as JSON. The raw editor passes its text as typed. */
+  getCopyText?: () => string
   /** Drops the edits (Discard changes, Reload after a conflict, or a request that is no longer editable). */
   onReset: () => void
   onSaved?: () => void
 }
 
 /** "N unsaved changes", Discard, the note and Save. Owns the PUT and its error handling (412, 409, 400/413). */
-export function SaveBar({ id, etag, dirty, summary, canSave = true, getPayload, onReset, onSaved }: Props) {
+export function SaveBar({ id, etag, dirty, summary, canSave = true, getPayload, getCopyText, onReset, onSaved }: Props) {
   const qc = useQueryClient()
   const save = useSaveRequest(id)
   const [note, setNote] = useState('')
@@ -94,7 +96,7 @@ export function SaveBar({ id, etag, dirty, summary, canSave = true, getPayload, 
       <ConflictDialog
         problem={conflict}
         onClose={() => setConflict(null)}
-        onCopy={() => navigator.clipboard.writeText(JSON.stringify(getPayload(), null, 2))}
+        onCopy={() => navigator.clipboard.writeText(getCopyText ? getCopyText() : JSON.stringify(getPayload(), null, 2))}
         onReload={() => {
           setConflict(null)
           onReset()

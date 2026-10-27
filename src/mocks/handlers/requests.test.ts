@@ -277,17 +277,18 @@ describe('POST /saved-requests/{id}/post', () => {
     await vi.advanceTimersByTimeAsync(1500)
     const res = await pending
     expect(res.status).toBe(200)
-    const body = (await res.json()) as { status: string; savedRequestId: number; attemptId: number; rows: { txnId: string }[] }
+    const body = (await res.json()) as { status: string; savedRequestId: number; attemptId: number; posted: { txnId: string }[] }
     expect(body.status).toBe('posted')
     expect(body.savedRequestId).toBe(1)
-    expect(body.rows).toHaveLength(12)
+    expect(body.posted).toHaveLength(12)
+    expect(body).not.toHaveProperty('rows')
     const after = (await (await call('/saved-requests/1')).json()) as RequestDetail
     expect(after.status).toBe('posted')
     expect(after.postId).toBeTruthy()
     const attempt = (await (await call(`/saved-requests/1/attempts/${body.attemptId}`)).json()) as {
-      result: { rows: { txnId: string }[] }
+      result: { posted: { txnId: string }[] }
     }
-    expect(attempt.result.rows[0].txnId).toBeTruthy()
+    expect(attempt.result.posted[0].txnId).toBeTruthy()
   })
 
   it('honours a forced outcome and returns the request to pending', async () => {

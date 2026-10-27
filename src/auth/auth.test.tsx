@@ -4,6 +4,7 @@ import { renderApp } from '@/test/render'
 import { server } from '@/mocks/server'
 import { mockControl, mockDb } from '@/mocks/db'
 import { MOCK_PASSWORD } from '@/mocks/fixtures/users'
+import { safeNext } from './useSession'
 
 async function fillSignIn(user: ReturnType<typeof renderApp>['user'], email: string, password = MOCK_PASSWORD) {
   await user.type(await screen.findByLabelText('Email'), email)
@@ -142,5 +143,12 @@ describe('session restore and guards', () => {
     expect(logoutCalled).toBe(true)
     expect(mockDb.session).toBeNull()
     await waitFor(() => expect(queryClient.getQueryData(['probe'])).toBeUndefined())
+  })
+})
+
+describe('safeNext', () => {
+  test('keeps only same-site paths', () => {
+    expect(safeNext('/requests/5?tab=history')).toBe('/requests/5?tab=history')
+    for (const bad of ['//evil.com', 'https://x', '/\\evil.com', '/a\nb', '', null]) expect(safeNext(bad)).toBeNull()
   })
 })

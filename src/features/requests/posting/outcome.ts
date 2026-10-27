@@ -141,7 +141,7 @@ export function outcomeFromRequest(r: RequestDetail, sinceAttemptId?: number | n
   const base = { postId: r.postId ?? undefined, attemptId: a?.id }
   if (r.status === 'posted' || r.status === 'partial' || r.status === 'unknown') return successOutcome(r.status, base)
   if (!a || (sinceAttemptId !== undefined && a.id === sinceAttemptId)) {
-    return { kind: 'error', title: 'The post did not go through. Nothing was sent.' }
+    return { kind: 'error', title: 'The server did not take the post. Nothing was posted.' }
   }
   switch (a.outcome) {
     case 'failed':

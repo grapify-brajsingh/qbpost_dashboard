@@ -69,6 +69,7 @@ export function RawJsonEditor({ request, etag }: { request: RequestDetail; etag:
         dirty={dirty}
         canSave={'payload' in checked}
         getPayload={() => ('payload' in checked ? checked.payload : request.payload)}
+        getCopyText={() => text}
         onReset={() => setState({ version, text: loaded })}
       />
       <Textarea

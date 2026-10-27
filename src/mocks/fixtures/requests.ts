@@ -194,7 +194,7 @@ export function buildRequests(): RequestRecord[] {
         counts: { submitted: 8, posted: 8, held: 0, skipped: 0 },
         startedUtc: '2026-10-20T09:00:00Z',
         finishedUtc: '2026-10-20T09:00:41Z',
-        result: { status: 'posted', postId: 'api-savings-1177-2026-07', counts: { submitted: 8, posted: 8, held: 0, skipped: 0 }, rows: rows7 },
+        result: { status: 'posted', postId: 'api-savings-1177-2026-07', counts: { submitted: 8, posted: 8, held: 0, skipped: 0 }, posted: rows7 },
       }),
     ],
     extraEvents: [
@@ -249,7 +249,7 @@ export function buildRequests(): RequestRecord[] {
           status: 'partial',
           postId: 'api-visa-8890-2026-07',
           counts: { submitted: 6, posted: 4, held: 2, skipped: 0 },
-          rows: toPostedRows(p9, 4, (i) => i < 4),
+          posted: toPostedRows(p9, 4, (i) => i < 4),
           validation: [
             { index: 4, externalId: 'row-5', reason: 'quickbooks-rejected', detail: 'QuickBooks rejected the row' },
             { index: 5, externalId: 'row-6', reason: 'quickbooks-rejected', detail: 'QuickBooks rejected the row' },

@@ -1,6 +1,7 @@
 import { ApiTimeoutError } from '@/api/client'
 import { ApiError, type ApiProblem } from '@/api/problem'
-import { interpretPost } from './outcome'
+import type { RequestDetail } from '@/api/schema'
+import { interpretPost, outcomeFromRequest } from './outcome'
 
 const ok = (body: unknown) => ({ status: 200, body, headers: new Headers() })
 const err = (problem: ApiProblem, headers: Record<string, string> = {}) => new ApiError(problem, new Headers(headers))
@@ -107,5 +108,12 @@ describe('interpretPost', () => {
     const o = interpretPost(err({ title: 'Internal error', status: 500, code: 'internal-error', requestId: 'req-42' }))
     expect(o).toMatchObject({ kind: 'error', title: 'Something went wrong', detail: 'Request ID: req-42' })
     expect(interpretPost(new TypeError('Failed to fetch')).kind).toBe('error')
+  })
+})
+
+describe('outcomeFromRequest', () => {
+  test('no newer attempt than before the post → the server did not take it', () => {
+    const r = { status: 'pending', postId: null, lastAttempt: { id: 7, outcome: 'busy', httpStatus: 409, finishedUtc: null } } as unknown as RequestDetail
+    expect(outcomeFromRequest(r, 7)).toEqual({ kind: 'error', title: 'The server did not take the post. Nothing was posted.' })
   })
 })

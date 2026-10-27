@@ -276,12 +276,13 @@ export function engineOutcome(r: RequestRecord): Outcome {
 export function fillSuccess(r: RequestRecord, attemptId: number, body: Record<string, unknown>): Record<string, unknown> {
   if (body.status !== 'posted') return body
   const payload = current(r).payload
-  const rows = toPostedRows(payload, attemptId)
-  const skipped = rowsOf(payload).length - rows.length
+  // `posted` is the real API's name for the per-row results (validate-and-post §6.1).
+  const posted = toPostedRows(payload, attemptId)
+  const skipped = rowsOf(payload).length - posted.length
   return {
     postId: `api-${typeof payload.reference === 'string' ? payload.reference : r.id}`,
-    counts: { submitted: rowsOf(payload).length, posted: rows.length, held: 0, skipped },
-    rows,
+    counts: { submitted: rowsOf(payload).length, posted: posted.length, held: 0, skipped },
+    posted,
     ...body,
   }
 }

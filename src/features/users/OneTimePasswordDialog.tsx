@@ -14,7 +14,12 @@ export function OneTimePasswordDialog({ password, onClose }: { password: string;
   }
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
+      {/* Shown once: only Done closes it, so a stray Escape or click outside cannot lose the password. */}
+      <DialogContent
+        showCloseButton={false}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Temporary password</DialogTitle>
           <DialogDescription>Give this to the user. They must change it when they sign in.</DialogDescription>

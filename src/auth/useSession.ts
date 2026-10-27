@@ -21,7 +21,13 @@ export function hasScope(me: Me | null, scope: string): boolean {
   return !!me && me.scopes.includes(scope)
 }
 
-/** Only same-app absolute paths are allowed as a post-login destination. */
+/**
+ * Only same-app absolute paths are allowed as a post-login destination: no `//host`, no backslash (browsers read
+ * `/\host` as `//host`) and no control characters.
+ */
+// eslint-disable-next-line no-control-regex -- rejecting control characters is the point
+const SAME_APP_PATH =/^\/(?![/\\])[^\\\x00-\x1f]*$/
+
 export function safeNext(next: string | null): string | null {
-  return next && next.startsWith('/') && !next.startsWith('//') ? next : null
+  return next && SAME_APP_PATH.test(next) ? next : null
 }

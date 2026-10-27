@@ -388,6 +388,29 @@ describe('raw JSON editor', () => {
     expect(await screen.findByRole('columnheader', { name: 'Payee' })).toBeInTheDocument()
   })
 
+  test('412: Copy my edits copies the text as typed, even when it is not valid JSON', async () => {
+    const { user } = await open(4)
+    const area = screen.getByRole('textbox', { name: 'Payload JSON' })
+    fireEvent.change(area, { target: { value: '{ "reference": "mine" }' } })
+    record(4).rowVersion = 9 // someone else saved: the mock answers 412
+    let release!: () => void
+    const gate = new Promise<void>((r) => (release = r))
+    server.use(
+      http.put(`${API}/4`, async () => {
+        await gate
+        return undefined
+      }),
+    )
+    const write = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    // While the save is on its way, the text is changed to something that is not JSON.
+    fireEvent.change(area, { target: { value: '{ "reference": "mine", oops' } })
+    release()
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Copy my edits' }))
+    expect(write).toHaveBeenCalledWith('{ "reference": "mine", oops')
+  })
+
   test('read-only for a viewer', async () => {
     await open(4, 'u-viewer')
     expect(screen.getByTestId('raw-json').tagName).toBe('PRE')
