@@ -34,7 +34,7 @@ export function StatementHeader({
   onMenu,
 }: {
   request: RequestDetail
-  /** The email subject, or the SR ref when there is none. */
+  /** The email subject, else the uploaded file name, else the SR ref. */
   title: string
   onOpenSheet: (tab: SheetTab) => void
   onMenu: (action: MenuAction) => void
@@ -47,8 +47,21 @@ export function StatementHeader({
         <h1 className="text-2xl leading-tight font-semibold tracking-[-0.015em] break-words">{title}</h1>
         <div data-testid="statement-meta" className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] text-muted-foreground">
           <dl className="contents">
-            <Meta label="Received">{request.email?.receivedUtc ? <Timestamp utc={request.email.receivedUtc} /> : '—'}</Meta>
-            <Meta label="From">{request.email?.from ?? '—'}</Meta>
+            {request.upload && !request.email ? (
+              <>
+                <Meta label="Uploaded">
+                  <Timestamp utc={request.created.utc} />
+                </Meta>
+                <Meta label="File">
+                  <span className="break-all">{request.upload.fileName}</span>
+                </Meta>
+              </>
+            ) : (
+              <>
+                <Meta label="Received">{request.email?.receivedUtc ? <Timestamp utc={request.email.receivedUtc} /> : '—'}</Meta>
+                <Meta label="From">{request.email?.from ?? '—'}</Meta>
+              </>
+            )}
             <Meta label="Reference">{request.reference ?? '—'}</Meta>
             <Meta label="Push">
               <PushId value={request.pushId} fallback={request.publicRef} />

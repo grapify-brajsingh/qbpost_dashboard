@@ -144,6 +144,14 @@ describe('statements list', () => {
     expect(within(row).getByRole('button', { name: 'History 0' })).toBeInTheDocument()
   })
 
+  test('an uploaded statement shows its file name and who uploaded it (R-14)', async () => {
+    const upload = { fileName: 'chase-sep-2026.pdf', sizeBytes: 1, sha256: 'x', model: 'm', promptVersion: 'p', extractedUtc: '2026-10-28T10:00:00Z' }
+    useList([summary({ id: 20, email: null, upload, source: { kind: 'user', id: 'u-editor', name: 'Eli Editor' } })])
+    signedIn()
+    const row = (await screen.findByRole('link', { name: 'chase-sep-2026.pdf' })).closest('tr')!
+    expect(within(row).getByText('Uploaded by Eli Editor')).toBeInTheDocument()
+  })
+
   test('tab counts come from stats; Has errors uses stats.hasErrors.pending', async () => {
     server.use(http.get(STATS, () => HttpResponse.json(STATS_FIXED)))
     signedIn()

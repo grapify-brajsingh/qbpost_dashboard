@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { parsePage } from '@/lib/pageParam'
 import { STATS_POLL_MS, useRequestsList, useStats, type ListParams } from '@/api/queries/requests'
 import { useSession, hasScope } from '@/auth/useSession'
 import { useUrlFilters } from '@/components/filters'
-import { InboxIcon, SearchXIcon } from 'lucide-react'
+import { FileUpIcon, InboxIcon, SearchXIcon } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { DataPanel, EmptyState, Pager, TableSkeleton } from '@/components/DataPanel'
 import { PageHeader } from '@/components/PageHeader'
 import { ProblemAlert } from '@/components/ProblemAlert'
@@ -104,6 +105,16 @@ export function StatementsPage({ onOpenSheet }: { onOpenSheet?: (id: number, tab
         title="Statements"
         description="Check each statement against its PDF, fix what n8n read wrong, then post it to QuickBooks."
         aside={newCount > 0 && <NewArrivalsPill count={newCount} onShow={() => void showNew()} />}
+        actions={
+          hasScope(me, 'requests:submit') && (
+            <Button asChild size="sm">
+              <Link to="/statements/upload">
+                <FileUpIcon aria-hidden />
+                Upload PDF
+              </Link>
+            </Button>
+          )
+        }
       />
       <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
         <StatusTabs value={tab} stats={stats.data} isAdmin={isAdmin} onChange={(t) => view.set({ tab: t === 'review' ? undefined : t })} />

@@ -18,6 +18,11 @@ describe('auditSentence', () => {
     expect(auditSentence(ev('post-failed', { detail: { outcome: 'busy' } }))).toBe('Post failed (busy)')
   })
 
+  it('an upload reads "Uploaded <file>"; n8n saves still read "Received"', () => {
+    expect(auditSentence(ev('received', { detail: { source: 'upload', fileName: 'chase-sep.pdf' } }))).toBe('Uploaded chase-sep.pdf')
+    expect(auditSentence(ev('received', { detail: { source: 'email' } }))).toBe('Received the statement')
+  })
+
   it('falls back to the row external id, then to words, when the position is unknown', () => {
     expect(auditSentence(ev('row-deleted', { row: { externalId: 'row-7', index: null } }))).toBe('Deleted row row-7')
     expect(auditSentence(ev('row-deleted'))).toBe('Deleted a row')

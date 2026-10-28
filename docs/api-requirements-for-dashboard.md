@@ -1,12 +1,13 @@
 # API requirements from the dashboard
 
-**Date**: 2026-10-27 · **Last updated**: 2026-10-28 (Home dashboard, R-10 to R-12; see [Changelog](#changelog))
+**Date**: 2026-10-27 · **Last updated**: 2026-10-28 (manual PDF upload, R-13 and R-14; see [Changelog](#changelog))
 **For**: the qbautopost API project (`D:\qb_post-issue-2`), to be turned into its own spec
 and plan, as an amendment to `docs/saved-requests-postgres.md` (ticket #2) or as a follow-up ticket.
 **From**: the dashboard designs in https://github.com/grapify-brajsingh/qbpost_dashboard:
 `docs/superpowers/specs/2026-10-27-qbautopost-dashboard-design.md` (v1),
-`docs/superpowers/specs/2026-10-28-dashboard-v2-pages-design.md` (v2) and
-`docs/superpowers/specs/2026-10-28-home-dashboard-spec.md` (Home).
+`docs/superpowers/specs/2026-10-28-dashboard-v2-pages-design.md` (v2),
+`docs/superpowers/specs/2026-10-28-home-dashboard-spec.md` (Home) and
+`docs/superpowers/specs/2026-10-28-manual-pdf-upload-spec.md` (manual PDF upload).
 
 Everything in `saved-requests-postgres.md` is assumed as written. This file lists only what the dashboard needs **in
 addition to** it, plus the answer to Q-82. Proposals marked *(suggested)* are for the API project to confirm or
@@ -38,6 +39,8 @@ Status values: **Open** (not started or not yet answered) · **Accepted** (agree
 | R-10 | Contracts the Home page relies on today (audit totals, time filters, event semantics, queue list) | Confirm | 2026-10-28 (Home) | **Home** | Implemented | Open |
 | R-11 | `GET /dashboard/summary`: period counts, series, posted value, time to post in one call | **New endpoint** *(suggested)* | 2026-10-28 (Home) | **Home** (replaces 8 + up to 10 calls; adds posted value) | Not implemented | Open |
 | R-12 | Statements list: filter and sort by posted time; time-zone-aware received filters | New filters *(nice to have)* | 2026-10-28 (Home) | **Home** drill-downs, Statements list | Not implemented | Open |
+| R-13 | `POST /statement-extractions`: read an uploaded PDF with the n8n prompt and model (OpenRouter), return rows and possible duplicates, store nothing but a short-lived extraction record | **New endpoint** | 2026-10-28 (upload) | **Upload PDF** page | Implemented | Open |
+| R-14 | Save a reviewed upload: `POST /saved-requests` accepts `upload.extractionId`; version 1 = what was read, version 2 = the reviewed rows; `upload` metadata on statements; `received` event detail | New field + behaviour | 2026-10-28 (upload) | Upload PDF page, Statements list, statement page, audit trail | Implemented | Open |
 
 ### APIs the dashboard needs built
 
@@ -58,6 +61,8 @@ QuickBooks lists) is already in that spec.
 | Static files + SPA fallback | R-2 | Deployment | Must (before go-live) |
 | `GET /dashboard/summary` | R-11 | Home | Should: Home works without it, with more calls and no posted value |
 | `GET /saved-requests?postedFrom=&postedTo=&sort=posted`, time-zone-aware received filters | R-12 | Home drill-downs | Could |
+| `POST /statement-extractions` (multipart PDF → extracted payload, possible duplicates; calls OpenRouter) | R-13 | Upload PDF page | **Must** for manual upload |
+| `POST /saved-requests` accepts `upload: { extractionId }`; `upload` on list and detail rows; list `q` matches the file name | R-14 | Upload PDF page, Statements list, statement page | **Must** for manual upload |
 
 ---
 
@@ -436,10 +441,181 @@ by post time.
 **Acceptance**: `postedFrom=2026-10-27&postedTo=2026-10-27&tz=Asia/Kolkata` returns exactly the statements whose post
 finished on that local day.
 
+---
+
+# Manual PDF upload additions (2026-10-28)
+
+**From**: `docs/superpowers/specs/2026-10-28-manual-pdf-upload-spec.md` (GitHub issue #4). Today every statement
+arrives from n8n: Gmail trigger → "Extract from File" (PDF text) → "Information Extractor" (OpenRouter,
+`google/gemini-pro-latest`, a fixed system prompt and JSON schema) → a Code node that tidies the rows → HTTP save.
+The owner wants two things:
+
+1. **n8n saves to the database** instead of posting straight to QuickBooks. That is the existing
+   `POST /saved-requests` (with `email` and `pushId`, R-1 and R-5), so for the API **nothing new is needed** beyond
+   what is already listed. The n8n HTTP node changes its URL.
+2. **An editor or admin can upload a statement PDF from the dashboard**, from anywhere. The API reads it **with the same
+   OpenRouter model and prompt** (decided: the API calls OpenRouter itself, not n8n). The user reviews and corrects the
+   extracted rows on a full editor **before anything is saved** (decided). Saving creates an ordinary statement that
+   then works exactly like one from n8n (edit, validate, post, audit).
+
+Owner decisions that shape R-13 and R-14:
+- **The PDF is discarded** once read. Only its name, size and SHA-256 are kept. ("No PDF storage" below still holds.)
+- **No made-up defaults.** The n8n Code node fills gaps with fixed values (`account: "Capital One - 3188"`,
+  `last4: "6891"`, `reference: "zemen-2019-12-p01"`, `payee: "Uncategorized"`, `lineAccount: "Ask My Accountant"`).
+  For uploads, a field the model did not find is **left empty** for the accountant to fill in.
+- **Possible duplicates are a warning**, never a block. The user can save anyway.
+- **Two copies of the prompt for now** (n8n and the API). Drift is made visible by recording the prompt version and
+  model on every uploaded statement (R-13.5). Pointing n8n at R-13 later would leave one copy; that is not part of this
+  work.
+
+## R-13. `POST /statement-extractions`: read an uploaded PDF (new)
+
+**Need**: turn one uploaded PDF into the same payload shape n8n produces, without saving a statement, so the user can
+review it first.
+
+1. **Request**: `POST /statement-extractions`, `multipart/form-data` with one part `file` (`application/pdf`).
+   Scope **`requests:submit`** (editor and admin; viewers get `403`). No other fields.
+2. **Limits** *(suggested)*: at most **10 MB** and **50 pages**. Larger → `413 file-too-large` (problem says which
+   limit). Not a PDF (by content, not only the part's content type: the file must start with `%PDF-`) →
+   `415 not-a-pdf`. Encrypted / password-protected → `422 pdf-protected`.
+3. **Reading**: the API takes the PDF's text (as n8n's "Extract from File" does) and calls OpenRouter with **the same
+   model, system prompt and JSON schema as the n8n "Information Extractor" node** (copied verbatim, see 13.5).
+   - *(suggested)* When the PDF has no text layer (a scan), send the PDF itself to the model as a file input instead
+     of failing; the model is multimodal. If that is not done, return `422 no-text` ("This PDF has no readable text.
+     It may be a scan.").
+   - The OpenRouter key lives in API configuration (secret store), never in a response, a log line or the browser.
+4. **Tidy-up rules** (the n8n Code node's rules, **minus its defaults**):
+   - `kind`: `Deposit` when the model says deposit, else `Check` (only those two, as in n8n).
+   - `amount`: absolute value, as returned (no rounding beyond what the model gave). Not a number → omitted.
+   - `externalId`: `row-1`, `row-2`, … in the order read.
+   - `date`, `account`, `lineAccount`, `memo`, `last4`, `payee`, `checkNo`: copied when the model returned a
+     non-empty value; **otherwise omitted** (never a default).
+   - `reference`: the model's value, or **null**. (The dashboard pre-fills the file name for the user to change.)
+   - `controlTotal`: **always null**. The API never computes it. The user types the total printed on the statement
+     (v1 anti-goal: never silently write or recompute `controlTotal`).
+5. **Prompt versioning**: the system prompt, JSON schema and model name live in **one versioned file or config section
+   in the API** (*suggested* `Extraction:Model`, default `google/gemini-pro-latest`; `Extraction:PromptVersion`, a
+   string such as `2026-10-28.1`). Every response and every statement saved from it records `model` and
+   `promptVersion`, so a difference between uploaded and emailed statements can be traced to a prompt change.
+6. **Extraction record** (not a statement): the API stores, for **24 hours**, `extractionId` (UUID), the uploading
+   user, file name, size, SHA-256, page count, model, prompt version, the tidied payload, time, and `savedRequestId`
+   (null until saved). **No PDF bytes and no PDF text.** Unsaved records are deleted after 24 hours. Creating or
+   expiring a record writes **no audit event** (the owner: discarding leaves no trace).
+7. **Response `200`**:
+   ```json
+   {
+     "extractionId": "5d0c2f7e-8a41-4b8e-9a59-0f1f3c2b7d10",
+     "file": { "name": "chase-aug-2026.pdf", "sizeBytes": 421337, "sha256": "9f2c…", "pageCount": 3 },
+     "model": "google/gemini-pro-latest",
+     "promptVersion": "2026-10-28.1",
+     "extractedUtc": "2026-10-28T10:15:02Z",
+     "expiresUtc": "2026-10-29T10:15:02Z",
+     "isBankStatement": true,
+     "payload": {
+       "reference": "chase-2026-08",
+       "controlTotal": null,
+       "transactions": [
+         { "externalId": "row-1", "kind": "Deposit", "date": "2026-08-01", "amount": 1240.00,
+           "account": "Chase - 4410", "lineAccount": "Merchant Card Deposits",
+           "memo": "BANKCARD SETTLEMENT 0801", "payee": "Bankcard Merchant Services" },
+         { "externalId": "row-2", "kind": "Check", "date": "2026-08-03", "amount": 60.00,
+           "memo": "ACH DEBIT 99812" }
+       ]
+     },
+     "possibleDuplicates": [
+       { "id": 118, "publicRef": "SR-000118", "reference": "chase-2026-08", "status": "pending",
+         "receivedUtc": "2026-10-27T07:12:44Z", "source": "email",
+         "reasons": ["same-reference", "overlapping-rows"] }
+     ]
+   }
+   ```
+   - The original filename is returned as sent, but the API must treat it as untrusted text (max 255 chars, control
+     characters stripped).
+8. **Not a bank statement**: when the model returns `is_bank_statement: false`, respond
+   **`422 not-a-bank-statement`** ("This PDF doesn't look like a bank or card statement.") and keep **no** extraction
+   record. A bank statement with zero rows is `200` with an empty `transactions` array (the user may add rows by hand).
+9. **Possible duplicates** (warning only; compared against every statement, any status, newest first, at most 5):
+   - `same-file`: SHA-256 equals the file of an **earlier saved** upload (R-14.4);
+   - `same-reference`: `reference` equals an existing statement's current `reference` (exact, non-empty);
+   - `overlapping-rows`: at least one row matches an existing statement's row on the §9 fingerprint (kind, date,
+     amount, account, check/ref number, payee). *(suggested)* Because uploaded rows often lack `account` or `payee`,
+     also count a match on **date + amount + kind** when **at least half** of the uploaded rows match the same
+     statement. Use the reason `overlapping-rows` either way.
+   `source` is `email` (has `email` metadata), `upload` (has `upload` metadata, R-14) or `other`.
+10. **Failures** (RFC 7807, as everywhere):
+    - `502 extraction-failed`: OpenRouter returned an error, or JSON that does not match the schema after one retry
+      *(suggested)*. Detail says to try again; nothing is stored.
+    - `504 extraction-timeout`: no answer within **120 s** *(suggested)*. Nothing is stored.
+    - `503 extraction-unavailable`: extraction is not configured (no key) or switched off.
+    - `429 too-many-extractions`: *(suggested)* more than one extraction in flight for the same user, or more than
+      20 per user per hour. `Retry-After` set.
+11. **Timing**: a 3-page statement takes 10–40 s. The request is synchronous; the dashboard waits up to 150 s and lets
+    the user cancel. A client disconnect *may* cancel the OpenRouter call (unlike posting, nothing is written).
+12. OpenAPI: document the multipart body, the response, and every problem `type`.
+
+**Acceptance**: uploading the PDF n8n handled for `zemen-2019-12` returns the same rows (kind, date, amount, payee,
+lineAccount, memo) as the n8n run on that PDF, with blanks where n8n would have written a default; a non-statement PDF
+returns `422 not-a-bank-statement`; no PDF bytes or text exist anywhere after the call; a second upload of a saved file
+lists the first statement with `same-file`.
+
+## R-14. Saving a reviewed upload (new)
+
+**Need**: the reviewed rows become an ordinary statement, with the model's reading kept as version 1 so **every
+change the user made during review is audited** like any other edit.
+
+1. **Body**: `POST /saved-requests` (scope `requests:submit`, unchanged) accepts a top-level
+   `upload: { "extractionId": "…" }` next to `reference`, `controlTotal` and `transactions` (the reviewed payload).
+   Like `email` and `pushId`, `upload` is metadata: excluded from binding, the duplicate hash and the change list.
+2. **Checks**: the extraction exists, is not expired, belongs to the **same user**, and has not been saved.
+   - Unknown or expired → `410 extraction-expired` ("Upload the PDF again.").
+   - Another user's → `404` (do not reveal it exists).
+   - Already saved → `409 extraction-already-saved` with `savedRequestId` and `publicRef`, never a second statement
+     (this also covers a double click or a retry after a lost response).
+3. **Versions**:
+   - **Version 1** = the extraction record's tidied **rows** (what the model read) with the body's `reference` and
+     `controlTotal` (the user always has to type or confirm these, so they are not treated as edits), created by the
+     uploading user, note `Read from chase-aug-2026.pdf`.
+   - **Version 2** = the posted body payload, only if its `transactions` differ from version 1's (`changes` as in
+     §8.3, so the audit feed shows each review edit as `row-edited`, `row-added`, `row-deleted`, `row-post-off`, …),
+     note `Reviewed before saving`. Same actor, same time.
+   - The dashboard sends `controlTotal: null` when the user left it empty (never omitted, never computed).
+   - `original_body` = the request body as received (as for n8n).
+   - Read errors, validation and duplicate detection (§9) run on the current version, as for any save.
+4. **Stored metadata**: new nullable columns, filled from the extraction record (never from the client):
+   `upload_file_name`, `upload_size_bytes`, `upload_sha256`, `upload_model`, `upload_prompt_version`,
+   `upload_extracted_utc`. Returned on detail **and** list rows:
+   ```json
+   "upload": { "fileName": "chase-aug-2026.pdf", "sizeBytes": 421337, "sha256": "9f2c…",
+               "model": "google/gemini-pro-latest", "promptVersion": "2026-10-28.1",
+               "extractedUtc": "2026-10-28T10:15:02Z" }   // or null for n8n saves
+   ```
+   `email` is null for uploads; `source` is the user (`{ "kind": "user", "id", "name" }`), as today for a save by a
+   signed-in user.
+5. **Audit (R-7)**: the `received` event for an upload has the user as `actor` and
+   `detail: { "source": "upload", "fileName": "…" }`. n8n saves get `detail: { "source": "email" }` *(suggested;
+   null is fine for older rows)*. R-10.3 is unchanged: still exactly one `received` per saved request. Version 2's
+   changes appear as ordinary row events at the same time.
+6. **List** (§6.5, R-1): `q` also matches `upload_file_name` (contains, case-insensitive). `sort=received` uses
+   `created_utc` for uploads (no email time), as R-1.5 already says.
+7. **Duplicates after saving** work as today (§9). The user already saw R-13's warning, so the dashboard does not ask
+   again on save; the statement page's existing duplicate flag and Post dialog warning still apply. This also covers a
+   reference the user typed during review that matches another statement (R-13.9 only saw the model's reference), so
+   no re-check call is needed.
+
+**Acceptance**: saving an extraction with two edited cells and one added row creates a statement with version 1 equal
+to the extraction rows (plus the saved reference and control total) and version 2 holding exactly those three changes;
+saving with no row edits creates only version 1; the audit feed shows `received`
+(actor = the user, `detail.source = upload`) and three row events; saving the same `extractionId` again returns `409`
+with the first statement's id; after 24 hours an unsaved extraction returns `410`.
+
+---
+
 ## Not needed (decided)
 
 - No bulk endpoints. About 10 statements a day doesn't justify them.
-- No PDF or attachment storage. The accountant reads the PDF from email.
+- No PDF or attachment storage. The accountant reads the PDF from email. Uploaded PDFs are discarded after reading
+  (R-13.6); only name, size and SHA-256 are kept.
+- No multi-file upload. One PDF per upload (R-13.1).
 - No server push (SSE or WebSocket). The dashboard polls stats every 60 s and a posting request every 3 s.
 - No merging of repeat pushes into one statement (v2): the owner wants each push as its own row.
 - No editing or deleting of audit events, ever.
@@ -454,6 +630,8 @@ the reason.
 
 | Date | Change | Requirements | Source |
 |---|---|---|---|
+| 2026-10-28 | R-13 and R-14 implemented in the dashboard's mock API (`src/mocks/handlers/extractions.ts`, `saveUpload` in `handlers/requests.ts`), as written. R-14.3 as clarified in review: reference and control total typed at review go into version 1; only row changes create version 2. | R-13, R-14 | `docs/superpowers/plans/2026-10-28-manual-pdf-upload-plan.md` §4 |
+| 2026-10-28 | **Manual PDF upload additions** (issue #4): R-13 `POST /statement-extractions` reads an uploaded PDF with the n8n prompt and model via OpenRouter, leaves missing fields empty (no defaults), never computes `controlTotal`, returns possible duplicates, keeps a 24-hour extraction record and no PDF. R-14 saves a reviewed upload through `POST /saved-requests` with `upload.extractionId` (version 1 = read, version 2 = reviewed), adds `upload` metadata and `received` event `detail.source`. Context: n8n switches its HTTP node to `POST /saved-requests` (no new API need). "Not needed" extended (uploaded PDFs discarded, no multi-file upload). | R-13, R-14 | `docs/superpowers/specs/2026-10-28-manual-pdf-upload-spec.md` |
 | 2026-10-28 | Added the **Tracker** (status per requirement, plus a table of the APIs the dashboard needs built) and this **Changelog**. Header now lists all three dashboard designs. | all | — |
 | 2026-10-28 | **Home dashboard additions**: R-10 confirms the contracts Home relies on (exact audit `total` with `pageSize=1`, inclusive time filters, one event per received / posted / failed / discarded, queue list paging). R-11 proposes `GET /dashboard/summary` (period counts, series, posted rows and amount, time to post). R-12 proposes posted-time filters and time-zone-aware received filters. Home needs no new endpoint to ship. | R-10, R-11, R-12 | `docs/superpowers/specs/2026-10-28-home-dashboard-spec.md` |
 | 2026-10-28 | R-7.3: `posted` events carry `detail.postedCount` and `detail.postId`; user events carry the subject user's `userId`, `email`, `displayName` (and `role` for created / role-changed). | R-7 | commit `aaf56c2` |

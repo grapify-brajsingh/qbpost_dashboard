@@ -118,6 +118,7 @@ export function toSummary(r: RequestRecord, role: Role): RequestSummary {
       : null,
     postId: r.postId,
     email: r.email,
+    upload: r.upload,
     pushId: r.pushId,
     historyCount: historyCountOf(r),
     validationSummary: validationSummaryOf(r),
@@ -251,6 +252,7 @@ export function listRequests(request: Request, user: MockUser) {
         typeof p.reference === 'string' ? p.reference : '',
         publicRef(r.id),
         r.email?.subject ?? '',
+        r.upload?.fileName ?? '',
         ...rowsOf(p).flatMap((t) => [t.payee ?? '', t.memo ?? '']),
       ]
       const pushMatch = qPush !== '' && (r.pushId?.replace(/-/g, '').startsWith(qPush) ?? false)

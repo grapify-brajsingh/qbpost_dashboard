@@ -19,6 +19,38 @@ function toNodeSignal(signal: AbortSignal): AbortSignal {
   return c.signal
 }
 
+// Node's fetch cannot send jsdom's FormData: it would send "[object FormData]", and its own FormData checks parts
+// against the global Blob, which is jsdom's here. So write the multipart body as bytes, exactly as a browser sends it.
+const CRLF = '\r\n'
+
+async function toMultipart(init: RequestInit & { body: FormData }): Promise<RequestInit> {
+  const boundary = `----vitest-${crypto.randomUUID()}`
+  const chunks: Buffer[] = []
+  for (const [name, value] of init.body.entries()) {
+    const head =
+      typeof value === 'string'
+        ? `Content-Disposition: form-data; name="${name}"`
+        : `Content-Disposition: form-data; name="${name}"; filename="${value.name}"${CRLF}Content-Type: ${value.type || 'application/octet-stream'}`
+    chunks.push(Buffer.from(`--${boundary}${CRLF}${head}${CRLF}${CRLF}`, 'latin1'))
+    chunks.push(typeof value === 'string' ? Buffer.from(value) : await readBlob(value))
+    chunks.push(Buffer.from(CRLF))
+  }
+  chunks.push(Buffer.from(`--${boundary}--${CRLF}`))
+  const headers = new Headers(init.headers)
+  headers.set('Content-Type', `multipart/form-data; boundary=${boundary}`)
+  return { ...init, headers, body: Buffer.concat(chunks) }
+}
+
+/** A jsdom Blob's bytes (it has no arrayBuffer()); read as a binary string so no foreign-realm ArrayBuffer is involved. */
+function readBlob(blob: Blob): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(Buffer.from(reader.result as string, 'latin1'))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsBinaryString(blob)
+  })
+}
+
 let unbridgedFetch: typeof fetch
 let unbridgedRequest: typeof Request
 
@@ -34,8 +66,10 @@ beforeAll(() => {
   unbridgedRequest = globalThis.Request
   globalThis.Request = BridgedRequest
   unbridgedFetch = globalThis.fetch
-  globalThis.fetch = (input, init) =>
-    unbridgedFetch(input, init?.signal ? { ...init, signal: toNodeSignal(init.signal) } : init)
+  globalThis.fetch = async (input, init) => {
+    const bridged = init?.body instanceof FormData ? await toMultipart(init as RequestInit & { body: FormData }) : init
+    return unbridgedFetch(input, bridged?.signal ? { ...bridged, signal: toNodeSignal(bridged.signal) } : bridged)
+  }
 })
 afterEach(() => {
   server.resetHandlers()

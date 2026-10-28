@@ -24,6 +24,7 @@ import { StatementSheet } from '@/features/statements/sheet/StatementSheet'
 import { useStatementSheet } from '@/features/statements/sheet/useStatementSheet'
 import { useBreadcrumb } from '@/layout/useBreadcrumb'
 import { StatementHeader, type MenuAction } from './StatementHeader'
+import { statementSubject } from '@/lib/statementTitle'
 
 /** The version a post dialog opened on. */
 interface Seen {
@@ -33,10 +34,9 @@ interface Seen {
   payload: RequestDetail['payload']
 }
 
-/** The page title and last crumb: the email subject, or the SR ref when it is missing or blank. */
+/** The page title and last crumb: the email subject, else the uploaded file name, else the SR ref. */
 function titleOf(request: RequestDetail): string {
-  const subject = request.email?.subject?.trim()
-  return subject ? subject : request.publicRef
+  return statementSubject(request)?.trim() || request.publicRef
 }
 
 /** True when the saved statement has rows and every one is marked don't post. */
