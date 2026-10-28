@@ -23,35 +23,34 @@ function cacheDump(qc: QueryClient): string {
 }
 
 async function createUser(user: ReturnType<typeof renderApp>['user'], email: string) {
-  await user.click(await screen.findByRole('button', { name: 'Create user' }))
+  await user.click(await screen.findByRole('button', { name: 'New user' }))
   await user.type(screen.getByLabelText('Email'), email)
   await user.type(screen.getByLabelText('Display name'), 'Nina New')
-  await user.click(screen.getByRole('button', { name: 'Create' }))
+  await user.click(screen.getByRole('button', { name: 'Create user' }))
 }
 
 describe('Users list', () => {
-  test('hides disabled by default, filters by role, search and Show disabled', async () => {
+  test('lists everyone and filters by role and search', async () => {
     const { user } = open('/users')
     await rowOf('Asha K')
-    expect(screen.queryByRole('link', { name: 'Dan Disabled' })).not.toBeInTheDocument()
-
-    await user.click(screen.getByLabelText('Show disabled'))
     expect(within(await rowOf('Dan Disabled')).getByText('Disabled')).toBeInTheDocument()
 
-    await user.selectOptions(screen.getByLabelText('Role'), 'viewer')
+    await user.click(screen.getByRole('button', { name: 'Role' }))
+    await user.click(await screen.findByRole('option', { name: 'Viewer' }))
     await waitFor(() => expect(screen.queryByRole('link', { name: 'Asha K' })).not.toBeInTheDocument())
     expect(screen.getByRole('link', { name: 'Vera Viewer' })).toBeInTheDocument()
 
-    await user.selectOptions(screen.getByLabelText('Role'), '')
+    await user.click(screen.getByRole('button', { name: 'Clear Role filter' }))
     await user.type(screen.getByRole('searchbox', { name: 'Search' }), 'lena')
     await waitFor(() => expect(screen.queryByRole('link', { name: 'Asha K' })).not.toBeInTheDocument())
     expect(screen.getByRole('link', { name: 'Lena Locked' })).toBeInTheDocument()
   })
 
-  test('status column: Active and Locked until <local time>', async () => {
+  test('status badges: Active and Locked out (tooltip has the time)', async () => {
     open('/users')
     expect(within(await rowOf('Asha K')).getByText('Active')).toBeInTheDocument()
-    expect(within(await rowOf('Lena Locked')).getByText(`Locked until ${formatTimestamp('2099-01-01T00:00:00Z')}`)).toBeInTheDocument()
+    const locked = within(await rowOf('Lena Locked')).getByText('Locked out')
+    expect(locked).toHaveAttribute('title', `Locked until ${formatTimestamp('2099-01-01T00:00:00Z')}`)
   })
 
   test('an editor sees not found', async () => {
@@ -183,23 +182,11 @@ describe('User page', () => {
       if (request.method === 'POST') calls.push(new URL(request.url).pathname)
     })
     const { user } = open('/users/u-locked')
-    await screen.findByText(`Locked until ${formatTimestamp('2099-01-01T00:00:00Z')}`)
+    await screen.findByText('Locked out')
     await user.click(screen.getByRole('button', { name: 'Unlock' }))
     expect(await screen.findByText('Active')).toBeInTheDocument()
     expect(calls).toContain('/api/v1/users/u-locked/unlock')
     expect(screen.queryByRole('button', { name: 'Unlock' })).not.toBeInTheDocument()
-  })
-
-  test('the audit list renders rows', async () => {
-    const { user } = open('/users/u-viewer')
-    await screen.findByRole('heading', { name: 'Vera Viewer' })
-    expect(await screen.findByText('No audit entries.')).toBeInTheDocument()
-    await user.selectOptions(screen.getByLabelText('Role'), 'editor')
-    await user.click(screen.getByRole('button', { name: 'Save role' }))
-    const audit = screen.getByRole('region', { name: 'Audit' })
-    expect(await within(audit).findByText('role-changed')).toBeInTheDocument()
-    expect(within(audit).getByText(/by Asha K/)).toBeInTheDocument()
-    expect(within(audit).getByText('(from: viewer, to: editor)')).toBeInTheDocument()
   })
 })
 

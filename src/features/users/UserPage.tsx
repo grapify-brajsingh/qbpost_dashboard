@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { toast } from 'sonner'
-import { usePatchUser, useResetPassword, useUnlock, useUser, useUserAudit, type UserWithEtag } from '@/api/queries/users'
+import { usePatchUser, useResetPassword, useUnlock, useUser, type UserWithEtag } from '@/api/queries/users'
 import { ApiError, problemCode } from '@/api/problem'
 import type { Role } from '@/api/schema'
+import { useAuditEvents } from '@/api/queries/audit'
 import { useSession } from '@/auth/useSession'
 import { ProblemAlert } from '@/components/ProblemAlert'
 import { Timestamp } from '@/components/Timestamp'
@@ -11,8 +12,10 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { AuditTable } from '@/features/audit/AuditTable'
 import { OneTimePasswordDialog } from './OneTimePasswordDialog'
-import { isLocked, ROLES, selectClass, statusText } from './userStatus'
+import { UserStatusBadge } from './UserStatusBadge'
+import { isLocked, ROLES, selectClass } from './userStatus'
 
 export function UserPage() {
   const { id = '' } = useParams()
@@ -78,8 +81,8 @@ function UserDetail({
       <div>
         <h1 className="text-xl font-semibold">{user.displayName}</h1>
         <p className="text-sm text-muted-foreground">{user.email}</p>
-        <p className="text-sm">
-          Status: <span>{statusText(user)}</span>
+        <p className="flex items-center gap-2 text-sm">
+          Status: <UserStatusBadge user={user} />
         </p>
         <p className="text-sm">Last login: {user.lastLoginUtc ? <Timestamp utc={user.lastLoginUtc} /> : '—'}</p>
       </div>
@@ -165,34 +168,21 @@ function UserDetail({
         </DialogContent>
       </Dialog>
 
-      <AuditList id={user.id} />
+      <ActivityList id={user.id} />
     </>
   )
 }
 
-function detailText(detail: Record<string, unknown>): string {
-  return Object.entries(detail)
-    .map(([k, v]) => `${k}: ${String(v)}`)
-    .join(', ')
-}
-
-function AuditList({ id }: { id: string }) {
-  const audit = useUserAudit(id)
+function ActivityList({ id }: { id: string }) {
+  const events = useAuditEvents({ actor: id, pageSize: 50 })
   return (
-    <section aria-labelledby="audit-heading" className="space-y-2">
-      <h2 id="audit-heading" className="text-lg font-semibold">
-        Audit
+    <section aria-labelledby="activity-heading" className="space-y-2">
+      <h2 id="activity-heading" className="text-lg font-semibold">
+        Activity
       </h2>
-      {audit.error && <ProblemAlert error={audit.error} />}
-      {audit.data?.length === 0 && <p className="text-sm text-muted-foreground">No audit entries.</p>}
-      <ul className="space-y-1 text-sm">
-        {audit.data?.map((row) => (
-          <li key={row.id}>
-            <Timestamp utc={row.atUtc} /> · <span className="font-medium">{row.kind}</span> by {row.actor.name}
-            {row.detail && <span className="text-muted-foreground"> ({detailText(row.detail)})</span>}
-          </li>
-        ))}
-      </ul>
+      {events.error && <ProblemAlert error={events.error} />}
+      {events.data?.items.length === 0 && <p className="text-sm text-muted-foreground">No activity yet.</p>}
+      {events.data && events.data.items.length > 0 && <AuditTable events={events.data.items} />}
     </section>
   )
 }
