@@ -5,6 +5,9 @@
 **Builds on**: `docs/superpowers/specs/2026-10-27-qbautopost-dashboard-design.md` (v1). Everything in v1 still holds
 unless this document changes it. The anti-goals in v1 §2 hold without exception.
 **API side**: `docs/api-requirements-for-dashboard.md`, R-5 to R-9 are new for this design.
+> **Partly superseded (note added 2026-10-28)**: §4 "Look and feel" (teal primary, slate neutrals, dark sidebar,
+> 10px radius) is replaced by `2026-10-28-ui-refresh-ledger-spec.md`. In §5, `/` no longer redirects to `/statements`:
+> it is the Home page (`2026-10-28-home-dashboard-spec.md`), first item in the Work group. Everything else holds.
 
 ---
 

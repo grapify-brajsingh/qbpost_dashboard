@@ -118,6 +118,7 @@ updates `docs/api-requirements-for-dashboard.md` (requirement, tracker row, chan
 | v1: foundations, auth, posting, versions | [`2026-10-27-qbautopost-dashboard-design.md`](docs/superpowers/specs/2026-10-27-qbautopost-dashboard-design.md) | [`2026-10-27-qbautopost-dashboard.md`](docs/superpowers/plans/2026-10-27-qbautopost-dashboard.md) |
 | v2: Statements, statement page, Audit trail, Users | [`2026-10-28-dashboard-v2-pages-design.md`](docs/superpowers/specs/2026-10-28-dashboard-v2-pages-design.md) | [`2026-10-28-dashboard-v2-pages.md`](docs/superpowers/plans/2026-10-28-dashboard-v2-pages.md) |
 | Home dashboard | [`2026-10-28-home-dashboard-spec.md`](docs/superpowers/specs/2026-10-28-home-dashboard-spec.md) | [`2026-10-28-home-dashboard-plan.md`](docs/superpowers/plans/2026-10-28-home-dashboard-plan.md) |
+| Look and feel ("ledger" UI refresh) | [`2026-10-28-ui-refresh-ledger-spec.md`](docs/superpowers/specs/2026-10-28-ui-refresh-ledger-spec.md) | [`2026-10-28-ui-refresh-ledger-plan.md`](docs/superpowers/plans/2026-10-28-ui-refresh-ledger-plan.md) |
 
 - What the dashboard needs from the API: [`docs/api-requirements-for-dashboard.md`](docs/api-requirements-for-dashboard.md)
 - Original product brief: [`qbautopost-dashboard-brief.md`](qbautopost-dashboard-brief.md)

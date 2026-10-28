@@ -590,3 +590,31 @@ Run: `npm run lint && npm test && npm run build`. Expected: all green, and `dist
 Cover: what this is (one paragraph); `npm run dev:mock` (no API needed; mock users, all with the password `correct horse battery`); `npm run dev` with `VITE_API_PROXY_TARGET`; `npm test`, `npm run e2e`; `npm run gen:api` (once the API publishes the new routes, replace the hand-written types in `src/api/schema.ts` and keep `TXN_KINDS` derived from the generated enum); deploy (`npm run build`, copy `dist/*` into the API's `Dashboard:Path`, API requirement R-2); and a link to the design and the API requirements file.
 
 - [ ] **Step 5: Commit** — `test: e2e smoke; docs: README`
+
+---
+
+## Status and results (recorded 2026-10-28, retroactively)
+
+This section was added after the work, from the git history, because the plan's results had not been recorded.
+**The step checkboxes above were left as they are**: each step was not re-verified one by one. What is recorded is
+which commit delivered each task, and what later replaced it.
+
+| Task | Delivered in | Follow-up fixes | Today |
+|---|---|---|---|
+| 1 Tooling | `e0c3b19` | — | in use |
+| 2 Money and date helpers | `3808f27` | `0aca1f7` invalid timestamps | in use (`lib/money.ts`, `lib/dates.ts`) |
+| 3 API types, problems, mock API | `8969e36` | `f748472` fixture rows, event ids | in use; extended by v2 (R-5–R-9) |
+| 4 Session and fetch wrapper | `fda9d6c` | `e82dfd3` auth endpoints exempt from refresh, abort bridge | in use |
+| 5 Sign-in, password, guards, shell | `ccfde91` | — | shell **replaced** by the v2 sidebar shell (`0d38045`); sign-in restyled by the ledger refresh |
+| 6 Requests list | `b63db6b` | `ea8590d` search whitespace | **removed** in `6fb02a9`, replaced by the v2 Statements page |
+| 7 Request detail shell | `e444d95` | `f3fdb3c` keep detail on refetch failure | **removed** in `6fb02a9`, replaced by the v2 statement page; `StatusBanner` kept |
+| 8 Transactions table | `449f86d` | — | in use inside the v2 statement page |
+| 9 Inline editing, totals, If-Match | `291a573` | `211b477` draft keyed by request | in use |
+| 10 Posting | `15eb331` | `cf31818` partial findings, `73dd6ad` post state per request + pinned ETag | in use; v2 post dialog additions (`b764c7d`, `2de1d4a`) |
+| 11 Discard, restore, resolve | `b5dd96e` | `8bb7967` resolve evidence | in use |
+| 12 Versions, original, attempts, history tabs | `c27369a` | — | tabs **replaced** by the v2 statement sheet (`01fe1f5`); components reused |
+| 13 Users (admin) | `6536d30` | — | restyled and extended by v2 (`4349f7b`) |
+| 14 E2E smoke, build, README | `6da6441` | `df54471` final-review hardening | v1 e2e replaced by `e2e/v2.spec.ts` (`6fb02a9`) |
+
+**Verification today**: the current suite (432 Vitest tests, 2026-10-28) covers the v1 behaviour that is still in
+use (money, dates, session refresh, posting outcomes, editing, dialogs). The v1 e2e smoke no longer exists.

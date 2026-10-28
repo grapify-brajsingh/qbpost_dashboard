@@ -500,3 +500,31 @@ it('every AUDIT_ACTIONS value has a sentence (no fallback to the raw enum)')
   only `index.html` + `assets/`.
 - [ ] **Step 4:** README: pages, routes, mock users table, "what the fake API assumes (R-5..R-9)".
 - [ ] **Step 5: Commit** `chore: remove v1 list/detail, v2 end-to-end test and README`
+
+---
+
+## Status and results (recorded 2026-10-28, retroactively)
+
+Added after the work, from the git history. **The step checkboxes above were left as they are** (steps not
+re-verified one by one). What is recorded is which commit delivered each task and what changed it later.
+
+| Task | Delivered in | Follow-up fixes | Today |
+|---|---|---|---|
+| 1 Fake API and types, R-5/6/8/9 | `07f9fd5` | — | in use |
+| 2 Fake audit-events API (R-7) | `61bee58` | `aaf56c2` push-id filter, sentences, invalidation | in use; also feeds the Home page |
+| 3 Look: tokens, Geist, shadcn components | `fbe52b2` | — | tokens **replaced** by the ledger UI refresh (`5950cb4`, spec `2026-10-28-ui-refresh-ledger-spec.md`); components in use |
+| 4 Shell: sidebar, breadcrumb, routes, Ctrl K, My account | `0d38045` | `bb2c929` stale command results, breadcrumb trail | in use; `/` now the Home page instead of a redirect (`5950cb4`) |
+| 5 URL filter state and chips | `bd9b65e` | `a094432` SearchBox flush | in use |
+| 6 Statements page | `cfb3658` | `fe02b81` tests re-homed | in use |
+| 7 Statement sheet | `01fe1f5` | — | in use |
+| 8 Draft: don't post, ids, meter | `9db1835` | — | in use |
+| 9 Statement page | `d135991` | `707f977` row heights, multi-kind filter, subject title, editable control total | in use |
+| 10 Audit trail page | `a51d97e` | `aaf56c2` | in use |
+| 11 Post dialog additions | `b764c7d` | `2de1d4a` counts from the opened version | in use |
+| 12 Users restyle and activity | `4349f7b` | — | in use |
+| 13 Remove v1 leftovers, e2e, docs | `6fb02a9` | — | done |
+| Final review | `c85bdb4` | audit export via api client, unknown actions, push id detection, control total blur, post dialog snapshot, page param, filter count, partial results, breadcrumb, dead v1 code | — |
+
+**Verification today** (2026-10-28): lint and build pass; 432 Vitest tests, with one full run all green and other
+full runs showing 1–2 load-related timeouts in `StatementPage.test.tsx` that pass when the file runs alone.
+`e2e/v2.spec.ts` was updated for the Home landing page but not run on 2026-10-28.

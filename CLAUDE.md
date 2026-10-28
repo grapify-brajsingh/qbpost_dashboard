@@ -21,6 +21,7 @@ then the plan, review both for consistency, and only then write code.
   | v1 foundations (auth, posting, versions, attempts) | `specs/2026-10-27-qbautopost-dashboard-design.md` | `plans/2026-10-27-qbautopost-dashboard.md` |
   | Statements, statement page, audit trail, users (v2) | `specs/2026-10-28-dashboard-v2-pages-design.md` | `plans/2026-10-28-dashboard-v2-pages.md` |
   | Home dashboard | `specs/2026-10-28-home-dashboard-spec.md` | `plans/2026-10-28-home-dashboard-plan.md` |
+  | Look and feel: tokens, shared layout components, page restyle | `specs/2026-10-28-ui-refresh-ledger-spec.md` | `plans/2026-10-28-ui-refresh-ledger-plan.md` |
 
 - **Spec must cover**: goal and scope; what in the codebase it touches (read the real files, do not guess); behaviour
   and UI states (loading, empty, error, partial data); data sources (existing endpoints only, unless the API
@@ -37,6 +38,36 @@ then the plan, review both for consistency, and only then write code.
 
 If a request arrives without a spec and plan, write them first and say so. Do not skip this because a change looks
 trivial.
+
+## Rule 2: starting work means the spec and plan come first, for review
+
+When asked to start, build, add, fix or change something, the **first deliverable is the spec and the plan**, not
+code:
+
+1. Inspect the relevant code, then write (or update) the spec and the plan as in Rule 1.
+2. **Stop and show them for review**: give their paths, a short summary of what will be built, and any open
+   decisions. Do not edit code in the same turn.
+3. Start coding only after the user approves (or asks for changes, which go into the docs first). Approval for one
+   spec does not carry over to the next piece of work.
+4. Follow the approved plan while coding. If the build needs to differ from it, update the spec and plan and say why,
+   rather than drifting silently.
+
+## Rule 3: committing and pushing
+
+Only when the user asks. Then:
+
+1. **Branch**: work on a feature branch (`feature/<topic>`). Never commit or push to `main`. If on `main`, create a
+   branch first. Never force-push, rewrite pushed history, or skip hooks (`--no-verify`) unless the user explicitly asks.
+2. **Checks first**: run `npm run lint`, `npm run build` and `npm test` before committing. If anything fails, report
+   it with the output and ask before committing anyway; never describe a failing run as passing.
+3. **Look before staging**: run `git status` and review what will go in. Never commit `dist/`, `test-results/`,
+   `node_modules/`, `.superpowers/`, `.env*` or secrets. If the tree holds unrelated changes (someone else's work in
+   progress), say so and ask whether to include them, or stage only the files for this change.
+4. **Message**: Conventional Commits style (`feat(home): …`, `fix(audit): …`, `docs: …`). The body lists what the
+   commit contains, names the spec and plan it implements, and says plainly if it bundles anything else.
+5. **Docs go with the code**: the commit that implements a change includes its updated spec, plan (milestones ticked,
+   results recorded) and, if the API is affected, `docs/api-requirements-for-dashboard.md`.
+6. After pushing, report the branch, the commit hash and anything that was left out.
 
 ## Commands
 
