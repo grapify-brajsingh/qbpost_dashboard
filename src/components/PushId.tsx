@@ -1,10 +1,7 @@
 import { Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { shortPushId } from '@/lib/pushId'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-
-function shortPushId(value: string): string {
-  return value.length <= 8 ? value : `${value.slice(0, 4)}…${value.slice(-3)}`
-}
 
 export function PushId({ value, fallback }: { value: string | null; fallback: string }) {
   if (value === null) return <span className="text-muted-foreground">{fallback}</span>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useAuditEvents } from '@/api/queries/audit'
 import { useAttempt, useAttempts, useRequest } from '@/api/queries/requests'
 import type { RequestDetail, Txn } from '@/api/schema'
 import { Money } from '@/components/Money'
@@ -21,7 +22,14 @@ const STATE_TEXT: Record<RequestDetail['validation']['state'], string> = {
   unavailable: 'Validation unavailable',
 }
 
+/** The validation snapshot has no actor: take it from the newest `validated` audit event, if there is one. */
+function useValidatedBy(requestId: number): string | null {
+  const q = useAuditEvents({ requestId, action: ['validated'], pageSize: 1 })
+  return q.data?.items[0]?.actor.name ?? null
+}
+
 function ValidationBlock({ d }: { d: RequestDetail }) {
+  const validatedBy = useValidatedBy(d.id)
   const v = d.validation
   const findings = v.validation ?? []
   const errors = v.errors ?? []
@@ -38,7 +46,8 @@ function ValidationBlock({ d }: { d: RequestDetail }) {
         <p className="font-medium">{STATE_TEXT[v.state]}</p>
         {v.validatedUtc ? (
           <p className="text-xs">
-            Checked <Timestamp utc={v.validatedUtc} />
+            Validated <Timestamp utc={v.validatedUtc} />
+            {validatedBy ? ` by ${validatedBy}` : ''}
             {v.versionNumber !== undefined ? ` against version ${v.versionNumber}` : ''}
           </p>
         ) : (

@@ -7,6 +7,7 @@ import { SessionProvider } from '@/auth/SessionProvider'
 import { SignInPage } from '@/auth/SignInPage'
 import { hasScope, useSession } from '@/auth/useSession'
 import { AccountPage } from '@/features/account/AccountPage'
+import { AuditPage } from '@/features/audit/AuditPage'
 import { StatementPage } from '@/features/statements/detail/StatementPage'
 import { StatementsPage } from '@/features/statements/list/StatementsPage'
 import { UserPage } from '@/features/users/UserPage'
@@ -40,11 +41,6 @@ function RedirectToStatements() {
   const { id } = useParams()
   const { search } = useLocation()
   return <Navigate to={`/statements${id ? `/${encodeURIComponent(id)}` : ''}${search}`} replace />
-}
-
-/** Placeholder until the audit trail page replaces it. */
-function AuditPlaceholder() {
-  return <h1 className="p-6 text-[22px] font-semibold">Audit trail</h1>
 }
 
 export const routes: RouteObject[] = [
@@ -83,7 +79,7 @@ export const routes: RouteObject[] = [
               { path: ':id', element: <StatementRoute />, handle: { crumb: 'Statement' } },
             ],
           },
-          { path: '/audit', element: <AuditPlaceholder />, handle: { crumb: 'Audit trail' } },
+          { path: '/audit', element: <AuditPage />, handle: { crumb: 'Audit trail' } },
           {
             path: '/users',
             handle: { crumb: 'Users' },

@@ -54,7 +54,7 @@ describe('validation', () => {
     await user.click(screen.getByRole('button', { name: 'Results' }))
     const block = await within(await screen.findByRole('dialog')).findByRole('region', { name: 'Latest validation' })
     expect(block).toHaveTextContent('Refused by the checks')
-    expect(block).toHaveTextContent(/Checked/)
+    expect(block).toHaveTextContent(/Validated/)
     expect(within(block).getByText(/controlTotal .* does not match/)).toBeInTheDocument()
     await user.keyboard('{Escape}')
     await user.click(screen.getByRole('button', { name: 'Has a problem' }))

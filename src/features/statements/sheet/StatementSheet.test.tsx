@@ -136,6 +136,36 @@ describe('statement sheet', () => {
     expect(within(sheet).getByText('Rows add up to 90.50; the control total is 100.00.')).toBeInTheDocument()
   })
 
+  test('Results shows who last validated, from the newest validated audit event; "by" is left out when there is none', async () => {
+    useDetail(detail(7))
+    useAttempts(7, [])
+    let asked: URLSearchParams | null = null
+    server.use(
+      http.get('/api/v1/audit-events', ({ request }) => {
+        asked = new URL(request.url).searchParams
+        return HttpResponse.json({
+          items: [event('v1', '2026-10-27T08:00:00Z', { action: 'validated', actor: { id: 'u2', name: 'Eli Editor', kind: 'user' } })],
+          page: 1,
+          pageSize: 1,
+          total: 1,
+        })
+      }),
+    )
+    const { unmount } = open('/statements?sheet=7&sheetTab=results')
+    const block = await within(await screen.findByRole('dialog')).findByRole('region', { name: 'Latest validation' })
+    await waitFor(() => expect(block).toHaveTextContent(/Validated .* by Eli Editor against version 1/))
+    expect(asked!.get('requestId')).toBe('7')
+    expect(asked!.getAll('action')).toEqual(['validated'])
+    expect(asked!.get('pageSize')).toBe('1')
+    unmount()
+
+    server.use(http.get('/api/v1/audit-events', () => HttpResponse.json({ items: [], page: 1, pageSize: 1, total: 0 })))
+    open('/statements?sheet=7&sheetTab=results')
+    const bare = await within(await screen.findByRole('dialog')).findByRole('region', { name: 'Latest validation' })
+    await waitFor(() => expect(bare).toHaveTextContent(/Validated .* against version 1/))
+    expect(bare).not.toHaveTextContent(' by ')
+  })
+
   test('Results, posted: posted by/when/counts/batch and the row to TxnID table, first 10, "Show all 61"', async () => {
     const rows = Array.from({ length: 61 }, (_, i) => ({ index: i, externalId: `r${i}`, txnId: `TXN-${i}`, kind: 'check', account: 'Checking', amount: 1 }))
     useDetail(
@@ -194,10 +224,12 @@ describe('statement sheet', () => {
     const sheet = await screen.findByRole('dialog')
     const list = await within(sheet).findByRole('list', { name: 'History' })
     const items = within(list).getAllByRole('listitem')
-    expect(items[0]).toHaveTextContent('memo')
+    expect(items[0]).toHaveTextContent('Changed memo')
     expect(items[0]).toHaveTextContent('<img src=x onerror=alert(1)>')
     expect(items[0].querySelector('img')).toBeNull()
-    expect(items[1]).toHaveTextContent('amount: 10 → 12')
+    expect(items[1]).toHaveTextContent('Changed amount')
+    expect(items[1]).toHaveTextContent('10→12')
+    expect(within(items[1]).getByText('10')).toHaveClass('line-through')
     await user.click(within(sheet).getByRole('link', { name: 'Open in Audit trail' }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/audit'))
     expect(router.state.location.search).toBe('?requestId=7')

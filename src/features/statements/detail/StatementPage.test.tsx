@@ -513,7 +513,7 @@ describe('save bar', () => {
     await user.click(within(saveBar()).getByRole('button', { name: 'Validate' }))
     await user.click(screen.getByRole('button', { name: 'Results' }))
     const sheet = await screen.findByRole('dialog')
-    await waitFor(() => expect(within(sheet).getByRole('region', { name: 'Latest validation' })).toHaveTextContent('Checked'))
+    await waitFor(() => expect(within(sheet).getByRole('region', { name: 'Latest validation' })).toHaveTextContent('Validated'))
     const key = ['requests', 'detail', '2']
     const cur = queryClient.getQueryData(key) as { request: RequestDetail; etag: string }
     act(() => {

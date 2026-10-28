@@ -4,38 +4,19 @@ import type { AuditEvent } from '@/api/schema'
 import { ProblemAlert } from '@/components/ProblemAlert'
 import { Timestamp } from '@/components/Timestamp'
 import { Skeleton } from '@/components/ui/skeleton'
-
-const MAX = 120
-
-/** Untrusted values: always plain text, long ones cut (the full text stays in the title tooltip). */
-function show(v: unknown): string {
-  if (v === undefined || v === null) return '—'
-  return typeof v === 'string' ? v : (JSON.stringify(v) ?? '—')
-}
-
-function Value({ v, tone }: { v: unknown; tone: 'old' | 'new' }) {
-  const full = show(v)
-  const text = full.length > MAX ? `${full.slice(0, MAX)}…` : full
-  return (
-    <span title={full} className={tone === 'old' ? 'text-muted-foreground line-through' : 'rounded bg-primary-soft px-1 font-medium'}>
-      {text}
-    </span>
-  )
-}
+import { auditSentence } from '@/features/audit/auditSentence'
+import { ValueDiff } from '@/features/audit/ValueDiff'
 
 function Entry({ e }: { e: AuditEvent }) {
-  const hasChange = e.field !== null || e.old != null || e.new != null
   return (
     <li className="relative border-l pl-4">
       <span aria-hidden className="absolute -left-[5px] top-1.5 size-2.5 rounded-full bg-primary" />
       <p className="text-sm">
-        <span className="font-medium">{e.actor.name}</span> · {e.action}
-        {e.row?.externalId ? ` · ${e.row.externalId}` : ''}
+        <span className="font-medium">{e.actor.name}</span> · {auditSentence(e)}
       </p>
-      {hasChange && (
+      {(e.old != null || e.new != null) && (
         <p className="text-sm">
-          {e.field !== null && <>{e.field}: </>}
-          <Value v={e.old} tone="old" /> → <Value v={e.new} tone="new" />
+          <ValueDiff old={e.old} new={e.new} />
         </p>
       )}
       <p className="text-xs text-muted-foreground">
