@@ -14,6 +14,7 @@ import type {
   Stats,
   ValidationSummary,
 } from '@/api/schema'
+import { deriveAuditEvents } from '../audit'
 import { DEFAULT_POST_DELAY_MS, mockDb, type RequestRecord } from '../db'
 import type { MockUser } from '../fixtures/users'
 import {
@@ -73,8 +74,8 @@ function postSummaryOf(r: RequestRecord): PostSummary | null {
   return { postId: a.postId!, postedCount: a.counts?.posted ?? 0, postedUtc: a.finishedUtc ?? a.startedUtc, postedBy: a.startedBy }
 }
 
-/** Interim count: events plus version change ops. Task 2 replaces it with the audit derivation. */
-const historyCountOf = (r: RequestRecord) => r.events.length + r.versions.reduce((n, v) => n + v.changes.length, 0)
+/** Number of audit events for the request (R-7.7). */
+const historyCountOf = (r: RequestRecord) => deriveAuditEvents('admin').filter((e) => e.request?.id === r.id).length
 
 const OPEN_STATUSES: RequestStatus[] = ['pending', 'posting', 'partial', 'unknown']
 

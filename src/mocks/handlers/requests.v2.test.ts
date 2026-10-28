@@ -48,10 +48,9 @@ describe('list summaries (R-5, R-8)', () => {
     expect(byId.get(1)!.validationSummary).toMatchObject({ state: 'ok', problemCount: 0, versionNumber: 3 })
     expect(byId.get(3)!.validationSummary.problemCount).toBeGreaterThan(0)
 
-    // history = events + version change ops
-    const rec1 = mockDb.requests.find((r) => r.id === 1)!
-    expect(byId.get(1)!.historyCount).toBe(rec1.events.length + rec1.versions.reduce((n, v) => n + v.changes.length, 0))
-    expect(byId.get(1)!.historyCount).toBeGreaterThan(rec1.events.length)
+    // history = audit events of request 1, counted by hand from the fixture:
+    // received (1) + version 2 payee fix (1) + version 3 amount on row 5 and control total (2)
+    expect(byId.get(1)!.historyCount).toBe(4)
 
     expect(byId.get(1)!.skipCount).toBe(0)
     expect(byId.get(12)!.skipCount).toBe(1)

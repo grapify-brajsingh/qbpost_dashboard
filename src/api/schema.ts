@@ -255,3 +255,53 @@ export interface QbLists {
   customers: string[]
   syncedUtc: string | null
 }
+
+/** The only list of audit actions (R-7.4). Mirrors the OpenAPI enum. */
+export const AUDIT_ACTIONS = [
+  'received',
+  'row-edited',
+  'row-added',
+  'row-deleted',
+  'row-post-off',
+  'row-post-on',
+  'control-total-changed',
+  'validated',
+  'post-started',
+  'posted',
+  'post-failed',
+  'discarded',
+  'restored',
+  'resolved',
+  'user-created',
+  'user-role-changed',
+  'user-disabled',
+  'user-enabled',
+  'user-password-reset',
+  'user-unlocked',
+  'user-password-changed',
+  'user-signed-in',
+  'user-sign-in-failed',
+  'user-locked-out',
+] as const
+export type AuditAction = (typeof AUDIT_ACTIONS)[number]
+
+/** One entry of the audit feed (R-7.3). `request` and `row` are null for user events. */
+export interface AuditEvent {
+  id: string
+  atUtc: string
+  actor: { id: string; name: string; kind: 'user' | 'api-client' }
+  action: AuditAction
+  request: {
+    id: number
+    publicRef: string
+    reference: string | null
+    pushId: string | null
+    emailSubject: string | null
+  } | null
+  row: { externalId: string | null; index: number | null } | null
+  field: string | null
+  old: unknown
+  new: unknown
+  versionNumber: number | null
+  detail: Record<string, unknown> | null
+}
