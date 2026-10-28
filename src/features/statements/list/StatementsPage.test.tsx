@@ -3,6 +3,7 @@ import { http, HttpResponse } from 'msw'
 import { afterEach, vi } from 'vitest'
 import type { Page, RequestSummary, Stats } from '@/api/schema'
 import { formatTimestamp } from '@/lib/dates'
+import { STATS_POLL_MS } from '@/api/queries/requests'
 import { mockControl } from '@/mocks/db'
 import { server } from '@/mocks/server'
 import { renderApp, renderWithProviders } from '@/test/render'
@@ -290,5 +291,71 @@ describe('statements list', () => {
     expect(router.state.location.search).toContain('page=2')
     await user.click(screen.getByRole('tab', { name: /^Posted/ }))
     await waitFor(() => expect(router.state.location.search).not.toContain('page'))
+  })
+
+  test('search is debounced: typing sends one request carrying q', async () => {
+    useList([summary({ id: 1 })])
+    const { user } = signedIn()
+    await screen.findByText('Subject 1')
+    await user.type(screen.getByRole('searchbox', { name: 'Search' }), 'plumb')
+    await waitFor(() => expect(seen.some((u) => u.searchParams.get('q') === 'plumb')).toBe(true))
+    expect(seen.filter((u) => u.searchParams.has('q'))).toHaveLength(1)
+  })
+
+  test('search keeps whitespace typed before a pause', async () => {
+    useList([summary({ id: 1 })])
+    const { user } = signedIn()
+    await screen.findByText('Subject 1')
+    const box = screen.getByRole('searchbox', { name: 'Search' })
+    await user.type(box, 'a ')
+    await waitFor(() => expect(seen.some((u) => u.searchParams.get('q') === 'a')).toBe(true))
+    await user.type(box, 'b')
+    expect(box).toHaveValue('a b')
+    await waitFor(() => expect(seen.some((u) => u.searchParams.get('q') === 'a b')).toBe(true))
+  })
+
+  test('Enter on a focused row opens the statement', async () => {
+    useList([summary({ id: 9, email: { subject: 'Click me', receivedUtc: '2026-10-27T07:00:00Z' } })])
+    const { user, router } = signedIn()
+    const row = (await screen.findByText('Click me')).closest('tr')!
+    row.focus()
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(router.state.location.pathname).toBe('/statements/9'))
+  })
+
+  test('the received-date filter reaches the API as receivedFrom and receivedTo', async () => {
+    useList([summary({ id: 1 })])
+    signedIn('/statements?receivedFrom=2026-10-01&receivedTo=2026-10-27')
+    await waitFor(() => {
+      const u = seen[seen.length - 1]
+      expect(u.searchParams.get('receivedFrom')).toBe('2026-10-01')
+      expect(u.searchParams.get('receivedTo')).toBe('2026-10-27')
+    })
+  })
+
+  test('new arrivals pill: rows stay put while stats polling finds arrivals, and the list refetches only when the pill is clicked', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    useList([summary({ id: 1 })])
+    let bumped = false
+    server.use(
+      http.get(STATS, () =>
+        HttpResponse.json(bumped ? { ...STATS_FIXED, byStatus: { ...STATS_FIXED.byStatus, pending: 9 } } : STATS_FIXED),
+      ),
+    )
+    const { user } = signedIn()
+    await screen.findByText('Subject 1')
+    await screen.findByRole('tab', { name: 'To review 9' })
+    expect(screen.queryByText(/new — show/)).not.toBeInTheDocument()
+    const listBefore = seen.length
+    bumped = true
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(STATS_POLL_MS)
+    })
+    const pill = await screen.findByRole('button', { name: '2 new — show' })
+    expect(seen.length).toBe(listBefore)
+    await user.click(pill)
+    await waitFor(() => expect(seen.length).toBe(listBefore + 1))
+    await waitFor(() => expect(screen.queryByText(/new — show/)).not.toBeInTheDocument())
+    expect(await screen.findByRole('tab', { name: 'To review 11' })).toBeInTheDocument()
   })
 })
