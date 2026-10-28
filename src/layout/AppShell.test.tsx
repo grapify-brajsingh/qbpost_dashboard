@@ -19,7 +19,8 @@ afterEach(() => {
 })
 
 function activeOf(name: string | RegExp) {
-  return screen.getByRole('link', { name }).closest('[data-active]')
+  // The sidebar comes first in the document; a breadcrumb link with the same name may follow it.
+  return screen.getAllByRole('link', { name })[0].closest('[data-active]')
 }
 
 describe('sidebar', () => {
@@ -54,7 +55,7 @@ describe('sidebar', () => {
   test('the active item follows the route, including /statements/:id', async () => {
     mockControl.signInAs('u-admin')
     const { router } = renderApp('/statements/5')
-    await screen.findByRole('link', { name: /Statements/ })
+    await screen.findAllByRole('link', { name: /Statements/ })
     await waitFor(() => expect(activeOf(/Statements/)).toHaveAttribute('data-active', 'true'))
     expect(activeOf('Audit trail')).toHaveAttribute('data-active', 'false')
     await act(() => router.navigate('/audit'))
@@ -95,6 +96,14 @@ describe('routes', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/statements'))
   })
 
+  test('the breadcrumb shows the parent trail on a detail page', async () => {
+    mockControl.signInAs('u-admin')
+    renderApp('/statements/5')
+    const crumb = await screen.findByRole('navigation', { name: 'Breadcrumb' })
+    expect(within(crumb).getByRole('link', { name: 'Statements' })).toHaveAttribute('href', '/statements')
+    expect(within(crumb).getByText('Statement')).toHaveAttribute('aria-current', 'page')
+  })
+
   test('the breadcrumb names the current page', async () => {
     mockControl.signInAs('u-admin')
     renderApp('/account')
@@ -111,9 +120,10 @@ describe('command menu', () => {
     await user.keyboard('{Control>}k{/Control}')
     const input = await screen.findByPlaceholderText(/Search by reference/)
     await user.type(input, 'SR-000005')
-    expect(await screen.findByRole('option', { name: /SR-000005/ })).toBeInTheDocument()
+    const options = await screen.findAllByRole('option', { name: /SR-000005/ })
+    expect(options[0]).toHaveAttribute('data-selected', 'true')
     await user.keyboard('{Enter}')
-    await waitFor(() => expect(router.state.location.pathname).toBe('/statements/13'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/statements/5'))
     expect(screen.queryByPlaceholderText(/Search by reference/)).not.toBeInTheDocument()
   })
 

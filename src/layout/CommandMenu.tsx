@@ -54,6 +54,8 @@ export function CommandMenu({ open, onOpenChange }: { open: boolean; onOpenChang
   )
 }
 
+const exactFirst = (ref: string, q: string) => (q !== '' && ref.toLowerCase() === q.toLowerCase() ? 0 : 1)
+
 /** Mounted only while the dialog is open, so the search state resets and nothing is fetched when closed. */
 function CommandBody({ close }: { close(): void }) {
   const { me } = useSession()
@@ -64,7 +66,12 @@ function CommandBody({ close }: { close(): void }) {
     const t = setTimeout(() => setQ(text.trim()), SEARCH_DEBOUNCE_MS)
     return () => clearTimeout(t)
   }, [text])
-  const { data } = useRequestsList({ q: q || undefined, pageSize: 8 })
+  const { data, isPlaceholderData } = useRequestsList({ q: q || undefined, pageSize: 8 })
+
+  // While the debounce is pending or the list is the previous query's data, the items are stale: never offer them,
+  // or Enter would open a statement that does not match what was typed.
+  const fresh = text.trim() === q && !isPlaceholderData
+  const items = fresh && data ? [...data.items].sort((a, b) => exactFirst(a.publicRef, q) - exactFirst(b.publicRef, q)) : []
 
   const needle = text.trim().toLowerCase()
   const pages = PAGES.filter(
@@ -81,9 +88,9 @@ function CommandBody({ close }: { close(): void }) {
       <CommandInput placeholder="Search by reference, sender or subject…" value={text} onValueChange={setText} />
       <CommandList>
         <CommandEmpty>Nothing found.</CommandEmpty>
-        {data && data.items.length > 0 && (
+        {items.length > 0 && (
           <CommandGroup heading={q ? 'Statements' : 'Recent statements'}>
-            {data.items.map((r) => (
+            {items.map((r) => (
               <CommandItem key={r.id} value={`statement-${r.id}`} onSelect={() => go(`/statements/${r.id}`)}>
                 <FileTextIcon />
                 <span className="num font-mono text-xs">{r.publicRef}</span>

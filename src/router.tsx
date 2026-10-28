@@ -75,11 +75,23 @@ export const routes: RouteObject[] = [
           { path: '/', element: <RedirectToStatements /> },
           { path: '/requests', element: <RedirectToStatements /> },
           { path: '/requests/:id', element: <RedirectToStatements /> },
-          { path: '/statements', element: <RequestsPage />, handle: { crumb: 'Statements' } },
-          { path: '/statements/:id', element: <RequestDetailRoute />, handle: { crumb: 'Statement' } },
+          {
+            path: '/statements',
+            handle: { crumb: 'Statements' },
+            children: [
+              { index: true, element: <RequestsPage /> },
+              { path: ':id', element: <RequestDetailRoute />, handle: { crumb: 'Statement' } },
+            ],
+          },
           { path: '/audit', element: <AuditPlaceholder />, handle: { crumb: 'Audit trail' } },
-          { path: '/users', element: <RequireAdmin><UsersPage /></RequireAdmin>, handle: { crumb: 'Users' } },
-          { path: '/users/:id', element: <RequireAdmin><UserPage /></RequireAdmin>, handle: { crumb: 'User' } },
+          {
+            path: '/users',
+            handle: { crumb: 'Users' },
+            children: [
+              { index: true, element: <RequireAdmin><UsersPage /></RequireAdmin> },
+              { path: ':id', element: <RequireAdmin><UserPage /></RequireAdmin>, handle: { crumb: 'User' } },
+            ],
+          },
           { path: '/account', element: <AccountPage />, handle: { crumb: 'My account' } },
         ],
       },
