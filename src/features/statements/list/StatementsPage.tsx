@@ -6,6 +6,8 @@ import { useUrlFilters } from '@/components/filters'
 import { ProblemAlert } from '@/components/ProblemAlert'
 import { Button } from '@/components/ui/button'
 import { NewArrivalsPill } from '@/features/requests/list/NewArrivalsPill'
+import { StatementSheet } from '@/features/statements/sheet/StatementSheet'
+import { useStatementSheet } from '@/features/statements/sheet/useStatementSheet'
 import { lastSeen } from './lastSeen'
 import { StatementsTable, type SheetTab } from './StatementsTable'
 import { StatementsToolbar, StatusTabs } from './StatementsToolbar'
@@ -29,10 +31,10 @@ const VIEW_SPEC = {
   sort: { kind: 'enum', values: SORT_VALUES },
 } as const
 
-const noSheet = () => {}
-
-export function StatementsPage({ onOpenSheet = noSheet }: { onOpenSheet?: (id: number, tab: SheetTab) => void }) {
+export function StatementsPage({ onOpenSheet }: { onOpenSheet?: (id: number, tab: SheetTab) => void }) {
   const { me } = useSession()
+  const sheet = useStatementSheet()
+  const openSheet = onOpenSheet ?? sheet.open
   const isAdmin = hasScope(me, 'users:manage')
   const filters = useUrlFilters(FILTER_SPEC)
   const view = useUrlFilters(VIEW_SPEC)
@@ -118,7 +120,7 @@ export function StatementsPage({ onOpenSheet = noSheet }: { onOpenSheet?: (id: n
           sort={sort}
           onSort={(next) => view.set({ sort: next === DEFAULT_SORT ? undefined : next })}
           lastSeen={seenAt}
-          onOpenSheet={onOpenSheet}
+          onOpenSheet={openSheet}
         />
       )}
       {list.data && total > 0 && (
@@ -134,6 +136,7 @@ export function StatementsPage({ onOpenSheet = noSheet }: { onOpenSheet?: (id: n
           </Button>
         </div>
       )}
+      <StatementSheet />
     </div>
   )
 }
