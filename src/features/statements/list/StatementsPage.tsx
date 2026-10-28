@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
+import { parsePage } from '@/lib/pageParam'
 import { STATS_POLL_MS, useRequestsList, useStats, type ListParams } from '@/api/queries/requests'
 import { useSession, hasScope } from '@/auth/useSession'
 import { useUrlFilters } from '@/components/filters'
@@ -43,7 +44,7 @@ export function StatementsPage({ onOpenSheet }: { onOpenSheet?: (id: number, tab
   const tab: StatusTab = view.values.tab ?? 'review'
   const sort: SortValue = view.values.sort ?? DEFAULT_SORT
   const f = filters.values
-  const pageNo = Math.max(1, Math.floor(Number(search.get('page'))) || 1)
+  const pageNo = parsePage(search.get('page'))
 
   const params: ListParams = {
     ...paramsFor(tab, isAdmin),

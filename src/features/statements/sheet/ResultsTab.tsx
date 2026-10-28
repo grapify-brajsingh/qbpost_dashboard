@@ -127,7 +127,7 @@ function PostedBlock({ d }: { d: RequestDetail }) {
   const attempts = useAttempts(String(d.id))
   const s = d.postSummary
   if (!s) return null
-  const posted = attempts.data?.filter((a) => a.outcome === 'posted').sort((a, b) => b.id - a.id)[0]
+  const posted = attempts.data?.filter((a) => a.outcome === 'posted' || a.outcome === 'partial').sort((a, b) => b.id - a.id)[0]
   const counts = d.ledgerBatch?.counts
   return (
     <section aria-label="Posted" className="space-y-2">

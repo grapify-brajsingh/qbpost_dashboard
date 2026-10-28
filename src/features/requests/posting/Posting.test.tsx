@@ -119,6 +119,15 @@ describe('Post button and dialog', () => {
     expect(reqs.of('POST', `${API}/11/post`)[0].ifMatch).toBe(openedEtag)
   })
 
+  test('the callout wording follows the other push status (posting, partial, unknown)', async () => {
+    record(13).status = 'posting'
+    const { user } = await open(11)
+    await user.click(postButton())
+    const d = await screen.findByRole('dialog')
+    expect(d).toHaveTextContent(/arrived at .* and is still posting\. Make sure you're not posting the same statement twice\./)
+    expect(d).not.toHaveTextContent(/isn't posted/)
+  })
+
   test('no callout when there is no other push', async () => {
     const { user } = await open(2)
     await user.click(postButton())
@@ -195,7 +204,6 @@ describe('outcomes', () => {
     await waitFor(() => expect(result()).toHaveTextContent('Posted'))
     expect(result()).toHaveTextContent('api-chase-4521-2026-08')
     expect(spy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: requestKeys.attempts('1') }))
-    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: requestKeys.events('1') }))
   })
 
   test('422 → "Nothing was sent" and the rows get data-problem from the response findings', async () => {
@@ -415,6 +423,27 @@ describe('the version the dialog showed (counts)', () => {
     expect(await within(d).findByText('This request changed while this dialog was open.')).toBeInTheDocument()
     expect(within(d).getByRole('heading', { name: 'Post 12 rows to QuickBooks?' })).toBeInTheDocument()
     expect(within(d).getByRole('button', { name: 'Post 12 rows' })).toBeInTheDocument()
+  })
+})
+
+describe('the version the dialog showed (rows and control total)', () => {
+  test('Rows and Control total come from the version the dialog opened on, not the live request', async () => {
+    const { user, queryClient } = await open(1)
+    await user.click(postButton())
+    const d = await screen.findByRole('dialog')
+    const rowsBefore = within(d).getByText('Rows').nextElementSibling!.textContent!
+    const totalBefore = within(d).getByText('Control total').nextElementSibling!.textContent!
+    const r = record(1)
+    const next = structuredClone(r.versions[r.versions.length - 1])
+    ;(next.payload.transactions as Txn[]).splice(0, 4)
+    next.payload.controlTotal = 1
+    next.number += 1
+    r.versions.push(next)
+    r.rowVersion++
+    await act(() => queryClient.invalidateQueries({ queryKey: requestKeys.detail('1'), exact: true }))
+    expect(await within(d).findByText('This request changed while this dialog was open.')).toBeInTheDocument()
+    expect(within(d).getByText('Rows').nextElementSibling).toHaveTextContent(rowsBefore)
+    expect(within(d).getByText('Control total').nextElementSibling).toHaveTextContent(totalBefore)
   })
 })
 

@@ -23,7 +23,7 @@ export function Breadcrumb() {
           <li key={c.to} className="flex items-center gap-1.5">
             {i > 0 && <span aria-hidden="true">/</span>}
             {i === last ? (
-              <b aria-current="page" className="font-medium text-foreground">
+              <b aria-current="page" title={c.label} className="block max-w-[40ch] truncate font-medium text-foreground">
                 {c.label}
               </b>
             ) : (

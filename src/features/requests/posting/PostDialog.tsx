@@ -68,9 +68,9 @@ function Body({ request, seenPayload, duplicate, changed, onConfirm, onCancel }:
         <dt className="text-muted-foreground">Subject</dt>
         <dd>{request.email?.subject ?? 'No subject'}</dd>
         <dt className="text-muted-foreground">Rows</dt>
-        <dd>{`${request.transactionCount} ${request.transactionCount === 1 ? 'row' : 'rows'}`}</dd>
+        <dd>{`${stats.total} ${stats.total === 1 ? 'row' : 'rows'}`}</dd>
         <dt className="text-muted-foreground">Control total</dt>
-        <dd className="tabular-nums">{formatMoney(request.controlTotal)}</dd>
+        <dd className="tabular-nums">{formatMoney(typeof seenPayload.controlTotal === 'number' ? seenPayload.controlTotal : null)}</dd>
       </dl>
       <div className="space-y-1 text-sm">
         <p>Validation: {STATE_LABEL[v.state]}</p>
@@ -102,6 +102,14 @@ function Body({ request, seenPayload, duplicate, changed, onConfirm, onCancel }:
   )
 }
 
+/** What to say about another push that has not finished, by its status. */
+const OTHER_PUSH_STATE: Partial<Record<string, string>> & { pending: string } = {
+  pending: "and isn't posted.",
+  posting: 'and is still posting.',
+  partial: 'and is partly posted.',
+  unknown: 'and may have posted.',
+}
+
 function OtherPushes({ pushes }: { pushes: OtherPush[] }) {
   return (
     <div className="space-y-1 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
@@ -116,7 +124,7 @@ function OtherPushes({ pushes }: { pushes: OtherPush[] }) {
               <Timestamp utc={p.receivedUtc} />
             </>
           )}
-          {" and isn't posted. Make sure you're not posting the same statement twice."}
+          {` ${OTHER_PUSH_STATE[p.status] ?? OTHER_PUSH_STATE.pending} Make sure you're not posting the same statement twice.`}
         </p>
       ))}
     </div>

@@ -4,7 +4,6 @@ import type {
   Page,
   Payload,
   RequestDetail,
-  RequestEvent,
   RequestStatus,
   RequestSummary,
   Stats,
@@ -45,7 +44,6 @@ export const requestKeys = {
   version: (id: number | string, n: number) => [...requestKeys.detail(id), 'versions', n] as const,
   attempts: (id: number | string) => [...requestKeys.detail(id), 'attempts'] as const,
   attempt: (id: number | string, a: number) => [...requestKeys.detail(id), 'attempts', a] as const,
-  events: (id: number | string) => [...requestKeys.detail(id), 'events'] as const,
   original: (id: number | string) => [...requestKeys.detail(id), 'original'] as const,
 }
 
@@ -200,8 +198,3 @@ export const useAttempt = (id: string, attemptId: number, enabled = true) =>
     enabled,
   })
 
-export const useEvents = (id: string) =>
-  useQuery({
-    queryKey: requestKeys.events(id),
-    queryFn: ({ signal }) => api.get<RequestEvent[]>(`/saved-requests/${id}/events`, { signal }).then((r) => r.data),
-  })

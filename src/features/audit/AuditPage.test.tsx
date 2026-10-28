@@ -102,7 +102,7 @@ describe('Audit trail page', () => {
     expect(screen.getByRole('link', { name: '135' })).toHaveAttribute('href', '/statements/12?row=dash-a%20b')
   })
 
-  test('filters round-trip through the URL; Export CSV href carries the same filters', async () => {
+  test('filters round-trip through the URL; Export CSV sends the same filters with the token', async () => {
     feed([event('a')])
     const { router } = open('/audit?q=plumb&actor=u-admin&from=2026-10-20&to=2026-10-21&requestId=12&reference=chase&action=row-edited,posted')
     await screen.findByRole('table', { name: 'Audit trail' })
@@ -116,13 +116,6 @@ describe('Audit trail page', () => {
     expect(q.get('from')).toBe(new Date(2026, 9, 20).toISOString())
     expect(q.get('to')).toBe(new Date(2026, 9, 22).toISOString())
 
-    const csv = new URL(screen.getByRole('link', { name: /Export CSV/ }).getAttribute('href')!, 'http://x')
-    expect(csv.pathname).toBe('/api/v1/audit-events.csv')
-    for (const k of ['q', 'actor', 'from', 'to', 'requestId', 'reference']) expect(csv.searchParams.get(k)).toBe(q.get(k))
-    expect(csv.searchParams.getAll('action')).toEqual(['row-edited', 'posted'])
-    expect(csv.searchParams.has('page')).toBe(false)
-    expect(csv.searchParams.has('pageSize')).toBe(false)
-
     expect(screen.getByRole('button', { name: 'User: Me' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Action: Edited, Posted' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Statement: chase' })).toBeInTheDocument()
@@ -135,7 +128,79 @@ describe('Audit trail page', () => {
     await screen.findByRole('table', { name: 'Audit trail' })
     expect(lastQuery().get('pushId')).toBe('7f3a9c1e-5b2d')
     expect(lastQuery().has('reference')).toBe(false)
-    expect(new URL(screen.getByRole('link', { name: /Export CSV/ }).getAttribute('href')!, 'http://x').searchParams.get('pushId')).toBe('7f3a9c1e-5b2d')
+  })
+
+  test('digits-only references (20261028, 2026-10-28) go as reference; a hex prefix goes as pushId', async () => {
+    feed([event('a')])
+    open('/audit?reference=20261028')
+    await screen.findByRole('table', { name: 'Audit trail' })
+    expect(lastQuery().get('reference')).toBe('20261028')
+    expect(lastQuery().has('pushId')).toBe(false)
+  })
+
+  test('a date-shaped reference goes as reference', async () => {
+    feed([event('a')])
+    open('/audit?reference=2026-10-28')
+    await screen.findByRole('table', { name: 'Audit trail' })
+    expect(lastQuery().get('reference')).toBe('2026-10-28')
+    expect(lastQuery().has('pushId')).toBe(false)
+  })
+
+  test('a full push id and a dashless prefix go as pushId', async () => {
+    feed([event('a')])
+    open('/audit?reference=7f3a9c1e5b2d')
+    await screen.findByRole('table', { name: 'Audit trail' })
+    expect(lastQuery().get('pushId')).toBe('7f3a9c1e5b2d')
+  })
+
+  test('an action this build does not know renders as its raw name instead of crashing', async () => {
+    feed([event('a', { action: 'something-new' as AuditEvent['action'] })])
+    open()
+    const table = await screen.findByRole('table', { name: 'Audit trail' })
+    expect(within(table).getAllByText('something-new').length).toBeGreaterThan(0)
+  })
+
+  test('Export CSV fetches with the bearer token and the current filters, then saves a file', async () => {
+    feed([event('a')])
+    let auth: string | null = null
+    let url: URL | null = null
+    server.use(
+      http.get('/api/v1/audit-events.csv', ({ request: r }) => {
+        auth = r.headers.get('Authorization')
+        url = new URL(r.url)
+        return new HttpResponse('a,b\n1,2\n', { headers: { 'Content-Type': 'text/csv' } })
+      }),
+    )
+    const created = vi.fn(() => 'blob:x')
+    const revoked = vi.fn()
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: created, revokeObjectURL: revoked }))
+    const { user } = open('/audit?q=plumb&requestId=12&action=posted')
+    await screen.findByRole('table', { name: 'Audit trail' })
+    await user.click(screen.getByRole('button', { name: /Export CSV/ }))
+    await waitFor(() => expect(revoked).toHaveBeenCalledWith('blob:x'))
+    expect(auth).toMatch(/^Bearer .+/)
+    expect(url!.searchParams.get('q')).toBe('plumb')
+    expect(url!.searchParams.get('requestId')).toBe('12')
+    expect(url!.searchParams.getAll('action')).toEqual(['posted'])
+    expect(url!.searchParams.has('page')).toBe(false)
+    expect(created).toHaveBeenCalledOnce()
+    vi.unstubAllGlobals()
+  })
+
+  test('Export CSV shows the problem detail when the export is too large', async () => {
+    feed([event('a')])
+    server.use(
+      http.get('/api/v1/audit-events.csv', () =>
+        HttpResponse.json(
+          { type: 'about:blank', title: 'Too many entries', status: 413, detail: 'Narrow the dates and try again.' },
+          { status: 413, headers: { 'Content-Type': 'application/problem+json' } },
+        ),
+      ),
+    )
+    const { user } = open()
+    await screen.findByRole('table', { name: 'Audit trail' })
+    await user.click(screen.getByRole('button', { name: /Export CSV/ }))
+    expect(await screen.findByText('Narrow the dates and try again.')).toBeInTheDocument()
   })
 
   test('row-added / row-deleted with no old/new fall back to the sentence', async () => {

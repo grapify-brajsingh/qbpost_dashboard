@@ -1,6 +1,9 @@
 import type { AuditAction, AuditEvent } from '@/api/schema'
 
 /** Short action names for badges and the Action filter. */
+/** Label for an action; an action this build does not know shows as the raw value. */
+export const actionLabel = (a: string): string => (ACTION_LABEL as Partial<Record<string, string>>)[a] ?? a
+
 export const ACTION_LABEL: Record<AuditAction, string> = {
   received: 'Received',
   'row-edited': 'Edited',
@@ -97,5 +100,6 @@ const SENTENCE: Record<AuditAction, (e: AuditEvent) => string> = {
 
 /** One plain-text sentence for an audit event. Untrusted `detail` values are only ever inserted as text. */
 export function auditSentence(e: AuditEvent): string {
-  return SENTENCE[e.action](e)
+  const sentence = (SENTENCE as Partial<Record<string, (e: AuditEvent) => string>>)[e.action]
+  return sentence ? sentence(e) : String(e.action)
 }

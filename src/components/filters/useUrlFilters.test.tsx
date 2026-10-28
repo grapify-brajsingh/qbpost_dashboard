@@ -63,6 +63,11 @@ describe('useUrlFilters', () => {
     expect(search().get('other')).toBe('1')
   })
 
+  it('does not count a false boolean as an active filter', () => {
+    setup('/s?problems=false')
+    expect(screen.getByTestId('count')).toHaveTextContent('0')
+  })
+
   it('set() resets page to 1; clear() removes only spec keys', async () => {
     const user = setup('/s?page=3&tab=all&keep=x&q=hi')
     await user.click(screen.getByText('tab'))

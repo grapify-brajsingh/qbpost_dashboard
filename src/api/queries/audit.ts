@@ -35,10 +35,15 @@ export function useAuditEvents(params: AuditParams) {
   })
 }
 
-/** Download link for the CSV of everything the filters match (page and pageSize do not apply). */
-export function auditCsvHref(params: AuditParams): string {
+/** API path (relative to the client's base) of the CSV of everything the filters match (page and pageSize do not apply). */
+export function auditCsvPath(params: AuditParams): string {
   const { page: _page, pageSize: _pageSize, ...filters } = params
   void _page
   void _pageSize
-  return `/api/v1/audit-events.csv?${auditQuery(filters)}`
+  return `/audit-events.csv?${auditQuery(filters)}`
+}
+
+/** Same as `auditCsvPath`, as the absolute URL a browser would open. */
+export function auditCsvHref(params: AuditParams): string {
+  return `/api/v1${auditCsvPath(params)}`
 }

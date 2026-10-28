@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { formatTimestamp } from '@/lib/dates'
 import { shortPushId } from '@/lib/pushId'
 import { cn } from '@/lib/utils'
-import { ACTION_LABEL, auditSentence } from './auditSentence'
+import { actionLabel, auditSentence } from './auditSentence'
 import { groupByDay } from './groupByDay'
 import { ValueDiff } from './ValueDiff'
 
@@ -112,7 +112,7 @@ function Change({ e }: { e: AuditEvent }) {
 }
 
 function ActionBadge({ action }: { action: AuditAction }) {
-  return <Badge className={TONE_CLASS[TONE[action] ?? 'plain']}>{ACTION_LABEL[action]}</Badge>
+  return <Badge className={TONE_CLASS[TONE[action] ?? 'plain']}>{actionLabel(action)}</Badge>
 }
 
 /** Read-only audit entries grouped by local day. `showStatement` is false where the page is about one statement. */

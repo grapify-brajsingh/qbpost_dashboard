@@ -69,7 +69,8 @@ export function ReconciliationMeter({ allCents, controlTotal, postStats, onContr
                     parse={parseTotal}
                     onCommit={(v) => {
                       setEditing(false)
-                      if (!Object.is(v, controlTotal)) onControlTotal(v as number | null)
+                      // Opening the editor and clicking away must not write anything: unchanged text, or null vs missing, is no edit.
+                      if (asText(v) !== asText(controlTotal)) onControlTotal(v as number | null)
                     }}
                     onCancel={() => setEditing(false)}
                   />

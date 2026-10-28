@@ -1,7 +1,10 @@
+import { useState } from 'react'
 import { DownloadIcon } from 'lucide-react'
 import { addDays, parse } from 'date-fns'
 import { useSearchParams } from 'react-router'
-import { auditCsvHref, useAuditEvents, type AuditParams } from '@/api/queries/audit'
+import { parsePage } from '@/lib/pageParam'
+import { api } from '@/api/client'
+import { auditCsvPath, useAuditEvents, type AuditParams } from '@/api/queries/audit'
 import { useUsers } from '@/api/queries/users'
 import { AUDIT_ACTIONS, type AuditAction } from '@/api/schema'
 import { hasScope, useSession } from '@/auth/useSession'
@@ -27,8 +30,26 @@ const FILTER_SPEC = {
   action: { kind: 'enumList', values: AUDIT_ACTIONS },
 } as const
 
-/** What a person pastes for a push id (hex and dashes); anything else is a reference. */
-const PUSH_ID_RE = /^[0-9a-f-]{8,}$/i
+/** What a person pastes for a push id: a UUID or a prefix of one (8+ hex digits, dashes where a UUID has them). */
+const PUSH_ID_RE = /^[0-9a-f]{8}[0-9a-f-]{0,28}$/i
+/** Pure digits and dashes (a date, a number) are references, not push ids. */
+const isPushId = (v: string) => PUSH_ID_RE.test(v) && /[a-f]/i.test(v)
+
+/** Fetches the CSV through the api client (bearer token, 401 refresh) and saves it as a file. */
+async function downloadCsv(path: string): Promise<void> {
+  const text = await api.getText(path)
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }))
+  try {
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'audit-events.csv'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
 
 /** The API client n8n posts statements with. */
 const N8N_ACTOR = 'api-client:n8n-mailbox'
@@ -110,7 +131,7 @@ export function AuditPage() {
   const filters = useUrlFilters(FILTER_SPEC)
   const [search, setSearch] = useSearchParams()
   const f = filters.values
-  const pageNo = Math.max(1, Math.floor(Number(search.get('page'))) || 1)
+  const pageNo = parsePage(search.get('page'))
 
   const filterParams: AuditParams = {
     q: f.q,
@@ -119,9 +140,11 @@ export function AuditPage() {
     // Through the end of the chosen day: local midnight of the day after.
     to: f.to ? localMidnightUtc(f.to, 1) : undefined,
     requestId: f.requestId,
-    ...(f.reference && PUSH_ID_RE.test(f.reference) ? { pushId: f.reference } : { reference: f.reference }),
+    ...(f.reference && isPushId(f.reference) ? { pushId: f.reference } : { reference: f.reference }),
     action: f.action,
   }
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<unknown>(null)
   const events = useAuditEvents({ ...filterParams, page: pageNo, pageSize: AUDIT_PAGE_SIZE })
 
   const setPage = (n: number) =>
@@ -144,13 +167,22 @@ export function AuditPage() {
           <h1 className="text-[22px] font-semibold">Audit trail</h1>
           <p className="text-sm text-muted-foreground">Who changed what, and when. Nothing here can be edited or deleted.</p>
         </div>
-        <Button asChild variant="outline">
-          <a href={auditCsvHref(filterParams)} download>
-            <DownloadIcon aria-hidden />
-            Export CSV
-          </a>
+        <Button
+          variant="outline"
+          disabled={exporting}
+          onClick={() => {
+            setExporting(true)
+            setExportError(null)
+            downloadCsv(auditCsvPath(filterParams))
+              .catch((e: unknown) => setExportError(e))
+              .finally(() => setExporting(false))
+          }}
+        >
+          <DownloadIcon aria-hidden />
+          Export CSV
         </Button>
       </div>
+      {exportError !== null && <ProblemAlert error={exportError} />}
 
       <div role="search" aria-label="Filters" className="flex flex-wrap items-center gap-2">
         <SearchBox

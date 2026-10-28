@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { PlusIcon } from 'lucide-react'
 import { toast } from 'sonner'
+import { parsePage } from '@/lib/pageParam'
 import { usePatchUser, useResetPassword, useUnlock, useUsers, type UsersParams } from '@/api/queries/users'
 import type { User } from '@/api/schema'
 import { ClearFilters, FilterChip, SearchBox, useUrlFilters } from '@/components/filters'
@@ -28,7 +29,7 @@ export function UsersPage() {
   const filters = useUrlFilters(FILTER_SPEC)
   const [search, setSearch] = useSearchParams()
   const f = filters.values
-  const pageNo = Math.max(1, Math.floor(Number(search.get('page'))) || 1)
+  const pageNo = parsePage(search.get('page'))
 
   const params: UsersParams = { q: f.q, role: f.role, status: f.status, page: pageNo }
   const list = useUsers(params)

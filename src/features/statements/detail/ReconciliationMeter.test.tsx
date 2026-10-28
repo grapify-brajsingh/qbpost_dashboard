@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event'
 import { render, screen } from '@testing-library/react'
 import { addRow, createDraft, postStats, rowsSumCents, setPost } from '@/features/requests/transactions/draft'
 import { ReconciliationMeter } from './ReconciliationMeter'
@@ -41,4 +42,39 @@ it('meter ignores table filters: it takes postStats of the whole draft', () => {
   render(<ReconciliationMeter allCents={rowsSumCents(d)} controlTotal={3} postStats={postStats(d)} />)
   expect(screen.getByText(/2 of 3 rows will post/)).toBeInTheDocument()
   expect(screen.getByText('Matches to the cent')).toBeInTheDocument()
+})
+
+describe('opening the control total editor and clicking away', () => {
+  async function blurWith(controlTotal: unknown) {
+    const onControlTotal = vi.fn()
+    const user = userEvent.setup()
+    render(<ReconciliationMeter allCents={0} controlTotal={controlTotal} postStats={postStats(createDraft({ transactions: [] }))} onControlTotal={onControlTotal} />)
+    await user.click(screen.getByRole('button', { name: 'Edit control total' }))
+    await user.click(screen.getByRole('textbox', { name: 'Control total' }))
+    await user.tab()
+    return { onControlTotal, user }
+  }
+
+  it('writes nothing when the payload has no control total', async () => {
+    expect((await blurWith(undefined)).onControlTotal).not.toHaveBeenCalled()
+  })
+
+  it('writes nothing for a null control total', async () => {
+    expect((await blurWith(null)).onControlTotal).not.toHaveBeenCalled()
+  })
+
+  it('writes nothing for a control total stored as a string', async () => {
+    expect((await blurWith('1234.56')).onControlTotal).not.toHaveBeenCalled()
+  })
+
+  it('still writes a real change', async () => {
+    const onControlTotal = vi.fn()
+    const user = userEvent.setup()
+    render(<ReconciliationMeter allCents={0} controlTotal={10} postStats={postStats(createDraft({ transactions: [] }))} onControlTotal={onControlTotal} />)
+    await user.click(screen.getByRole('button', { name: 'Edit control total' }))
+    const box = screen.getByRole('textbox', { name: 'Control total' })
+    await user.clear(box)
+    await user.type(box, '12.5{Enter}')
+    expect(onControlTotal).toHaveBeenCalledWith(12.5)
+  })
 })

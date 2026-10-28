@@ -189,6 +189,21 @@ describe('statement sheet', () => {
     expect(within(table).getAllByRole('row')).toHaveLength(62)
   })
 
+  test('Results, partly posted: the TxnID table is shown for a partial attempt too', async () => {
+    const rows = [{ index: 0, externalId: 'r0', txnId: 'TXN-PART', kind: 'check', account: 'Checking', amount: 1 }]
+    useDetail(
+      detail(7, {
+        status: 'partial',
+        postSummary: { postId: 'p-2', postedCount: 1, postedUtc: '2026-10-27T09:01:00Z', postedBy: { id: 'u', name: 'Asha K' } },
+      }),
+    )
+    useAttempts(7, [attempt(1, { outcome: 'partial' })], { 1: { posted: rows } })
+    open('/statements?sheet=7&sheetTab=results')
+    const sheet = await screen.findByRole('dialog')
+    const table = await within(sheet).findByRole('table', { name: 'Row to TxnID' })
+    expect(within(table).getByText('TXN-PART')).toBeInTheDocument()
+  })
+
   test('Results lists attempts newest first, including refused ones', async () => {
     useDetail(detail(7))
     useAttempts(7, [attempt(1, { outcome: 'held' }), attempt(3, { outcome: 'refused', httpStatus: 422 }), attempt(2, { outcome: 'failed' })])

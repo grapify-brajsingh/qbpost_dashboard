@@ -116,7 +116,7 @@ export function useUrlFilters<S extends FilterSpec>(spec: S) {
     })
   }, [setParams, spec])
 
-  const activeCount = Object.keys(values).length
+  const activeCount = Object.values(values).filter((v) => v !== false).length
 
   return { values, set, clear, activeCount }
 }
