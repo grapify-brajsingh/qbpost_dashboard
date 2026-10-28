@@ -138,8 +138,145 @@ Each of these is already implied by the spec. Please make it explicit in the Ope
 11. **`partial`**: validate-and-post is all-or-nothing, so please confirm whether a post by id can ever end
     `partial`. The dashboard renders it defensively either way.
 
+---
+
+# Dashboard v2 additions (2026-10-28)
+
+**From**: `docs/superpowers/specs/2026-10-28-dashboard-v2-pages-design.md`. The owner reviewed the dashboard on the
+fake API and asked for separate pages: a **Statements** page where every push from n8n is its own row, a statement
+page where rows can be edited, added, deleted or marked **"don't post"**, a full **Audit trail** page ("who changed
+which transaction and when"), and a Users page. R-5 to R-9 are what that needs from the API. The dashboard's fake API
+(MSW) implements them exactly as written here until the real API catches up, so **please flag any shape you change**.
+
+## R-5. Push ID: a GUID n8n sends with every push (new)
+
+**Need**: the owner wants each push identified by a random GUID that n8n generates per request. The same bank
+statement can be pushed several times a day; each push is a separate saved request and the dashboard shows the push
+ID on every row.
+
+1. n8n sends `pushId` (a UUID, any version) as a top-level body field on `POST /saved-requests`. *(suggested)*
+   It may also send it as `Idempotency-Key`; they are independent. Malformed (not a UUID) → the save still succeeds,
+   the column stays null, and the request is flagged `needsAttention` with read error `$.pushId: not a UUID`.
+2. New nullable column `saved_requests.push_id` (`uuid`), **unique when not null**. A second save with a `pushId`
+   that already exists returns the **existing** request with `200` (like an idempotent replay, §10.1), never a second
+   row.
+3. Like `email` (R-1): stays in `original_body` and version 1, is excluded from binding, the duplicate hash, and the
+   change list. Edits never change it.
+4. Returned as `pushId` (string or null) on detail and list rows. List `q` matches it (prefix, case-insensitive, with
+   or without dashes).
+5. Missing `pushId` (older n8n flows, or a request created in the dashboard) → null; the dashboard shows the
+   `SR-…` ref instead.
+
+**Acceptance**: a save with `pushId` returns it; repeating the same `pushId` returns the same request; searching by
+the first 8 characters finds it.
+
+## R-6. Per-row "don't post", and rows added in the dashboard (new)
+
+**Need**: the accountant marks some real rows (e.g. a transfer between their own accounts) as **don't post**. The row
+stays in the statement and in the history; it is not sent to QuickBooks.
+
+1. **Row field `post`** (boolean, optional, default `true`) in the saved payload. Stored as part of the payload
+   like any other field, so it is versioned and appears in the change list as
+   `{ "op": "replace", "path": "$.transactions[i].post", "old": true, "new": false }`. A missing `post` means `true`;
+   the change list must treat "missing" and `true` as equal.
+2. **Post by id** (`POST /saved-requests/{id}/post`) and **validate**: rows with `post: false` are sent to
+   validate-and-post with **`kind: "Skip"`** and are otherwise unchanged. The stored payload keeps the real kind.
+   - **Please confirm** that a `Skip` row (a) still counts toward the `controlTotal` check (the control total is the
+     bank statement's total and must not change because a row is skipped), (b) is reported under `skipped` /
+     `counts.skipped`, never `held`, and (c) is never sent to QuickBooks. `DirectPlanner.WithCallerNames` returns
+     early for `Skip`, and `QbXmlBuilder` skips it, so (c) looks true today; (a) and (b) need a test.
+   - If a `Skip` row is not allowed through validate-and-post, the alternative is to drop `post:false` rows from the
+     body **and** send `controlTotal` minus their sum. That writes a derived control total, which v1 anti-goals
+     forbid unless it is shown to the user, so the dashboard prefers the `Skip` route.
+3. A post where every row is `post: false` → `400 nothing-to-post`; the dashboard disables Post in that case anyway.
+4. **Rows added in the dashboard** carry `externalId: "dash-<uuid>"`. The API must accept any `externalId` matching
+   the existing rule, and keep comparing rows by `externalId` in the change list (§8.3). Please confirm that a
+   payload where **some** rows lack `externalId` (older n8n rows) and some have one still diffs sensibly: the
+   dashboard needs added and deleted rows reported as `add` / `remove`, not as every later row changing.
+   *(suggested)* When n8n rows lack `externalId`, the API assigns `row-<n>` (1-based payload position) at save
+   time, in version 1, before any edit. This is the one exception to "version 1 equals the bytes received"; the bytes
+   stay in `original_body`.
+5. `allowedActions` gains nothing new: marking don't post is an edit.
+
+## R-7. Audit events: one feed for the Audit trail page (new)
+
+**Need**: one page showing every operation by everyone, filterable, newest first: "who changed which transaction and
+when". Today the data is spread over `saved_request_events`, `saved_request_versions.changes`, `post_attempts` and
+`user_audit`.
+
+1. **`GET /audit-events`** (scope: every role with `requests:read`; user events only for `users:manage`, others
+   see request events only).
+2. **Query**: `from`, `to` (UTC instants), `actor` (user id, or `api-client:<id>`), `requestId`, `reference`,
+   `pushId`, `action` (repeatable), `q` (contains, case-insensitive, over old/new values, field names, reference and
+   push id), `page`, `pageSize` (≤ 200, default 50). Sorted `at desc, id desc`.
+3. **Response** (paged like §6.5):
+   ```json
+   { "items": [
+       { "id": "ev-9182", "atUtc": "2026-10-28T14:20:11Z",
+         "actor": { "id": "u-admin", "name": "Asha K", "kind": "user" },
+         "action": "row-edited",
+         "request": { "id": 123, "publicRef": "SR-000123", "reference": "chase-2026-08",
+                      "pushId": "7f3a…", "emailSubject": "Chase statement – Aug 2026" },
+         "row": { "externalId": "row-7", "index": 6 },
+         "field": "payee", "old": "ABC Plumbing", "new": "ABC Plumbing LLC",
+         "versionNumber": 3, "detail": null } ],
+     "page": 1, "pageSize": 50, "total": 812 }
+   ```
+   `actor.kind` is `user` or `api-client` (name = client id, e.g. `n8n-mailbox`). `request` and `row` are null for
+   user events. `old`/`new` are JSON values (string, number, boolean, object for whole rows) or null.
+4. **Actions** (enum, in OpenAPI): `received`, `row-edited` (one event per changed field), `row-added`,
+   `row-deleted`, `row-post-off`, `row-post-on`, `control-total-changed`, `validated`, `post-started`, `posted`,
+   `post-failed` (any non-posted outcome, outcome in `detail`), `discarded`, `restored`, `resolved`,
+   `user-created`, `user-role-changed`, `user-disabled`, `user-enabled`, `user-password-reset`, `user-unlocked`,
+   `user-password-changed`, `user-signed-in`, `user-sign-in-failed`, `user-locked-out`.
+5. **How it's built** *(suggested)*: a view or query over the existing append-only tables. Each version's
+   `changes` list expands to one event per op (`replace` on a row field → `row-edited`, or `row-post-off/on` for
+   `post`; `add`/`remove` on `$.transactions[i]` → `row-added`/`row-deleted`; `$.controlTotal` →
+   `control-total-changed`). The `id` must be stable across calls (for example `v<versionId>-<opIndex>`,
+   `e<eventId>`, `u<userAuditId>`). Nothing new is written; nothing is ever updated or deleted.
+6. **`GET /audit-events.csv`**: same filters, all matching rows (cap 50,000; above that `413` with a problem telling
+   the user to narrow the dates). Columns: time (UTC ISO), actor, action, reference, push id, SR ref, row, field,
+   old, new. Values are CSV-escaped and **formula-injection safe** (a leading `=`, `+`, `-`, `@` is prefixed with
+   `'`).
+7. `GET /saved-requests/{id}` list rows gain `historyCount` (number of audit events for that request), so the
+   Statements page can show "History 4" without another call.
+
+## R-8. Statements page: list summary fields and filters (new)
+
+On `GET /saved-requests` rows *(and `GET /saved-requests/{id}` where noted)*:
+
+1. `pushId` (R-5), `email` (R-1), `historyCount` (R-7.7).
+2. `validationSummary`: `{ "state": "ok|held|refused|unreadable|unavailable|none", "problemCount": 3,
+   "validatedUtc": "…", "versionNumber": 2 }`. `problemCount` = row findings + request-level errors in the latest
+   snapshot. `state: "none"` when never validated.
+3. `postSummary` when the request has a posted or partial attempt: `{ "postId": "api-amex-2026-09",
+   "postedCount": 61, "postedUtc": "…", "postedBy": { "id", "name" } }`, else null.
+4. `skipCount`: number of rows with `post: false` in the current version.
+5. `otherUnpostedPushes` (detail only): other requests with the **same `reference`** whose status is `pending`,
+   `posting`, `partial` or `unknown`, as `[{ "id", "publicRef", "pushId", "receivedUtc", "status" }]`. The Post
+   dialog warns from this.
+
+New list query parameters (AND with everything in §6.5 and R-1):
+
+6. `emailFrom` (contains, case-insensitive), `reference` (exact), `minTotal` / `maxTotal` (on `control_total`,
+   inclusive), `hasErrors=true` (latest validation `problemCount > 0` or `needsAttention`), `sort` also accepts
+   `total`, `-total`, `rows`, `-rows`.
+7. `GET /saved-requests/stats` adds `hasErrors: { "pending": n, "all": n }`, same rule as the filter.
+
+## R-9. Users: status filter and the row TxnIDs (small)
+
+1. `GET /users` accepts `status` = `active` | `must-change-password` | `locked` | `disabled` (repeatable), and
+   returns `lockedOutUntilUtc` and `mustChangePassword` on list rows, so the dashboard can show the status badge
+   without a call per user.
+2. `GET /audit-events?actor=<userId>` is how the user page shows that user's activity; `GET /users/{id}/audit` can
+   stay as is.
+3. Confirmation of R-4.8: the attempt detail for a posted attempt lists every row's `externalId`, `index` and
+   `txnId`, so the Results sheet can show "row → TxnID".
+
 ## Not needed (decided)
 
 - No bulk endpoints. About 10 statements a day doesn't justify them.
 - No PDF or attachment storage. The accountant reads the PDF from email.
 - No server push (SSE or WebSocket). The dashboard polls stats every 60 s and a posting request every 3 s.
+- No merging of repeat pushes into one statement (v2): the owner wants each push as its own row.
+- No editing or deleting of audit events, ever.
