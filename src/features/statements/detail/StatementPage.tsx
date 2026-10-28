@@ -28,6 +28,8 @@ import { StatementHeader, type MenuAction } from './StatementHeader'
 interface Seen {
   etag: string
   version: number
+  /** The saved payload the user saw, so the dialog's counts match the ETag it posts. */
+  payload: RequestDetail['payload']
 }
 
 /** The page title and last crumb: the email subject, or the SR ref when it is missing or blank. */
@@ -89,7 +91,7 @@ export function StatementPage() {
     const d = request.duplicate
     setDialog({
       dup: d.flagged ? { of: d.of, ofRef: d.ofRef, ofStatus: d.ofStatus } : null,
-      seen: { etag, version: request.currentVersion },
+      seen: { etag, version: request.currentVersion, payload: request.payload },
     })
   }
   const postBlocked = post.isPosting
@@ -142,6 +144,7 @@ export function StatementPage() {
         open={dialog !== null}
         onOpenChange={(o) => !o && setDialog(null)}
         request={request}
+        seenPayload={dialog?.seen.payload}
         duplicate={dialog?.dup ?? null}
         changed={dialog !== null && dialog.seen.version !== request.currentVersion}
         onConfirm={(opts) => {

@@ -109,12 +109,14 @@ describe('Post button and dialog', () => {
     await user.click(postButton())
     const d = await screen.findByRole('dialog')
     expect(d).toHaveTextContent(/arrived at .* and isn't posted\. Make sure you're not posting the same statement twice\./)
+    const openedEtag = `"${record(11).rowVersion}"`
     const link = within(d).getByRole('link', { name: /^Push / })
     expect(link).toHaveAttribute('href', '/statements/13')
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
     await user.click(within(d).getByRole('button', { name: /^Post \d+ rows?$/ }))
     await waitFor(() => expect(reqs.count('POST', `${API}/11/post`)).toBe(1))
+    expect(reqs.of('POST', `${API}/11/post`)[0].ifMatch).toBe(openedEtag)
   })
 
   test('no callout when there is no other push', async () => {
@@ -394,6 +396,25 @@ describe('the version the dialog showed', () => {
     await waitFor(() => expect(result()).toHaveTextContent('This changed since you opened it.'))
     expect(reqs.count('POST', `${API}/1/post`)).toBe(1)
     expect(reqs.of('POST', `${API}/1/post`)[0].ifMatch).toBe('"4"')
+  })
+})
+
+describe('the version the dialog showed (counts)', () => {
+  test('a reload with a different row set under the open dialog keeps the original title and button count', async () => {
+    const { user, queryClient } = await open(1)
+    await user.click(postButton())
+    const d = await screen.findByRole('dialog')
+    expect(within(d).getByRole('heading', { name: 'Post 12 rows to QuickBooks?' })).toBeInTheDocument()
+    const r = record(1)
+    const next = structuredClone(r.versions[r.versions.length - 1])
+    ;(next.payload.transactions as Txn[]).splice(0, 4)
+    next.number += 1
+    r.versions.push(next)
+    r.rowVersion++
+    await act(() => queryClient.invalidateQueries({ queryKey: requestKeys.detail('1'), exact: true }))
+    expect(await within(d).findByText('This request changed while this dialog was open.')).toBeInTheDocument()
+    expect(within(d).getByRole('heading', { name: 'Post 12 rows to QuickBooks?' })).toBeInTheDocument()
+    expect(within(d).getByRole('button', { name: 'Post 12 rows' })).toBeInTheDocument()
   })
 })
 
