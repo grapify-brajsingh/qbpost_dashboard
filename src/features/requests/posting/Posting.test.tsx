@@ -49,7 +49,7 @@ const result = () => screen.getByRole('status', { name: 'Post result' })
 
 async function confirmPost(user: ReturnType<typeof renderApp>['user']) {
   await user.click(postButton())
-  await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Confirm' }))
+  await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /^Post \d+ rows?$/ }))
 }
 
 describe('Post button and dialog', () => {
@@ -75,7 +75,52 @@ describe('Post button and dialog', () => {
     expect(within(d).getByText('4,820.17')).toBeInTheDocument()
     expect(within(d).getByText(/Validation: OK/)).toBeInTheDocument()
     expect(within(d).getByText('Validation is out of date')).toBeInTheDocument()
-    expect(within(d).getByRole('button', { name: 'Confirm' })).toBeEnabled()
+    expect(within(d).getByRole('button', { name: /^Post \d+ rows?$/ })).toBeEnabled()
+  })
+
+  test('the title and button carry the posting count and the skipped sentence appears only when rows are skipped', async () => {
+    const { user } = await open(1)
+    await user.click(postButton())
+    const d = await screen.findByRole('dialog')
+    expect(within(d).getByRole('heading', { name: 'Post 12 rows to QuickBooks?' })).toBeInTheDocument()
+    expect(within(d).getByRole('button', { name: 'Post 12 rows' })).toBeEnabled()
+    expect(d).not.toHaveTextContent(/skipped/)
+    expect(d).toHaveTextContent(/will post\./)
+    await user.click(within(d).getByRole('button', { name: 'Cancel' }))
+  })
+
+  test("rows marked don't post are skipped: count, amount and sentence follow the saved payload", async () => {
+    const rows = payloadOf(1).transactions as Txn[]
+    rows[0].post = false
+    rows[1].post = false
+    const posting = rows.slice(2).reduce((sum, r) => sum + Math.round(Number(r.amount) * 100), 0)
+    const { user } = await open(1)
+    await user.click(postButton())
+    const d = await screen.findByRole('dialog')
+    expect(within(d).getByRole('heading', { name: 'Post 10 rows to QuickBooks?' })).toBeInTheDocument()
+    expect(within(d).getByRole('button', { name: 'Post 10 rows' })).toBeInTheDocument()
+    expect(d).toHaveTextContent("2 rows marked don't post are skipped.")
+    expect(d).toHaveTextContent(`${(posting / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} will post.`)
+  })
+
+  test('another unposted push of the same statement is listed in an amber callout that opens it in a new tab', async () => {
+    const reqs = countRequests()
+    const { user } = await open(11)
+    await user.click(postButton())
+    const d = await screen.findByRole('dialog')
+    expect(d).toHaveTextContent(/arrived at .* and isn't posted\. Make sure you're not posting the same statement twice\./)
+    const link = within(d).getByRole('link', { name: /^Push / })
+    expect(link).toHaveAttribute('href', '/statements/13')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    await user.click(within(d).getByRole('button', { name: /^Post \d+ rows?$/ }))
+    await waitFor(() => expect(reqs.count('POST', `${API}/11/post`)).toBe(1))
+  })
+
+  test('no callout when there is no other push', async () => {
+    const { user } = await open(2)
+    await user.click(postButton())
+    expect(await screen.findByRole('dialog')).not.toHaveTextContent(/isn't posted/)
   })
 
   test('a duplicate needs "Yes, post anyway" and sends confirmDuplicate: true', async () => {
@@ -84,7 +129,7 @@ describe('Post button and dialog', () => {
     await user.click(postButton())
     const d = await screen.findByRole('dialog')
     expect(within(d).getByText('Possible duplicate of SR-000001 (pending)')).toBeInTheDocument()
-    const confirm = within(d).getByRole('button', { name: 'Confirm' })
+    const confirm = within(d).getByRole('button', { name: /^Post \d+ rows?$/ })
     expect(confirm).toBeDisabled()
     await user.click(within(d).getByRole('checkbox', { name: 'Yes, post anyway' }))
     expect(confirm).toBeEnabled()
@@ -100,9 +145,9 @@ describe('Post button and dialog', () => {
     await confirmPost(user)
     const d = await screen.findByRole('dialog')
     expect(within(d).getByText('Possible duplicate of SR-000005 (pending)')).toBeInTheDocument()
-    expect(within(d).getByRole('button', { name: 'Confirm' })).toBeDisabled()
+    expect(within(d).getByRole('button', { name: /^Post \d+ rows?$/ })).toBeDisabled()
     await user.click(within(d).getByRole('checkbox', { name: 'Yes, post anyway' }))
-    expect(within(d).getByRole('button', { name: 'Confirm' })).toBeEnabled()
+    expect(within(d).getByRole('button', { name: /^Post \d+ rows?$/ })).toBeEnabled()
   })
 
   test('after Confirm the button is disabled at once, progress shows, and a double-click sends exactly 1 POST', async () => {
@@ -110,7 +155,7 @@ describe('Post button and dialog', () => {
     const reqs = countRequests()
     const { user } = await open(1)
     await user.click(postButton())
-    const confirm = within(await screen.findByRole('dialog')).getByRole('button', { name: 'Confirm' })
+    const confirm = within(await screen.findByRole('dialog')).getByRole('button', { name: /^Post \d+ rows?$/ })
     await user.dblClick(confirm)
     expect(postButton()).toBeDisabled()
     expect(screen.getByText(/Posting 12 rows to QuickBooks… this can take a few minutes/)).toBeInTheDocument()
@@ -293,7 +338,7 @@ describe('isolation between requests', () => {
     await user.click(postButton())
     const d = await screen.findByRole('dialog')
     await user.click(within(d).getByRole('checkbox', { name: 'Yes, post anyway' }))
-    await user.click(within(d).getByRole('button', { name: 'Confirm' }))
+    await user.click(within(d).getByRole('button', { name: /^Post \d+ rows?$/ }))
     await waitFor(() => expect(result()).toHaveTextContent('Nothing was sent'))
     await waitFor(() => expect(document.querySelectorAll('tr[data-problem="true"]')).toHaveLength(2))
 
@@ -345,7 +390,7 @@ describe('the version the dialog showed', () => {
     r.rowVersion++
     await act(() => queryClient.invalidateQueries({ queryKey: requestKeys.detail('1'), exact: true }))
     expect(await within(d).findByText('This request changed while this dialog was open.')).toBeInTheDocument()
-    await user.click(within(d).getByRole('button', { name: 'Confirm' }))
+    await user.click(within(d).getByRole('button', { name: /^Post \d+ rows?$/ }))
     await waitFor(() => expect(result()).toHaveTextContent('This changed since you opened it.'))
     expect(reqs.count('POST', `${API}/1/post`)).toBe(1)
     expect(reqs.of('POST', `${API}/1/post`)[0].ifMatch).toBe('"4"')

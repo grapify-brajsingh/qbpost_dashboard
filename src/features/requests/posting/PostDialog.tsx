@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { api } from '@/api/client'
 import { requestKeys } from '@/api/queries/requests'
-import type { RequestDetail } from '@/api/schema'
+import type { OtherPush, RequestDetail } from '@/api/schema'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -15,7 +15,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { formatMoney } from '@/lib/money'
+import { PushId } from '@/components/PushId'
+import { Timestamp } from '@/components/Timestamp'
+import { createDraft, postStats } from '@/features/requests/transactions/draft'
+import { formatCents, formatMoney } from '@/lib/money'
 import type { DuplicateInfo } from './outcome'
 
 const STATE_LABEL = { ok: 'OK', held: 'Held', refused: 'Refused', unreadable: 'Unreadable', unavailable: 'Unavailable' } as const
@@ -45,12 +48,19 @@ function Body({ request, duplicate, changed, onConfirm, onCancel }: Omit<Props, 
   const v = request.validation
   const outdated = v.versionNumber !== undefined && v.versionNumber < request.currentVersion
   const blocked = duplicate !== null && !anyway
+  // The dialog only opens on a saved (not dirty) draft, so the saved payload is what will be posted.
+  const stats = postStats(createDraft(request.payload))
+  const rowsLabel = `${stats.posting} ${stats.posting === 1 ? 'row' : 'rows'}`
 
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Post to QuickBooks?</DialogTitle>
-        <DialogDescription>This sends the saved version to QuickBooks.</DialogDescription>
+        <DialogTitle>{`Post ${rowsLabel} to QuickBooks?`}</DialogTitle>
+        <DialogDescription>
+          {`${formatCents(stats.allCents - stats.skippedCents)} will post.`}
+          {stats.skipped > 0 && ` ${stats.skipped} ${stats.skipped === 1 ? 'row' : 'rows'} marked don't post ${stats.skipped === 1 ? 'is' : 'are'} skipped.`}
+          {' This sends the saved version to QuickBooks.'}
+        </DialogDescription>
       </DialogHeader>
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
         <dt className="text-muted-foreground">Subject</dt>
@@ -70,6 +80,7 @@ function Body({ request, duplicate, changed, onConfirm, onCancel }: Omit<Props, 
           This request changed while this dialog was open.
         </p>
       )}
+      {request.otherUnpostedPushes.length > 0 && <OtherPushes pushes={request.otherUnpostedPushes} />}
       {duplicate && <DuplicateBlock duplicate={duplicate} anyway={anyway} onAnyway={setAnyway} />}
       <DialogFooter>
         <Button variant="outline" onClick={onCancel}>
@@ -82,10 +93,31 @@ function Body({ request, duplicate, changed, onConfirm, onCancel }: Omit<Props, 
             onConfirm(duplicate ? { confirmDuplicate: true } : {})
           }}
         >
-          Confirm
+          {`Post ${rowsLabel}`}
         </Button>
       </DialogFooter>
     </>
+  )
+}
+
+function OtherPushes({ pushes }: { pushes: OtherPush[] }) {
+  return (
+    <div className="space-y-1 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
+      {pushes.map((p) => (
+        <p key={p.id}>
+          <Link className="underline" to={`/statements/${p.id}`} target="_blank" rel="noopener noreferrer">
+            Push <PushId value={p.pushId} fallback={p.publicRef} />
+          </Link>
+          {p.receivedUtc && (
+            <>
+              {' arrived at '}
+              <Timestamp utc={p.receivedUtc} />
+            </>
+          )}
+          {" and isn't posted. Make sure you're not posting the same statement twice."}
+        </p>
+      ))}
+    </div>
   )
 }
 
