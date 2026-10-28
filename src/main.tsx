@@ -7,6 +7,7 @@ import { makeQueryClient } from '@/api/queryClient'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { routes } from '@/router'
+import '@fontsource-variable/geist'
 import './index.css'
 
 const queryClient = makeQueryClient()
