@@ -94,19 +94,20 @@ describe('SearchBox', () => {
     expect(screen.getByRole('searchbox')).toHaveValue('')
   })
 
-  it('flushes a pending keystroke on unmount', async () => {
+  it('does not call onChange on unmount, even with a pending keystroke', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const user = userEvent.setup({ delay: null })
     const onChange = vi.fn()
     const { unmount } = render(<SearchBox value={undefined} onChange={onChange} />)
     await user.type(screen.getByRole('searchbox'), 'abc')
-    expect(onChange).not.toHaveBeenCalled()
     unmount()
-    expect(onChange).toHaveBeenCalledTimes(1)
-    expect(onChange).toHaveBeenCalledWith('abc')
+    act(() => {
+      vi.advanceTimersByTime(500)
+    })
+    expect(onChange).not.toHaveBeenCalled()
   })
 
-  it('does not call onChange on unmount when nothing is pending', async () => {
+  it('calls onChange once after the debounce, and not again on unmount', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const user = userEvent.setup({ delay: null })
     const onChange = vi.fn()

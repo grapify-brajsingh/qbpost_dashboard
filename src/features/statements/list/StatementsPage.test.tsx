@@ -222,6 +222,18 @@ describe('statements list', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/statements/9'))
   })
 
+  test('clicking a row within the search debounce window still navigates to the statement', async () => {
+    useList([summary({ id: 9, email: { subject: 'Click me', receivedUtc: '2026-10-27T07:00:00Z' } })])
+    const { user, router } = signedIn()
+    await screen.findByText('Click me')
+    await user.type(screen.getByRole('searchbox', { name: 'Search' }), 'abc')
+    await user.click(screen.getByText('Click me'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/statements/9'))
+    await new Promise((r) => setTimeout(r, 400))
+    expect(router.state.location.pathname).toBe('/statements/9')
+    expect(router.state.location.search).toBe('')
+  })
+
   test('empty To review shows "All clear. Nothing waiting."', async () => {
     useList([])
     signedIn()
