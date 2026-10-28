@@ -45,6 +45,7 @@ function Body({ requestId, onClose }: { requestId: string; onClose: () => void }
           Cancel
         </Button>
         <Button
+          variant="destructive"
           disabled={!valid || discard.isPending}
           onClick={() =>
             discard.mutate(
@@ -52,7 +53,7 @@ function Body({ requestId, onClose }: { requestId: string; onClose: () => void }
               {
                 onSuccess: () => {
                   onClose()
-                  toast.success('Request discarded')
+                  toast.success('Statement discarded')
                 },
               },
             )

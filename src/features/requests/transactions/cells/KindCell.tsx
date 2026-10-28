@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { TXN_KINDS } from '@/api/schema'
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { cellText, isKnownKind } from '../columns'
 import type { EditorProps } from './TextCell'
 
@@ -13,10 +14,12 @@ export function KindCell({ initial, onCommit, onCancel }: EditorProps & { initia
     fn()
   }
   return (
-    <select
+    <NativeSelect
       aria-label="Kind"
       autoFocus
-      className="h-7 w-full rounded border bg-background px-1 text-sm focus-visible:ring-2 focus-visible:ring-ring"
+      size="sm"
+      wrapperClassName="w-full"
+      className="h-7 py-0 pr-7 pl-1.5 text-[13px] data-[size=sm]:h-7 data-[size=sm]:py-0"
       value={known ? (initial as string) : ''}
       onChange={(e) => finish(() => onCommit(e.target.value))}
       onBlur={() => finish(onCancel)}
@@ -32,15 +35,15 @@ export function KindCell({ initial, onCommit, onCancel }: EditorProps & { initia
       }}
     >
       {!known && (
-        <option value="" disabled>
+        <NativeSelectOption value="" disabled>
           {cellText(initial)}
-        </option>
+        </NativeSelectOption>
       )}
       {TXN_KINDS.map((k) => (
-        <option key={k} value={k}>
+        <NativeSelectOption key={k} value={k}>
           {k}
-        </option>
+        </NativeSelectOption>
       ))}
-    </select>
+    </NativeSelect>
   )
 }

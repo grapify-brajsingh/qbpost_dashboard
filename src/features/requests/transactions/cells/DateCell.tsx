@@ -1,16 +1,5 @@
-import { TextCell, type EditorProps, type ParseResult } from './TextCell'
-
-const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/
-
-function parseDate(text: string): ParseResult {
-  const t = text.trim()
-  const m = DATE_RE.exec(t)
-  if (m) {
-    const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])))
-    if (d.getUTCMonth() === Number(m[2]) - 1 && d.getUTCDate() === Number(m[3])) return { value: t }
-  }
-  return { error: 'Use yyyy-MM-dd' }
-}
+import { parseDate } from './parse'
+import { TextCell, type EditorProps } from './TextCell'
 
 /** A yyyy-MM-dd text input with the browser's date picker next to it. */
 export function DateCell({ initial, ...rest }: EditorProps & { initial: unknown }) {

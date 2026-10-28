@@ -1,5 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
+import type { ParseResult } from './parse'
 
 /** `next`/`prev`: the edit was committed with Tab/Shift+Tab and focus moves on. */
 export type Move = 'next' | 'prev'
@@ -9,7 +10,7 @@ export interface EditorProps {
   onCancel: () => void
 }
 
-export type ParseResult = { value: unknown } | { error: string }
+export type { ParseResult }
 
 interface Props extends EditorProps {
   label: string

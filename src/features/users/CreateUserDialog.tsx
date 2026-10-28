@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ROLES, selectClass } from './userStatus'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { ROLE_HELP, ROLES } from './userStatus'
 
 interface Props {
   open: boolean
@@ -44,7 +45,7 @@ function Body({ onCancel, onCreated }: { onCancel: () => void; onCreated: (p: st
       }}
     >
       <DialogHeader>
-        <DialogTitle>Create user</DialogTitle>
+        <DialogTitle>New user</DialogTitle>
       </DialogHeader>
       <div className="grid gap-1">
         <Label htmlFor="new-user-email">Email</Label>
@@ -54,15 +55,23 @@ function Body({ onCancel, onCreated }: { onCancel: () => void; onCreated: (p: st
         <Label htmlFor="new-user-name">Display name</Label>
         <Input id="new-user-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
       </div>
-      <div className="grid gap-1">
-        <Label htmlFor="new-user-role">Role</Label>
-        <select id="new-user-role" className={selectClass} value={role} onChange={(e) => setRole(e.target.value as Role)}>
+      <div className="grid gap-2">
+        <Label id="new-user-role-label">Role</Label>
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          aria-labelledby="new-user-role-label"
+          value={role}
+          // Clicking the chosen role again would unset it; a user always has a role.
+          onValueChange={(v) => v && setRole(v as Role)}
+        >
           {ROLES.map((r) => (
-            <option key={r} value={r}>
+            <ToggleGroupItem key={r} value={r} className="capitalize">
               {r}
-            </option>
+            </ToggleGroupItem>
           ))}
-        </select>
+        </ToggleGroup>
+        <p className="text-sm text-muted-foreground">{ROLE_HELP[role]}</p>
       </div>
       {exists ? (
         <p role="alert" className="text-sm text-destructive">
@@ -76,7 +85,7 @@ function Body({ onCancel, onCreated }: { onCancel: () => void; onCreated: (p: st
           Cancel
         </Button>
         <Button type="submit" disabled={!valid || create.isPending}>
-          Create
+          Create user
         </Button>
       </DialogFooter>
     </form>

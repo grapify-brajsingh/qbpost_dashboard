@@ -3,6 +3,11 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * QbAutopost design tokens.
+ * A ledger, not a dashboard: paper and ink, one bottle-green for action, red ink for anything that is out.
+ * Every colour below is semantic; components never reach for raw palette colours.
+ */
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -16,6 +21,7 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -23,59 +29,162 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --font-sans: "Geist Variable", system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SFMono-Regular", Consolas, monospace;
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --ease-out-soft: cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --radius: 0.5rem;
+  /* Paper and ink */
+  --background: #f6f7f5;
+  --foreground: #16201c;
+  --card: #ffffff;
+  --card-foreground: #16201c;
+  --popover: #ffffff;
+  --popover-foreground: #16201c;
+  /* Ledger green: the only colour that means "act" */
+  --primary: #1d5c46;
+  --primary-foreground: #ffffff;
+  --primary-soft: #e6f0eb;
+  --secondary: #eef1ef;
+  --secondary-foreground: #16201c;
+  --muted: #eef1ef;
+  --muted-foreground: #59655f;
+  --accent: #eaefec;
+  --accent-foreground: #16201c;
+  /* Red ink: short, failed, destructive */
+  --destructive: #b3261e;
+  --destructive-soft: #fbeceb;
+  --success: #1e7349;
+  --success-soft: #e5f3eb;
+  --warning: #8f5409;
+  --warning-soft: #fbf1df;
+  --info: #2d4a8a;
+  --info-soft: #e9eef8;
+  /* Chart identity hues (received, posted). Validated: CVD and normal-vision separation, 3:1 on the card. */
+  --chart-1: #5a7fd0;
+  --chart-2: #2a9468;
+  --border: #dce2de;
+  --input: #cfd7d2;
+  --ring: #1d5c46;
+  --sidebar: #eef1ee;
+  --sidebar-foreground: #3c4843;
+  --sidebar-primary: #1d5c46;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e1e7e3;
+  --sidebar-accent-foreground: #16201c;
+  --sidebar-border: #dce2de;
+  --sidebar-ring: #1d5c46;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --background: #0f1513;
+  --foreground: #e3e9e6;
+  --card: #151d1a;
+  --card-foreground: #e3e9e6;
+  --popover: #18211d;
+  --popover-foreground: #e3e9e6;
+  --primary: #6cc39d;
+  --primary-foreground: #08130e;
+  --primary-soft: #183229;
+  --secondary: #1d2723;
+  --secondary-foreground: #e3e9e6;
+  --muted: #1d2723;
+  --muted-foreground: #9aa8a1;
+  --accent: #212c27;
+  --accent-foreground: #e3e9e6;
+  --destructive: #f08a80;
+  --destructive-soft: #3a1714;
+  --success: #74cd9c;
+  --success-soft: #15301f;
+  --warning: #e6b155;
+  --warning-soft: #33250c;
+  --info: #9db3ec;
+  --info-soft: #1b2440;
+  --chart-1: #6a8fe0;
+  --chart-2: #33a473;
+  --border: #26322d;
+  --input: #303d37;
+  --ring: #6cc39d;
+  --sidebar: #121916;
+  --sidebar-foreground: #b4c0ba;
+  --sidebar-primary: #6cc39d;
+  --sidebar-primary-foreground: #08130e;
+  --sidebar-accent: #1d2723;
+  --sidebar-accent-foreground: #e3e9e6;
+  --sidebar-border: #222c28;
+  --sidebar-ring: #6cc39d;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "ss01", "cv11";
+  }
+  .num,
+  td,
+  time {
+    font-variant-numeric: tabular-nums;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--primary) 22%, transparent);
+  }
+}
+
+@layer components {
+  /* One page frame for every signed-in screen. */
+  .page {
+    @apply grid w-full min-w-0 max-w-[1440px] grid-cols-[minmax(0,1fr)] content-start gap-5 px-4 py-6 md:px-8 md:py-8;
+  }
+  /* The bookkeeping mark for a final figure: a double rule above it. */
+  .rule-double {
+    border-top: 3px double var(--border);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@keyframes posting-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
   }
 }

@@ -1,21 +1,13 @@
 import { useState } from 'react'
 import { useAttempt, useAttempts } from '@/api/queries/requests'
-import type { Attempt, Finding, PostedRow } from '@/api/schema'
+import type { Attempt, Finding } from '@/api/schema'
 import { Money } from '@/components/Money'
 import { ProblemAlert } from '@/components/ProblemAlert'
 import { Timestamp } from '@/components/Timestamp'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-
-const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
-
-function postedRows(result: unknown): PostedRow[] {
-  if (!isObj(result)) return []
-  const list = Array.isArray(result.posted) ? result.posted : result.rows
-  if (!Array.isArray(list)) return []
-  return list.filter((r): r is PostedRow => isObj(r) && typeof r.txnId === 'string')
-}
+import { isObj, postedRows } from './postedRows'
 
 function findings(result: unknown): Finding[] {
   if (!isObj(result) || !Array.isArray(result.validation)) return []
@@ -109,7 +101,7 @@ function AttemptRow({ requestId, attempt: a }: { requestId: string; attempt: Att
         aria-expanded={open}
         aria-label={`Attempt ${a.id}`}
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 p-3 text-left text-sm"
+        className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-md p-3 text-left text-sm transition-colors duration-150 outline-none hover:bg-accent/60 focus-visible:ring-[3px] focus-visible:ring-ring/40"
       >
         <span className="font-medium">#{a.id}</span>
         <Badge variant="outline">{a.outcome}</Badge>
@@ -136,16 +128,23 @@ function AttemptRow({ requestId, attempt: a }: { requestId: string; attempt: Att
   )
 }
 
-export function AttemptsTab({ requestId }: { requestId: string }) {
+/** The attempt list body (newest first), shared by the v1 tab and the statement sheet. */
+export function AttemptList({ requestId }: { requestId: string }) {
   const q = useAttempts(requestId)
   if (q.isPending) return <Skeleton className="h-24" />
   if (q.data === undefined) return <ProblemAlert error={q.error} />
   if (q.data.length === 0) return <p className="text-sm text-muted-foreground">No post attempts yet.</p>
   return (
     <ul aria-label="Attempts" className="space-y-2">
-      {q.data.map((a) => (
-        <AttemptRow key={a.id} requestId={requestId} attempt={a} />
-      ))}
+      {[...q.data]
+        .sort((a, b) => b.startedUtc.localeCompare(a.startedUtc) || b.id - a.id)
+        .map((a) => (
+          <AttemptRow key={a.id} requestId={requestId} attempt={a} />
+        ))}
     </ul>
   )
+}
+
+export function AttemptsTab({ requestId }: { requestId: string }) {
+  return <AttemptList requestId={requestId} />
 }

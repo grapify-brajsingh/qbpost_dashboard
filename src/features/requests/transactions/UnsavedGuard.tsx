@@ -47,6 +47,7 @@ export function UnsavedGuard({ dirty }: { dirty: boolean }) {
         <AlertDialogFooter>
           <AlertDialogCancel>Stay</AlertDialogCancel>
           <AlertDialogAction
+            variant="destructive"
             onClick={() => {
               leaving.current = true
               blocker.proceed?.()

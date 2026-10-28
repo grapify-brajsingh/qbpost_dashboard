@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { Page, Role, User, UserAuditRow } from '../schema'
+import type { Page, Role, User, UserStatus } from '../schema'
 import { api } from '../client'
 
 export const USERS_PAGE_SIZE = 25
@@ -9,6 +9,7 @@ export interface UsersParams {
   role?: Role
   /** `false` hides disabled users; leave out to list everyone. */
   disabled?: boolean
+  status?: UserStatus[]
   page?: number
 }
 
@@ -16,7 +17,6 @@ export const userKeys = {
   all: ['users'] as const,
   list: (params: UsersParams) => [...userKeys.all, 'list', params] as const,
   detail: (id: string) => [...userKeys.all, 'detail', id] as const,
-  audit: (id: string) => [...userKeys.all, 'detail', id, 'audit'] as const,
 }
 
 function listQuery(params: UsersParams): string {
@@ -24,6 +24,7 @@ function listQuery(params: UsersParams): string {
   if (params.q) qs.set('q', params.q)
   if (params.role) qs.set('role', params.role)
   if (params.disabled !== undefined) qs.set('disabled', String(params.disabled))
+  for (const s of params.status ?? []) qs.append('status', s)
   if (params.page && params.page > 1) qs.set('page', String(params.page))
   qs.set('pageSize', String(USERS_PAGE_SIZE))
   return qs.toString()
@@ -49,13 +50,6 @@ export function useUser(id: string) {
       const r = await api.get<User>(`/users/${id}`, { signal })
       return { user: r.data, etag: r.headers.get('ETag') ?? '' }
     },
-  })
-}
-
-export function useUserAudit(id: string) {
-  return useQuery<UserAuditRow[]>({
-    queryKey: userKeys.audit(id),
-    queryFn: ({ signal }) => api.get<UserAuditRow[]>(`/users/${id}/audit`, { signal }).then((r) => r.data),
   })
 }
 

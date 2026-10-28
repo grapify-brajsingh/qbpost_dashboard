@@ -1,6 +1,12 @@
 # QbAutopost Dashboard — design
 
-**Date**: 2026-10-27 · **Status**: draft for owner review
+**Date**: 2026-10-27 · **Status**: draft for owner review; implemented 2026-10-28 (see the plan's "Status and
+results")
+> **Partly superseded (note added 2026-10-28)**: §5 (top bar, `/requests` routes) and §6.2–§6.3 (requests list and
+> request detail with tabs) were replaced by v2 (`2026-10-28-dashboard-v2-pages-design.md`): left sidebar,
+> `/statements` pages and the statement sheet. `/` is now the Home page (`2026-10-28-home-dashboard-spec.md`). The
+> look is now `2026-10-28-ui-refresh-ledger-spec.md`. Goals, anti-goals (§2), constraints (§3), posting rules
+> (§6.3.2), cross-cutting behaviour (§7) and testing (§9) still hold.
 **Repo**: https://github.com/grapify-brajsingh/qbpost_dashboard (this project)
 **Inputs**: `qbautopost-dashboard-brief.md` (in this repo) and the API contract
 `D:\qb_post-issue-2\docs\saved-requests-postgres.md` (qbautopost repo, ticket #2). Where this design and the API spec

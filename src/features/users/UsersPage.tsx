@@ -1,141 +1,130 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { useUsers, type UsersParams } from '@/api/queries/users'
+import { PlusIcon, UsersIcon } from 'lucide-react'
+import { toast } from 'sonner'
+import { parsePage } from '@/lib/pageParam'
+import { usePatchUser, useResetPassword, useUnlock, useUsers, type UsersParams } from '@/api/queries/users'
+import type { User } from '@/api/schema'
+import { ClearFilters, FilterChip, SearchBox, useUrlFilters } from '@/components/filters'
+import { DataPanel, EmptyState, Pager, TableSkeleton } from '@/components/DataPanel'
+import { PageHeader } from '@/components/PageHeader'
 import { ProblemAlert } from '@/components/ProblemAlert'
 import { Timestamp } from '@/components/Timestamp'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { CreateUserDialog } from './CreateUserDialog'
 import { OneTimePasswordDialog } from './OneTimePasswordDialog'
-import { ROLES, selectClass, statusText } from './userStatus'
+import { UserStatusBadge } from './UserStatusBadge'
+import { initials, ROLES, STATUS_LABEL, STATUSES, userStatusOf } from './userStatus'
 
-const DEBOUNCE_MS = 300
+// Module level: useUrlFilters memoises on the spec's identity.
+const FILTER_SPEC = {
+  q: { kind: 'text' },
+  role: { kind: 'enum', values: ROLES },
+  status: { kind: 'enumList', values: STATUSES },
+} as const
 
 export function UsersPage() {
+  const filters = useUrlFilters(FILTER_SPEC)
   const [search, setSearch] = useSearchParams()
-  const q = search.get('q') ?? ''
-  const role = ROLES.find((r) => r === search.get('role'))
-  const showDisabled = search.get('showDisabled') === 'true'
-  const pageNo = Math.max(1, Number(search.get('page')) || 1)
+  const f = filters.values
+  const pageNo = parsePage(search.get('page'))
 
-  const update = (patch: Record<string, string>, opts: { keepPage?: boolean } = {}) =>
-    setSearch(
-      (prev) => {
-        const next = new URLSearchParams(prev)
-        if (!opts.keepPage) next.delete('page')
-        for (const [k, v] of Object.entries(patch)) {
-          if (v === '' || (k === 'page' && v === '1')) next.delete(k)
-          else next.set(k, v)
-        }
-        return next
-      },
-      { replace: true },
-    )
-
-  // The search box is local state, written to the URL 300 ms after the last keystroke.
-  const [qInput, setQInput] = useState(q)
-  useEffect(() => setQInput((cur) => (cur.trim() === q ? cur : q)), [q])
-  useEffect(() => {
-    if (qInput.trim() === q) return
-    const t = setTimeout(() => update({ q: qInput.trim() }), DEBOUNCE_MS)
-    return () => clearTimeout(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a keystroke should (re)start the timer
-  }, [qInput])
-
-  const params: UsersParams = {
-    q: q || undefined,
-    role,
-    disabled: showDisabled ? undefined : false,
-    page: pageNo,
-  }
+  const params: UsersParams = { q: f.q, role: f.role, status: f.status, page: pageNo }
   const list = useUsers(params)
   const [creating, setCreating] = useState(false)
   const [password, setPassword] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<unknown>(null)
+
+  const setPage = (n: number) =>
+    setSearch((prev) => {
+      const next = new URLSearchParams(prev)
+      if (n <= 1) next.delete('page')
+      else next.set('page', String(n))
+      return next
+    })
 
   const total = list.data?.total ?? 0
   const pages = Math.max(1, Math.ceil(total / (list.data?.pageSize ?? 25)))
+  const status = f.status ?? []
 
   return (
-    <div className="space-y-4 p-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Users</h1>
-        <Button onClick={() => setCreating(true)}>Create user</Button>
-      </div>
-      <div className="flex flex-wrap items-end gap-4">
-        <div className="grid gap-1">
-          <Label htmlFor="user-search">Search</Label>
-          <Input
-            id="user-search"
-            type="search"
-            className="w-72"
-            placeholder="Name or email"
-            value={qInput}
-            onChange={(e) => setQInput(e.target.value)}
-          />
-        </div>
-        <div className="grid gap-1">
-          <Label htmlFor="user-role">Role</Label>
-          <select id="user-role" className={selectClass} value={role ?? ''} onChange={(e) => update({ role: e.target.value })}>
-            <option value="">Any</option>
-            {ROLES.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
+    <div className="page">
+      <PageHeader
+        title="Users"
+        description="Who can sign in, and what they can do."
+        actions={
+          <Button onClick={() => setCreating(true)}>
+            <PlusIcon aria-hidden />
+            New user
+          </Button>
+        }
+      />
+
+      <div role="search" aria-label="Filters" className="flex flex-wrap items-center gap-2">
+        <SearchBox value={f.q} onChange={(v) => filters.set({ q: v.trim() || undefined })} label="Search" placeholder="Search name or email" />
+        <FilterChip
+          label="Role"
+          value={f.role}
+          options={ROLES.map((r) => ({ value: r, label: r[0].toUpperCase() + r.slice(1) }))}
+          onChange={(v) => filters.set({ role: v as (typeof ROLES)[number] | undefined })}
+        />
+        <FilterChip
+          label="Status"
+          value={status.length ? status.map((s) => STATUS_LABEL[s]).join(', ') : undefined}
+          onChange={() => filters.set({ status: undefined })}
+        >
+          <ul aria-label="Statuses" className="p-2">
+            {STATUSES.map((s) => (
+              <li key={s} className="flex items-center gap-2 py-1">
+                <Checkbox
+                  id={`status-${s}`}
+                  checked={status.includes(s)}
+                  onCheckedChange={(on) => {
+                    const next = on === true ? [...status, s] : status.filter((x) => x !== s)
+                    filters.set({ status: next.length ? next : undefined })
+                  }}
+                />
+                <Label htmlFor={`status-${s}`} className="font-normal">
+                  {STATUS_LABEL[s]}
+                </Label>
+              </li>
             ))}
-          </select>
-        </div>
-        <div className="flex h-9 items-center gap-2">
-          <Checkbox
-            id="user-show-disabled"
-            checked={showDisabled}
-            onCheckedChange={(c) => update({ showDisabled: c === true ? 'true' : '' })}
-          />
-          <Label htmlFor="user-show-disabled">Show disabled</Label>
-        </div>
+          </ul>
+        </FilterChip>
+        <ClearFilters onClear={filters.clear} disabled={filters.activeCount === 0} />
       </div>
+
       {list.error && <ProblemAlert error={list.error} />}
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Role</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Last login</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {list.data?.items.map((u) => (
-            <TableRow key={u.id}>
-              <TableCell>
-                <Link className="underline" to={`/users/${u.id}`}>
-                  {u.displayName}
-                </Link>
-              </TableCell>
-              <TableCell>{u.email}</TableCell>
-              <TableCell>{u.role}</TableCell>
-              <TableCell>{statusText(u)}</TableCell>
-              <TableCell>{u.lastLoginUtc ? <Timestamp utc={u.lastLoginUtc} /> : '—'}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      {list.data && (
-        <div className="flex items-center justify-end gap-3 text-sm">
-          <span>
-            Page {list.data.page} of {pages} · {total} total
-          </span>
-          <Button variant="outline" size="sm" disabled={pageNo <= 1} onClick={() => update({ page: String(pageNo - 1) }, { keepPage: true })}>
-            Previous
-          </Button>
-          <Button variant="outline" size="sm" disabled={pageNo >= pages} onClick={() => update({ page: String(pageNo + 1) }, { keepPage: true })}>
-            Next
-          </Button>
-        </div>
-      )}
+      {actionError !== null && <ProblemAlert error={actionError} />}
+      <DataPanel>
+        {!list.data && !list.error ? (
+          <TableSkeleton columns={5} rows={5} />
+        ) : list.data && list.data.items.length === 0 ? (
+          <EmptyState icon={UsersIcon} title="No users match." description="Try another name, or clear the filters above." />
+        ) : (
+          <Table className="min-w-[760px]">
+            <TableHeader className="bg-muted/40">
+              <TableRow>
+                <TableHead>User</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Last login</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {list.data?.items.map((u) => (
+                <UserRow key={`${u.id}:${u.rowVersion}`} user={u} onPassword={setPassword} onError={setActionError} />
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </DataPanel>
+      {list.data && total > 0 && <Pager page={pageNo} shown={list.data.page} pages={pages} total={total} onPage={setPage} />}
       <CreateUserDialog
         open={creating}
         onOpenChange={setCreating}
@@ -146,5 +135,87 @@ export function UsersPage() {
       />
       {password !== null && <OneTimePasswordDialog password={password} onClose={() => setPassword(null)} />}
     </div>
+  )
+}
+
+function UserRow({ user: u, onPassword, onError }: { user: User; onPassword: (p: string) => void; onError: (e: unknown) => void }) {
+  const reset = useResetPassword(u.id)
+  const unlock = useUnlock(u.id)
+  const patch = usePatchUser(u.id)
+  const status = userStatusOf(u)
+  const busy = reset.isPending || unlock.isPending || patch.isPending
+  return (
+    <TableRow>
+      <TableCell>
+        <Link
+          to={`/users/${u.id}`}
+          className="group/user -m-1 inline-flex items-center gap-3 rounded-md p-1 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
+          aria-label={u.displayName}
+        >
+          <Avatar>
+            <AvatarFallback className="bg-primary-soft text-xs font-semibold text-primary">{initials(u.displayName)}</AvatarFallback>
+          </Avatar>
+          <span className="grid text-left leading-tight">
+            <span className="font-medium underline-offset-2 group-hover/user:text-primary group-hover/user:underline">{u.displayName}</span>
+            <span className="text-xs text-muted-foreground">{u.email}</span>
+          </span>
+        </Link>
+      </TableCell>
+      <TableCell className="capitalize">{u.role}</TableCell>
+      <TableCell>
+        <UserStatusBadge user={u} />
+      </TableCell>
+      <TableCell className="text-muted-foreground tabular-nums">{u.lastLoginUtc ? <Timestamp utc={u.lastLoginUtc} /> : '—'}</TableCell>
+      <TableCell>
+        <div className="flex justify-end gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={busy}
+            aria-label={`Reset password for ${u.displayName}`}
+            onClick={() => {
+              onError(null)
+              reset.mutate({ onPassword }, { onError })
+            }}
+          >
+            Reset password
+          </Button>
+          {status === 'locked' && (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              aria-label={`Unlock ${u.displayName}`}
+              onClick={() => {
+                onError(null)
+                unlock.mutate(undefined, { onSuccess: () => toast.success('User unlocked'), onError })
+              }}
+            >
+              Unlock
+            </Button>
+          )}
+          {status === 'disabled' && (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              aria-label={`Enable ${u.displayName}`}
+              onClick={() => {
+                onError(null)
+                // The version the admin saw in this list is the one the change is checked against.
+                patch.mutate({ patch: { disabled: false }, etag: `"${u.rowVersion}"` }, { onError })
+              }}
+            >
+              Enable
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" asChild>
+            <Link to={`/users/${u.id}`} aria-label={`Edit ${u.displayName}`}>
+              Edit
+            </Link>
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
   )
 }

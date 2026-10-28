@@ -37,7 +37,7 @@ export function RestoreDialog({ open, onOpenChange, requestId }: Props) {
               restore.mutate(undefined, {
                 onSuccess: () => {
                   onOpenChange(false)
-                  toast.success('Request restored')
+                  toast.success('Statement restored')
                 },
               })
             }

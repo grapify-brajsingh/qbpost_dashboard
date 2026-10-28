@@ -1,11 +1,12 @@
 import { http, HttpResponse } from 'msw'
-import type { Role } from '@/api/schema'
+import type { Role, UserStatus } from '@/api/schema'
 import { mockDb } from '../db'
 import type { MockUser } from '../fixtures/users'
 import { API, actorOf, authenticate, notFound, paginate, parseIfMatch, problem, readJson } from './common'
-import { addUserAudit, newTemporaryPassword, toUser } from './userHelpers'
+import { addUserAudit, newTemporaryPassword, toUser, userStatusOf } from './userHelpers'
 
 const ROLES: Role[] = ['admin', 'editor', 'viewer']
+const STATUSES: UserStatus[] = ['active', 'must-change-password', 'locked', 'disabled']
 const isRole = (v: unknown): v is Role => ROLES.includes(v as Role)
 const find = (id: unknown) => mockDb.users.find((u) => u.id === id)
 
@@ -24,11 +25,16 @@ export const userHandlers = [
     if ((role && !isRole(role)) || (disabled && disabled !== 'true' && disabled !== 'false')) {
       return problem(400, 'invalid-query', 'Invalid query', 'Unknown role or disabled value.')
     }
+    const statuses = url.searchParams.getAll('status')
+    if (statuses.some((s) => !STATUSES.includes(s as UserStatus))) {
+      return problem(400, 'invalid-query', 'Invalid query', 'Unknown status.')
+    }
     const matches = mockDb.users.filter(
       (u) =>
         (!q || u.email.toLowerCase().includes(q) || u.displayName.toLowerCase().includes(q)) &&
         (!role || u.role === role) &&
-        (!disabled || u.disabled === (disabled === 'true')),
+        (!disabled || u.disabled === (disabled === 'true')) &&
+        (!statuses.length || statuses.includes(userStatusOf(u))),
     )
     const page = paginate(matches.map(toUser), url)
     return 'error' in page ? page.error : HttpResponse.json(page)

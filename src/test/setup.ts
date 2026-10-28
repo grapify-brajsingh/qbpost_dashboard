@@ -72,6 +72,13 @@ console.error = (...args: unknown[]) => {
   consoleError(...args)
 }
 
+// jsdom lays nothing out, so Recharts' responsive container always measures 0 × 0 and says so. Drop exactly that.
+const consoleWarn = console.warn
+console.warn = (...args: unknown[]) => {
+  if (typeof args[0] === 'string' && args[0].startsWith('The width(0) and height(0) of chart should be greater than 0')) return
+  consoleWarn(...args)
+}
+
 // jsdom has no ResizeObserver; Radix (tooltip, popper) measures with it.
 if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = class {
