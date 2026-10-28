@@ -7,7 +7,7 @@ import { SessionProvider } from '@/auth/SessionProvider'
 import { SignInPage } from '@/auth/SignInPage'
 import { hasScope, useSession } from '@/auth/useSession'
 import { AccountPage } from '@/features/account/AccountPage'
-import { RequestDetailPage } from '@/features/requests/detail/RequestDetailPage'
+import { StatementPage } from '@/features/statements/detail/StatementPage'
 import { StatementsPage } from '@/features/statements/list/StatementsPage'
 import { UserPage } from '@/features/users/UserPage'
 import { UsersPage } from '@/features/users/UsersPage'
@@ -29,10 +29,10 @@ function RequireAdmin({ children }: { children: ReactNode }) {
   return hasScope(me, 'users:manage') ? children : <NotFound />
 }
 
-/** Keyed by id: nothing on the page (post state, dialogs) carries over to another request. */
-function RequestDetailRoute() {
+/** Keyed by id: nothing on the page (draft, post state, dialogs) carries over to another statement. */
+function StatementRoute() {
   const { id } = useParams()
-  return <RequestDetailPage key={id} />
+  return <StatementPage key={id} />
 }
 
 /** Old v1 addresses keep working: same id, same query string. */
@@ -80,7 +80,7 @@ export const routes: RouteObject[] = [
             handle: { crumb: 'Statements' },
             children: [
               { index: true, element: <StatementsPage /> },
-              { path: ':id', element: <RequestDetailRoute />, handle: { crumb: 'Statement' } },
+              { path: ':id', element: <StatementRoute />, handle: { crumb: 'Statement' } },
             ],
           },
           { path: '/audit', element: <AuditPlaceholder />, handle: { crumb: 'Audit trail' } },

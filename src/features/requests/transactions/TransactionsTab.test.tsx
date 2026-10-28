@@ -1,8 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
-import type { QueryClient } from '@tanstack/react-query'
 import { afterEach } from 'vitest'
-import type { RequestDetail } from '@/api/schema'
-import { mockControl } from '@/mocks/db'
+import { mockControl, mockDb } from '@/mocks/db'
 import { renderApp } from '@/test/render'
 
 afterEach(() => localStorage.clear())
@@ -14,12 +12,6 @@ function open(id: number, as = 'u-admin') {
 
 const rowsOf = () => document.querySelectorAll('tbody tr[data-index]')
 
-function patchDetail(qc: QueryClient, id: number, patch: (r: RequestDetail) => RequestDetail) {
-  const key = ['requests', 'detail', String(id)]
-  const cur = qc.getQueryData(key) as { request: RequestDetail; etag: string }
-  qc.setQueryData(key, { ...cur, request: patch(cur.request) })
-}
-
 describe('virtualised table', () => {
   test('renders far fewer than 210 rows, keeps the header, payload order', async () => {
     open(2)
@@ -28,7 +20,7 @@ describe('virtualised table', () => {
     expect(document.querySelector('tr[data-index="0"]')).not.toBeNull()
     const headers = screen.getAllByRole('columnheader').map((h) => h.textContent)
     expect(headers).toEqual([
-      '#', 'Date', 'Kind', 'Payee', 'Account', 'Line account', 'Amount', 'Check no', 'Ref no', 'Memo', 'Last 4', 'External id',
+      'Post', '#', 'Date', 'Kind', 'Payee', 'Account', 'Line account', 'Memo', 'Amount', 'Check no', 'Ref no', 'Last 4', 'External id', 'Delete',
     ])
     const container = screen.getByTestId('tx-scroll')
     fireEvent.scroll(container, { target: { scrollTop: 3000 } })
@@ -37,10 +29,10 @@ describe('virtualised table', () => {
 })
 
 describe('findings', () => {
-  test('only-problems toggle shows exactly the 3 problem rows; hover shows reason, detail, candidates', async () => {
+  test('"Has a problem" shows exactly the 3 problem rows; hover shows reason, detail, candidates', async () => {
     const { user } = open(2)
     await screen.findByRole('columnheader', { name: 'Payee' })
-    await user.click(screen.getByRole('checkbox', { name: 'Only rows with problems' }))
+    await user.click(screen.getByRole('button', { name: 'Has a problem' }))
     await waitFor(() => expect(rowsOf()).toHaveLength(3))
     expect([...rowsOf()].every((r) => r.getAttribute('data-problem') === 'true')).toBe(true)
     await user.hover(screen.getByRole('button', { name: 'Problems on row 89' }))
@@ -50,43 +42,45 @@ describe('findings', () => {
   })
 })
 
-describe('validation panel', () => {
-  test('shows state (refused: control total off), counts, age, errors, unknown names; re-validate updates it', async () => {
+// v1's validation panel: the snapshot now lives in the sheet's Results tab, Validate in the save bar, and the rows keep
+// their marks ("not in QuickBooks" names, problem reasons).
+describe('validation', () => {
+  test('Validate re-runs it; Results shows state and errors; an unknown name is flagged in its cell', async () => {
     const { user } = open(2)
-    const panel = await screen.findByRole('region', { name: 'Validation' })
-    expect(within(panel).getByText('Refused')).toBeInTheDocument()
-    expect(panel).toHaveTextContent(/submitted\s*210/i)
-    expect(panel).toHaveTextContent(/held\s*3/i)
-    expect(panel).toHaveTextContent(/checked .* ago/)
-    expect(within(panel).getByText(/controlTotal .* does not match/)).toBeInTheDocument()
-    expect(within(panel).getByText('Acme Roofing Inc')).toBeInTheDocument()
-    expect(within(panel).queryByText('Validation is out of date')).not.toBeInTheDocument()
-    await user.click(within(panel).getByRole('button', { name: 'Re-validate' }))
-    await waitFor(() => expect(panel).toHaveTextContent('checked just now'))
+    await screen.findByRole('columnheader', { name: 'Payee' })
+    const bar = screen.getByRole('region', { name: 'Save bar' })
+    await user.click(within(bar).getByRole('button', { name: 'Validate' }))
+    await waitFor(() => expect(within(bar).getByRole('button', { name: 'Validate' })).toBeEnabled())
+    await user.click(screen.getByRole('button', { name: 'Results' }))
+    const block = await within(await screen.findByRole('dialog')).findByRole('region', { name: 'Latest validation' })
+    expect(block).toHaveTextContent('Refused by the checks')
+    expect(block).toHaveTextContent(/Checked/)
+    expect(within(block).getByText(/controlTotal .* does not match/)).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    await user.click(screen.getByRole('button', { name: 'Has a problem' }))
+    const payee = await waitFor(() => {
+      const td = document.querySelector('tr[data-row="16"] td[data-field="payee"]')
+      if (!td) throw new Error('row 17 not shown')
+      return td as HTMLElement
+    })
+    expect(within(payee).getByText('Acme Roofing Inc')).toBeInTheDocument()
+    expect(within(payee).getByText('not in QuickBooks')).toBeInTheDocument()
   })
 
-  test('no Re-validate for a viewer', async () => {
+  test('no Validate for a viewer', async () => {
     open(2, 'u-viewer')
-    const panel = await screen.findByRole('region', { name: 'Validation' })
-    expect(within(panel).queryByRole('button', { name: 'Re-validate' })).not.toBeInTheDocument()
+    await screen.findByRole('columnheader', { name: 'Payee' })
+    expect(screen.queryByRole('button', { name: 'Validate' })).not.toBeInTheDocument()
   })
 
-  test('says so when the validation is for an older version', async () => {
-    const { queryClient } = open(1)
-    await screen.findByRole('region', { name: 'Validation' })
-    patchDetail(queryClient, 1, (r) => ({ ...r, currentVersion: 5, validation: { ...r.validation, versionNumber: 2 } }))
-    expect(await screen.findByText('Validation is out of date')).toBeInTheDocument()
-  })
-
-  test('findings whose row is not found are listed', async () => {
-    const { queryClient } = open(1)
-    await screen.findByRole('region', { name: 'Validation' })
-    patchDetail(queryClient, 1, (r) => ({
-      ...r,
-      validation: { ...r.validation, validation: [{ index: 99, reason: 'ghost-row', detail: 'gone' }] },
-    }))
-    expect(await screen.findByText('Row not found')).toBeInTheDocument()
-    expect(screen.getByText('ghost-row')).toBeInTheDocument()
+  test('findings whose row is not found are listed in Results', async () => {
+    mockDb.requests.find((r) => r.id === 1)!.validation.validation = [{ index: 99, reason: 'ghost-row', detail: 'gone' }]
+    const { user } = open(1)
+    await screen.findByRole('columnheader', { name: 'Payee' })
+    await user.click(screen.getByRole('button', { name: 'Results' }))
+    const problems = await within(await screen.findByRole('dialog')).findByRole('list', { name: 'Problems' })
+    expect(problems).toHaveTextContent('Row 100: ghost-row — gone')
+    expect(document.querySelectorAll('tr[data-problem="true"]')).toHaveLength(0)
   })
 })
 

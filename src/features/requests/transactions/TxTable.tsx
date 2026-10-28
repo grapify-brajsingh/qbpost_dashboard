@@ -1,26 +1,14 @@
-import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { observeElementRect, useVirtualizer, type Rect } from '@tanstack/react-virtual'
-import { AlertTriangle, Columns3, MoreHorizontal } from 'lucide-react'
+import { AlertTriangle, Columns3, Trash2, Undo2 } from 'lucide-react'
 import type { Finding, QbLists, Txn } from '@/api/schema'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { DeleteRowDialog, type DeleteTarget } from '@/features/statements/detail/DeleteRowDialog'
+import type { DisplayRow } from '@/features/statements/detail/rowFilters'
+import { formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import { AmountCell } from './cells/AmountCell'
 import { DateCell } from './cells/DateCell'
@@ -28,10 +16,12 @@ import { KindCell } from './cells/KindCell'
 import { NameComboCell, NotInQuickBooks } from './cells/NameComboCell'
 import { TextCell, type Move } from './cells/TextCell'
 import { cellText, COLUMNS, isEditableField, isKnownKind, NARROW_COLUMNS, type TxColumn, type TxField } from './columns'
-import { isAddedKey, type Draft } from './draft'
+import { isPosting, type Draft } from './draft'
 
 const STORAGE_KEY = 'qbpost-tx-columns'
-const ROW_HEIGHT = 36
+const ROW_HEIGHT = 40
+/** A row with a line under a cell ("was …" or a problem reason). */
+const TALL_ROW_HEIGHT = 56
 /** Used before the scroll box has a layout (first paint, jsdom). The real size takes over as soon as it is measured. */
 const FALLBACK_RECT: Rect = { width: 1200, height: 700 }
 
@@ -57,22 +47,36 @@ export interface TxEditing {
   draft: Draft
   lists: QbLists | undefined
   onCell: (rowKey: string, field: TxField, value: unknown) => void
+  onPost: (rowKey: string, post: boolean) => void
   onToggleDelete: (rowKey: string) => void
 }
 
 export interface TxTableProps {
-  /** Rows on screen: the loaded rows (with edits) followed by added rows. */
-  rows: Txn[]
+  /** Rows to show (already filtered), in payload order. */
+  rows: DisplayRow[]
   edit?: TxEditing
   findings: Map<number, Finding[]>
   /** Row index to the fields that could not be read. */
   readErrors: Map<number, Set<string>>
-  onlyProblems: boolean
   toolbar?: ReactNode
+  /** Payload index of a row to scroll to and highlight. */
+  highlight?: number | null
 }
 
 /** The finding reasons whose candidates fill a cell. */
 const CANDIDATE_FIELD: Partial<Record<string, TxField>> = { 'no-account-rule': 'lineAccount', 'unknown-payee': 'payee' }
+/** The cell a finding's reason is shown under; anything else goes under the payee. */
+const REASON_FIELD: Partial<Record<string, TxField>> = {
+  'no-account-rule': 'lineAccount',
+  'unknown-payee': 'payee',
+  'unknown-vendor': 'payee',
+  'unknown-account': 'account',
+  'date-too-old': 'date',
+}
+const reasonField = (f: Finding): TxField => REASON_FIELD[f.reason] ?? 'payee'
+
+/** Columns the keyboard moves between; the switch and the delete button are ordinary controls. */
+const isNavColumn = (c: TxColumn) => c.id !== 'post' && c.id !== 'delete'
 
 function ProblemIcon({
   n,
@@ -154,6 +158,12 @@ function CellView({ col, row, index, lists }: { col: TxColumn; row: Txn; index: 
   return <>{col.render(row, index)}</>
 }
 
+/** "was 184.32", "was ABC Plumbing", "was empty". */
+function wasText(field: TxField, v: unknown): string {
+  const shown = field === 'amount' && typeof v === 'number' ? formatMoney(v) : cellText(v)
+  return `was ${shown === '' ? 'empty' : shown}`
+}
+
 function Editor({ field, row, lists, onCommit, onCancel }: { field: TxField; row: Txn; lists: QbLists | undefined; onCommit: (v: unknown, move?: Move) => void; onCancel: () => void }) {
   const p = { onCommit, onCancel }
   const header = COLUMNS.find((c) => c.field === field)?.header ?? field
@@ -171,29 +181,27 @@ interface Pos {
   col: string
 }
 
-export function TxTable({ rows, edit, findings, readErrors, onlyProblems, toolbar }: TxTableProps) {
+export function TxTable({ rows, edit, findings, readErrors, toolbar, highlight = null }: TxTableProps) {
   const [hidden, setHidden] = useState(loadHidden)
   const [focus, setFocus] = useState<Pos | null>(null)
   const [editing, setEditing] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState<{ rowKey: string; n: number } | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<DeleteTarget | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const wantFocus = useRef(false)
 
   const columns = COLUMNS.filter((c) => !hidden.includes(c.id))
-  const loaded = edit ? edit.draft.rows.length : rows.length
-  const rowKey = (index: number) => (index < loaded ? String(index) : `n${index - loaded}`)
-  const isDeleted = (index: number) => edit !== undefined && index < loaded && edit.draft.deleted.has(index)
-  const canEdit = (index: number, col: TxColumn) => edit !== undefined && isEditableField(col.field) && !isDeleted(index)
+  const nav = columns.filter(isNavColumn)
+  const baseRows: Txn[] = edit && Array.isArray(edit.draft.base.transactions) ? (edit.draft.base.transactions as Txn[]) : []
+  const isDirtyCell = (key: string, field: TxField | undefined) => edit !== undefined && field !== undefined && edit.draft.dirtyCells.has(`${key}:${field}`)
+  const canEdit = (r: DisplayRow, col: TxColumn) => edit !== undefined && isEditableField(col.field) && !r.deleted
 
-  // Row keys are the original payload index, so filtering never changes a row's identity.
-  const visible = rows
-    .map((row, index) => ({ row, index }))
-    .filter(({ index }) => !onlyProblems || findings.has(index) || readErrors.has(index) || index >= loaded)
+  const tall = (r: DisplayRow) =>
+    findings.has(r.index) || (edit !== undefined && !r.added && [...edit.draft.dirtyCells].some((c) => c.startsWith(`${r.key}:`) && !c.endsWith(':post')))
 
   const virtualizer = useVirtualizer({
-    count: visible.length,
+    count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => ROW_HEIGHT,
+    estimateSize: (i) => (rows[i] && tall(rows[i]) ? TALL_ROW_HEIGHT : ROW_HEIGHT),
     overscan: 8,
     initialRect: FALLBACK_RECT,
     observeElementRect: (instance, cb) => observeElementRect(instance, (rect) => cb(rect.height === 0 ? FALLBACK_RECT : rect)),
@@ -212,34 +220,45 @@ export function TxTable({ rows, edit, findings, readErrors, onlyProblems, toolba
     }
   })
 
+  const canScroll = () => typeof scrollRef.current?.scrollTo === 'function'
+
+  // A row named in the URL: bring it into view.
+  useEffect(() => {
+    if (highlight === null) return
+    const at = rows.findIndex((r) => r.index === highlight)
+    if (at >= 0 && canScroll()) virtualizer.scrollToIndex(at, { align: 'center' })
+    // Only when the highlighted row changes, not on every edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlight])
+
   function moveTo(pos: Pos) {
-    const at = visible.findIndex((v) => v.index === pos.row)
+    const at = rows.findIndex((r) => r.index === pos.row)
     const rendered = items.some((it) => it.index === at)
-    if (at >= 0 && !rendered && typeof scrollRef.current?.scrollTo === 'function') virtualizer.scrollToIndex(at, { align: 'auto' })
+    if (at >= 0 && !rendered && canScroll()) virtualizer.scrollToIndex(at, { align: 'auto' })
     wantFocus.current = true
     setFocus(pos)
   }
 
   /** The next (or previous) editable cell in reading order, or null at the end. */
   function step(from: Pos, dir: 1 | -1): Pos | null {
-    let r = visible.findIndex((v) => v.index === from.row)
-    let c = columns.findIndex((col) => col.id === from.col)
+    let r = rows.findIndex((v) => v.index === from.row)
+    let c = nav.findIndex((col) => col.id === from.col)
     if (r < 0 || c < 0) return null
     for (;;) {
       c += dir
-      if (c < 0 || c >= columns.length) {
+      if (c < 0 || c >= nav.length) {
         r += dir
-        if (r < 0 || r >= visible.length) return null
-        c = dir === 1 ? 0 : columns.length - 1
+        if (r < 0 || r >= rows.length) return null
+        c = dir === 1 ? 0 : nav.length - 1
       }
-      if (canEdit(visible[r].index, columns[c])) return { row: visible[r].index, col: columns[c].id }
+      if (canEdit(rows[r], nav[c])) return { row: rows[r].index, col: nav[c].id }
     }
   }
 
   function arrow(from: Pos, dr: number, dc: number): Pos {
-    const r = Math.min(visible.length - 1, Math.max(0, visible.findIndex((v) => v.index === from.row) + dr))
-    const c = Math.min(columns.length - 1, Math.max(0, columns.findIndex((col) => col.id === from.col) + dc))
-    return { row: visible[r].index, col: columns[c].id }
+    const r = Math.min(rows.length - 1, Math.max(0, rows.findIndex((v) => v.index === from.row) + dr))
+    const c = Math.min(nav.length - 1, Math.max(0, nav.findIndex((col) => col.id === from.col) + dc))
+    return { row: rows[r].index, col: nav[c].id }
   }
 
   function onCellKeyDown(e: KeyboardEvent<HTMLTableCellElement>, pos: Pos, editable: boolean) {
@@ -262,10 +281,17 @@ export function TxTable({ rows, edit, findings, readErrors, onlyProblems, toolba
     }
   }
 
+  /** Enter or Esc stays on the cell; Tab / Shift+Tab keep the change and edit the next (previous) cell. */
   function finishEdit(pos: Pos, move?: Move) {
-    setEditing(false)
     const next = move ? step(pos, move === 'next' ? 1 : -1) : null
-    moveTo(next ?? pos)
+    if (next) {
+      moveTo(next)
+      wantFocus.current = false
+      setEditing(true)
+      return
+    }
+    setEditing(false)
+    moveTo(pos)
   }
 
   function toggle(id: string, show: boolean) {
@@ -274,14 +300,14 @@ export function TxTable({ rows, edit, findings, readErrors, onlyProblems, toolba
     saveHidden(next)
   }
 
-  const first = visible.length > 0 ? { row: visible[0].index, col: columns[Math.min(1, columns.length - 1)].id } : null
+  const first = rows.length > 0 && nav.length > 0 ? { row: rows[0].index, col: nav[Math.min(1, nav.length - 1)].id } : null
   const tabStop = focus ?? first
 
   return (
     <TooltipProvider>
       <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex-1">{toolbar}</div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">{toolbar}</div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
@@ -297,13 +323,17 @@ export function TxTable({ rows, edit, findings, readErrors, onlyProblems, toolba
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <div ref={scrollRef} data-testid="tx-scroll" className="h-[70vh] overflow-auto rounded-md border">
-          <table className="w-full table-fixed border-collapse text-sm">
-            <thead className="sticky top-0 z-10 bg-muted">
-              <tr>
+        <div ref={scrollRef} data-testid="tx-scroll" className="h-[70vh] overflow-auto rounded-[10px] border bg-card">
+          <table className="w-full table-fixed border-collapse text-[13px]">
+            <thead className="sticky top-0 z-10 bg-card">
+              <tr className="border-b">
                 {columns.map((c) => (
-                  <th key={c.id} scope="col" className={cn('px-2 py-2 text-left font-medium', c.width, c.align === 'right' && 'text-right')}>
-                    {c.header}
+                  <th
+                    key={c.id}
+                    scope="col"
+                    className={cn('px-3 py-2.5 text-left font-medium whitespace-nowrap text-muted-foreground', c.width, c.align === 'right' && 'text-right')}
+                  >
+                    {c.srHeader ? <span className="sr-only">{c.header}</span> : c.header}
                   </th>
                 ))}
               </tr>
@@ -315,13 +345,14 @@ export function TxTable({ rows, edit, findings, readErrors, onlyProblems, toolba
                 </tr>
               )}
               {items.map((item) => {
-                const { row, index } = visible[item.index]
-                const key = rowKey(index)
-                const added = isAddedKey(key)
-                const deleted = isDeleted(index)
+                const r = rows[item.index]
+                const { key, index, row, added, deleted } = r
+                const skip = !isPosting(row)
+                const n = index + 1
                 const found = findings.get(index) ?? []
                 const bad = readErrors.get(index)
                 const problem = found.length > 0 || bad !== undefined
+                const lit = highlight === index
                 return (
                   <tr
                     key={key}
@@ -329,19 +360,57 @@ export function TxTable({ rows, edit, findings, readErrors, onlyProblems, toolba
                     data-row={index}
                     data-problem={problem ? 'true' : undefined}
                     data-deleted={deleted ? 'true' : undefined}
-                    style={{ height: ROW_HEIGHT }}
+                    data-added={added ? 'true' : undefined}
+                    data-skip={skip ? 'true' : undefined}
+                    data-highlight={lit ? 'true' : undefined}
+                    style={{ height: tall(r) ? TALL_ROW_HEIGHT : ROW_HEIGHT }}
                     className={cn(
-                      'border-b hover:bg-muted/40',
+                      'border-b transition-colors hover:bg-muted/40',
                       deleted && 'text-muted-foreground line-through',
-                      added && 'bg-amber-50 dark:bg-amber-950/40',
+                      lit && 'bg-primary/10 ring-2 ring-primary ring-inset',
                     )}
                   >
-                    {columns.map((c, ci) => {
+                    {columns.map((c) => {
+                      if (c.id === 'post') {
+                        return (
+                          <td key={c.id} data-col={c.id} className={cn('px-3', problem && 'shadow-[inset_3px_0_0_var(--destructive)]')}>
+                            <Switch
+                              aria-label={`Post row ${n}`}
+                              checked={!skip}
+                              disabled={!edit || deleted}
+                              onCheckedChange={(v) => edit?.onPost(key, v)}
+                            />
+                          </td>
+                        )
+                      }
+                      if (c.id === 'delete') {
+                        return (
+                          <td key={c.id} data-col={c.id} className="px-1 text-right">
+                            {edit &&
+                              (deleted ? (
+                                <Button variant="ghost" size="icon-sm" aria-label={`Restore row ${n}`} onClick={() => edit.onToggleDelete(key)}>
+                                  <Undo2 aria-hidden />
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  aria-label={`Delete row ${n}`}
+                                  className="text-muted-foreground hover:text-destructive"
+                                  onClick={() => setConfirmDelete({ rowKey: key, n, row })}
+                                >
+                                  <Trash2 aria-hidden />
+                                </Button>
+                              ))}
+                          </td>
+                        )
+                      }
                       const pos = { row: index, col: c.id }
                       const unreadable = c.field !== undefined && bad?.has(c.field)
-                      const editable = canEdit(index, c)
+                      const editable = canEdit(r, c)
                       const isEditing = editing && focus?.row === index && focus.col === c.id
-                      const dirty = edit !== undefined && c.field !== undefined && edit.draft.dirtyCells.has(`${key}:${c.field}`)
+                      const dirty = isDirtyCell(key, c.field)
+                      const reasons = c.field ? found.filter((f) => reasonField(f) === c.field) : []
                       return (
                         <td
                           key={c.id}
@@ -361,45 +430,27 @@ export function TxTable({ rows, edit, findings, readErrors, onlyProblems, toolba
                           }}
                           onKeyDown={(e) => onCellKeyDown(e, pos, editable)}
                           className={cn(
-                            'px-2 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                            'group/cell px-3 py-1 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                             !isEditing && 'truncate',
-                            c.align === 'right' && 'text-right',
-                            ci === 0 && 'border-l-4 border-l-transparent',
-                            ci === 0 && problem && 'border-l-destructive',
+                            c.align === 'right' && 'text-right tabular-nums',
+                            editable && !isEditing && 'cursor-text hover:bg-primary/5',
+                            skip && !deleted && 'text-muted-foreground line-through decoration-muted-foreground/60',
                             unreadable && 'bg-destructive/15 text-destructive outline outline-1 -outline-offset-1 outline-destructive',
-                            dirty && 'bg-amber-100 dark:bg-amber-950',
+                            dirty && 'bg-primary/10',
                           )}
                         >
                           {c.id === 'index' ? (
-                            <span className="flex items-center gap-1.5">
-                              {index + 1}
+                            <span className="flex items-center gap-1.5 text-muted-foreground tabular-nums">
+                              {n}
+                              {added && <span className="text-[11px] text-primary no-underline">new</span>}
+                              {deleted && <span className="text-[11px] text-destructive no-underline">deleted</span>}
                               {problem && (
                                 <ProblemIcon
-                                  n={index + 1}
+                                  n={n}
                                   found={found}
                                   unreadable={[...(bad ?? [])]}
                                   onCandidate={edit && !deleted ? (field, v) => edit.onCell(key, field, v) : undefined}
                                 />
-                              )}
-                              {edit && (
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <button
-                                      type="button"
-                                      aria-label={`Row ${index + 1} actions`}
-                                      className="ml-auto rounded text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                                    >
-                                      <MoreHorizontal className="size-4" aria-hidden />
-                                    </button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="start">
-                                    <DropdownMenuItem
-                                      onSelect={() => (deleted ? edit.onToggleDelete(key) : setConfirmDelete({ rowKey: key, n: index + 1 }))}
-                                    >
-                                      {deleted ? 'Restore row' : 'Delete row'}
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
                               )}
                             </span>
                           ) : isEditing && edit && c.field ? (
@@ -414,7 +465,27 @@ export function TxTable({ rows, edit, findings, readErrors, onlyProblems, toolba
                               onCancel={() => finishEdit(pos)}
                             />
                           ) : (
-                            <CellView col={c} row={row} index={index} lists={edit?.lists} />
+                            <>
+                              <div className="flex items-center gap-1">
+                                <div className={cn('min-w-0 flex-1 truncate', c.align === 'right' && 'text-right')}>
+                                  <CellView col={c} row={row} index={index} lists={edit?.lists} />
+                                </div>
+                                {editable && (
+                                  <span data-pencil aria-hidden className="shrink-0 text-xs text-muted-foreground opacity-0 group-hover/cell:opacity-100">
+                                    ✎
+                                  </span>
+                                )}
+                              </div>
+                              {dirty && !added && c.field && (
+                                <div className="truncate text-[11px] text-primary no-underline">{wasText(c.field, baseRows[index]?.[c.field])}</div>
+                              )}
+                              {reasons.map((f, i) => (
+                                <div key={`${f.reason}-${i}`} className="flex items-center gap-1 truncate text-[11px] text-destructive">
+                                  <AlertTriangle className="size-3 shrink-0" aria-hidden />
+                                  <span className="truncate">{f.detail ?? f.reason}</span>
+                                </div>
+                              ))}
+                            </>
                           )}
                         </td>
                       )
@@ -431,18 +502,7 @@ export function TxTable({ rows, edit, findings, readErrors, onlyProblems, toolba
           </table>
         </div>
       </div>
-      <AlertDialog open={confirmDelete !== null} onOpenChange={(open) => !open && setConfirmDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete row {confirmDelete?.n}?</AlertDialogTitle>
-            <AlertDialogDescription>The row is struck through until you save, and left out of the saved payload.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => confirmDelete && edit?.onToggleDelete(confirmDelete.rowKey)}>Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteRowDialog target={confirmDelete} onClose={() => setConfirmDelete(null)} onConfirm={(k) => edit?.onToggleDelete(k)} />
     </TooltipProvider>
   )
 }

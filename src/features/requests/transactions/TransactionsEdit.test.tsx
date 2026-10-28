@@ -21,9 +21,12 @@ const payloadOf = (id: number) => record(id).versions[record(id).versions.length
 async function open(id = 1, as = 'u-admin') {
   mockControl.signInAs(as)
   const r = renderApp(`/statements/${id}`)
-  await screen.findByRole('region', { name: 'Validation' })
+  await screen.findByRole('heading', { level: 1 })
   return r
 }
+
+const saveButton = () => within(screen.getByRole('region', { name: 'Save bar' })).getByRole('button', { name: 'Save' })
+const querySave = () => screen.queryByRole('button', { name: 'Save' })
 
 const cell = (row: number, field: string) => {
   const td = document.querySelector<HTMLElement>(`tr[data-row="${row}"] td[data-field="${field}"]`)
@@ -112,7 +115,7 @@ describe('editing cells', () => {
     expect(screen.queryByText(/unsaved change/)).not.toBeInTheDocument()
   })
 
-  test('keyboard: Enter edits, Esc cancels, arrows move, Tab commits and moves to the next cell', async () => {
+  test('keyboard: Enter edits, Esc cancels, arrows move, Tab commits and edits the next cell', async () => {
     const { user } = await open(1)
     act(() => cell(0, 'payee').focus())
     await user.keyboard('{Enter}')
@@ -132,7 +135,9 @@ describe('editing cells', () => {
     await user.type(memo, ' paid')
     await user.keyboard('{Tab}')
     expect(cell(0, 'memo')).toHaveTextContent('INV 88000 item 1 paid')
-    expect(cell(0, 'last4')).toHaveFocus()
+    expect(screen.getByRole('textbox', { name: 'Amount' })).toHaveFocus()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(cell(0, 'amount')).toHaveFocus())
     await user.keyboard('{Shift>}{Tab}{/Shift}')
     expect(cell(0, 'memo')).toHaveFocus()
     expect(screen.getByText('1 unsaved change')).toBeInTheDocument()
@@ -140,7 +145,7 @@ describe('editing cells', () => {
 
   test('clicking a finding candidate fills the line account', async () => {
     const { user } = await open(2)
-    await user.click(screen.getByRole('checkbox', { name: 'Only rows with problems' }))
+    await user.click(screen.getByRole('button', { name: 'Has a problem' }))
     await user.hover(await screen.findByRole('button', { name: 'Problems on row 89' }))
     const [candidate] = await screen.findAllByRole('button', { name: 'Repairs and Maintenance' })
     await user.click(candidate)
@@ -149,54 +154,42 @@ describe('editing cells', () => {
   })
 })
 
-describe('totals bar', () => {
-  test('sum and difference update live; control total only changes when typed', async () => {
+// v1's totals bar is now the reconciliation meter: the control total is shown, never edited, and never written.
+describe('reconciliation meter', () => {
+  test('the sum and the difference follow edits live; the control total is not editable and is saved as loaded', async () => {
     seedTotals()
     const { user } = await open(1)
-    const bar = screen.getByRole('region', { name: 'Totals' })
-    expect(within(bar).getByTestId('rows-sum')).toHaveTextContent('4,830.17')
-    expect(within(bar).getByTestId('difference')).toHaveTextContent('10.00')
+    const meter = screen.getByRole('region', { name: 'Reconciliation' })
+    expect(within(meter).getByTestId('meter-sum')).toHaveTextContent('4,830.17')
+    expect(within(meter).getByTestId('meter-delta')).toHaveTextContent('Over by 10.00')
+    expect(meter).toHaveTextContent('Control total 4,820.17, never changed by the app')
+    expect(within(meter).queryByRole('textbox')).not.toBeInTheDocument()
 
     await user.click(cell(0, 'amount'))
     const input = screen.getByRole('textbox', { name: 'Amount' })
     await user.clear(input)
     await user.type(input, '194.32{Enter}')
-    expect(within(bar).getByTestId('rows-sum')).toHaveTextContent('4,840.17')
-    const diff = within(bar).getByTestId('difference')
-    expect(diff).toHaveTextContent('20.00')
-    expect(diff).toHaveClass('text-destructive')
-    expect(within(bar).getByRole('textbox', { name: 'Control total' })).toHaveValue('4820.17')
+    expect(within(meter).getByTestId('meter-sum')).toHaveTextContent('4,840.17')
+    expect(within(meter).getByTestId('meter-delta')).toHaveTextContent('Over by 20.00')
+    expect(within(meter).getByTestId('meter-delta')).toHaveClass('text-destructive')
 
     const seen = capturePut()
-    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    await user.click(saveButton())
     await waitFor(() => expect(seen).toHaveLength(1))
     expect(seen[0].body.payload.controlTotal).toBe(4820.17)
     expect((seen[0].body.payload.transactions as Txn[])[0].amount).toBe(194.32)
-  })
-
-  test('typing a control total changes it', async () => {
-    seedTotals()
-    const { user } = await open(1)
-    const bar = screen.getByRole('region', { name: 'Totals' })
-    const ct = within(bar).getByRole('textbox', { name: 'Control total' })
-    await user.clear(ct)
-    await user.type(ct, '4,830.17{Enter}')
-    expect(within(bar).getByTestId('difference')).toHaveTextContent('0.00')
-    expect(within(bar).getByTestId('difference')).not.toHaveClass('text-destructive')
-    expect(screen.getByText('1 unsaved change')).toBeInTheDocument()
   })
 })
 
 describe('saving', () => {
   test('sends If-Match and {payload, note}; on 200 the tint clears and the new snapshot shows', async () => {
     const original = structuredClone(payloadOf(1))
-    const { user } = await open(1)
-    const panel = screen.getByRole('region', { name: 'Validation' })
-    expect(panel).not.toHaveTextContent('checked just now')
+    const { user, queryClient } = await open(1)
+    const before = (queryClient.getQueryData(['requests', 'detail', '1']) as { request: RequestDetail }).request.validation.validatedUtc
     await choosePayee(user, 1, 'ABC Plumbing LLC')
     await user.type(screen.getByPlaceholderText('What did you fix? (optional)'), 'payee per PDF')
     const seen = capturePut()
-    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    await user.click(saveButton())
     await waitFor(() => expect(seen).toHaveLength(1))
     expect(seen[0].ifMatch).toBe('"4"')
     expect(seen[0].body).toEqual({
@@ -206,7 +199,10 @@ describe('saving', () => {
     await waitFor(() => expect(screen.queryByText(/unsaved change/)).not.toBeInTheDocument())
     expect(cell(1, 'payee')).not.toHaveAttribute('data-dirty')
     expect(cell(1, 'payee')).toHaveTextContent('ABC Plumbing LLC')
-    expect(panel).toHaveTextContent('checked just now')
+    // The returned record (new ETag and validation snapshot) replaced the screen.
+    const after = queryClient.getQueryData(['requests', 'detail', '1']) as { request: RequestDetail; etag: string }
+    expect(after.etag).toBe('"5"')
+    expect(after.request.validation.validatedUtc).not.toBe(before)
     expect(screen.getByPlaceholderText('What did you fix? (optional)')).toHaveValue('')
   })
 
@@ -214,7 +210,7 @@ describe('saving', () => {
     const { user } = await open(1)
     await choosePayee(user, 1, 'ABC Plumbing LLC')
     const seen = capturePut()
-    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    await user.click(saveButton())
     await waitFor(() => expect(seen).toHaveLength(1))
     expect('note' in seen[0].body).toBe(false)
   })
@@ -224,7 +220,7 @@ describe('saving', () => {
     await choosePayee(user, 1, 'ABC Plumbing LLC')
     record(1).rowVersion = 9
     const write = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
-    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    await user.click(saveButton())
     const dialog = await screen.findByRole('alertdialog')
     expect(dialog).toHaveTextContent(/Changed by Asha K/)
     expect(dialog).toHaveTextContent('Your edits are kept here; reload to see theirs.')
@@ -244,9 +240,9 @@ describe('saving', () => {
     const { user } = await open(1)
     await choosePayee(user, 1, 'ABC Plumbing LLC')
     record(1).status = 'posted'
-    await user.click(screen.getByRole('button', { name: 'Save changes' }))
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument())
-    expect(screen.getByRole('heading', { name: 'SR-000001' }).closest('header')).toHaveTextContent('Posted')
+    await user.click(saveButton())
+    await waitFor(() => expect(querySave()).not.toBeInTheDocument())
+    expect(screen.getByTestId('statement-meta')).toHaveTextContent('Posted')
     expect(cell(1, 'payee')).toHaveTextContent('Metro Electric Co')
   })
 
@@ -258,7 +254,7 @@ describe('saving', () => {
         Response.json({ title: 'Payload refused', status: 400, detail: 'Row 2 is bad.' }, { status: 400, headers: { 'Content-Type': 'application/problem+json' } }),
       ),
     )
-    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    await user.click(saveButton())
     expect(await screen.findByText('Row 2 is bad.')).toBeInTheDocument()
     expect(cell(1, 'payee')).toHaveAttribute('data-dirty', 'true')
   })
@@ -272,13 +268,13 @@ describe('saving', () => {
       queryClient.setQueryData(key, { ...cur, etag: '' })
     })
     const seen = capturePut()
-    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    await user.click(saveButton())
     expect(await screen.findByText('This request can’t be saved right now — reload and try again.')).toBeInTheDocument()
     expect(seen).toHaveLength(0)
     await user.click(screen.getByRole('button', { name: 'Reload' }))
     await waitFor(() => expect(screen.queryByText(/can’t be saved right now/)).not.toBeInTheDocument())
     expect(cell(1, 'payee')).toHaveAttribute('data-dirty', 'true')
-    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    await user.click(saveButton())
     await waitFor(() => expect(seen).toHaveLength(1))
     expect(seen[0].ifMatch).toBe('"4"')
   })
@@ -288,13 +284,14 @@ describe('who can edit', () => {
   test.each([
     ['a viewer', 1, 'u-viewer'],
     ['a posted request', 7, 'u-admin'],
-  ])('%s: cells are not editable and there is no Save or Add row', async (_name, id, as) => {
+  ])('%s: cells are not editable and there is no Save, Add transaction or Delete', async (_name, id, as) => {
     const { user } = await open(id, as)
     await user.click(cell(1, 'payee'))
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Add row' })).not.toBeInTheDocument()
-    expect(within(screen.getByRole('region', { name: 'Totals' })).queryByRole('textbox')).not.toBeInTheDocument()
+    expect(querySave()).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Add transaction' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete row 2' })).not.toBeInTheDocument()
+    expect(screen.getByRole('switch', { name: 'Post row 2' })).toBeDisabled()
   })
 })
 
@@ -327,11 +324,13 @@ describe('leaving with unsaved edits', () => {
     expect(before()).toBe(false)
   })
 
-  test('switching tabs keeps the edits', async () => {
+  test('opening and closing the sheet keeps the edits', async () => {
     const { user } = await open(1)
     await choosePayee(user, 1, 'ABC Plumbing LLC')
-    await user.click(screen.getByRole('tab', { name: 'History' }))
-    await user.click(screen.getByRole('tab', { name: 'Transactions' }))
+    await user.click(screen.getByRole('button', { name: 'History' }))
+    await screen.findByRole('dialog')
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(cell(1, 'payee')).toHaveAttribute('data-dirty', 'true')
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
   })
@@ -340,26 +339,31 @@ describe('leaving with unsaved edits', () => {
 describe('add and delete rows', () => {
   test('add appends an empty row; delete (confirmed) strikes through; save omits the deleted row', async () => {
     const { user } = await open(1)
-    await user.click(screen.getByRole('button', { name: 'Add row' }))
+    await user.click(screen.getByRole('button', { name: 'Add transaction' }))
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Add row' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     const added = document.querySelector('tr[data-row="12"]')!
     expect(added).not.toBeNull()
-    expect(added.textContent).toMatch(/^13dash-/)
+    expect(cell(12, 'externalId')).toHaveTextContent(/^dash-/)
     await user.click(cell(12, 'memo'))
     await user.type(screen.getByRole('textbox', { name: 'Memo' }), 'new line{Enter}')
 
-    await user.click(screen.getByRole('button', { name: 'Row 3 actions' }))
-    await user.click(await screen.findByRole('menuitem', { name: 'Delete row' }))
+    await user.click(screen.getByRole('button', { name: 'Delete row 3' }))
     const confirm = await screen.findByRole('alertdialog')
     expect(confirm).toHaveTextContent('Delete row 3?')
-    await user.click(within(confirm).getByRole('button', { name: 'Delete' }))
+    await user.click(within(confirm).getByRole('button', { name: 'Delete row' }))
     const row3 = document.querySelector('tr[data-row="2"]')!
     expect(row3).toHaveAttribute('data-deleted', 'true')
     expect(row3).toHaveClass('line-through')
     expect(screen.getByText('2 unsaved changes')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Restore row 3' }))
+    expect(document.querySelector('tr[data-row="2"]')).not.toHaveAttribute('data-deleted')
+    await user.click(screen.getByRole('button', { name: 'Delete row 3' }))
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete row' }))
 
     const original = structuredClone(payloadOf(1).transactions as Txn[])
     const seen = capturePut()
-    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    await user.click(saveButton())
     await waitFor(() => expect(seen).toHaveLength(1))
     const sent = seen[0].body.payload.transactions as Txn[]
     expect(sent).toHaveLength(12)
@@ -374,13 +378,13 @@ describe('raw JSON editor', () => {
     await user.clear(area)
     await user.type(area, 'nope')
     expect(screen.getByText('Not valid JSON')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+    expect(saveButton()).toBeDisabled()
 
     const fixed = { reference: 'broken-shape', controlTotal: 0, transactions: [] }
     fireEvent.change(area, { target: { value: JSON.stringify(fixed) } })
     expect(screen.queryByText('Not valid JSON')).not.toBeInTheDocument()
     const seen = capturePut()
-    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    await user.click(saveButton())
     await waitFor(() => expect(seen).toHaveLength(1))
     expect(seen[0].ifMatch).toBe('"1"')
     expect(seen[0].body).toEqual({ payload: fixed })
@@ -402,7 +406,7 @@ describe('raw JSON editor', () => {
       }),
     )
     const write = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
-    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    await user.click(saveButton())
     // While the save is on its way, the text is changed to something that is not JSON.
     fireEvent.change(area, { target: { value: '{ "reference": "mine", oops' } })
     release()
@@ -414,7 +418,7 @@ describe('raw JSON editor', () => {
   test('read-only for a viewer', async () => {
     await open(4, 'u-viewer')
     expect(screen.getByTestId('raw-json').tagName).toBe('PRE')
-    expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument()
+    expect(querySave()).not.toBeInTheDocument()
   })
 })
 
@@ -428,15 +432,15 @@ describe('moving between requests', () => {
     act(() => {
       void router.navigate('/statements/12')
     })
-    await screen.findByRole('heading', { name: 'SR-000012' })
+    await screen.findByRole('heading', { level: 1, name: 'SR-000012' })
     await waitFor(() => expect(document.querySelector('tr[data-row="11"]')).toBeNull())
     await user.click(screen.getByRole('link', { name: 'Possible duplicate of SR-000005' }))
-    await screen.findByRole('heading', { name: 'SR-000005' })
+    await screen.findByRole('heading', { level: 1, name: 'Chase statement – Aug 2026 (resent)' })
     await waitFor(() => expect(document.querySelector('tr[data-row="11"]')).not.toBeNull())
 
     await choosePayee(user, 1, 'ABC Plumbing LLC')
     const seen = capturePut()
-    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    await user.click(saveButton())
     await waitFor(() => expect(seen).toHaveLength(1))
     expect(seen[0].url).toBe(`${API}/5`)
     expect(seen[0].body.payload).toEqual(draftToPayload(setCell(createDraft(payload5), '1', 'payee', 'ABC Plumbing LLC')))
@@ -448,14 +452,14 @@ describe('moving between requests', () => {
     act(() => {
       void router.navigate('/statements/1')
     })
-    await screen.findByRole('heading', { name: 'SR-000001' })
+    await screen.findByRole('heading', { level: 1, name: 'Chase statement – Aug 2026' })
     await waitFor(() => expect(document.querySelector('tr[data-row="11"]')).not.toBeNull())
     await choosePayee(user, 1, 'ABC Plumbing LLC')
     act(() => {
       void router.navigate('/statements/12')
     })
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Leave' }))
-    await screen.findByRole('heading', { name: 'SR-000012' })
+    await screen.findByRole('heading', { level: 1, name: 'SR-000012' })
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
     expect(screen.queryByText(/unsaved change/)).not.toBeInTheDocument()
 

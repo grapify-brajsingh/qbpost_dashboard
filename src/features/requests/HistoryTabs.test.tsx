@@ -3,12 +3,15 @@ import { http, HttpResponse } from 'msw'
 import { formatTimestamp } from '@/lib/dates'
 import { mockControl, mockDb } from '@/mocks/db'
 import { server } from '@/mocks/server'
-import { renderApp } from '@/test/render'
+import { setAccessToken } from '@/api/session'
+import { renderApp, renderWithProviders } from '@/test/render'
+import { HistoryTab } from './history/HistoryTab'
 
-async function open(id: number, tab: string) {
+/** v1's Versions and Attempts tabs now live in the statement sheet (Versions, and Results for attempts). */
+async function open(id: number, tab: 'versions' | 'attempts') {
   mockControl.signInAs('u-admin')
-  const r = renderApp(`/statements/${id}?tab=${tab}`)
-  await screen.findByRole('heading', { name: `SR-${String(id).padStart(6, '0')}` })
+  const r = renderApp(`/statements/${id}?sheet=${id}&sheetTab=${tab === 'attempts' ? 'results' : 'versions'}`)
+  await screen.findByRole('dialog')
   return r
 }
 
@@ -121,8 +124,10 @@ describe('Attempts tab', () => {
 })
 
 describe('History tab', () => {
+  // The v1 History tab is no longer on a page (the sheet has its own timeline); it is kept until the v1 cleanup.
   test('shows the timeline in API order with actors and local times', async () => {
-    await open(7, 'history')
+    setAccessToken(mockControl.signInAs('u-admin'))
+    renderWithProviders(<HistoryTab requestId="7" />)
     const items = within(await screen.findByRole('list', { name: 'History' })).getAllByRole('listitem')
     const api = mockDb.requests.find((x) => x.id === 7)!.events
     const expected = [...api].reverse() // the mock serves newest first; the tab keeps the order it is given
@@ -131,5 +136,6 @@ describe('History tab', () => {
     expect(items[0]).toHaveTextContent('Asha K')
     expect(items[0]).toHaveTextContent(formatTimestamp('2026-10-20T09:00:41Z'))
     expect(items[items.length - 1]).toHaveTextContent('Request received')
+    setAccessToken(null)
   })
 })

@@ -44,6 +44,9 @@ function ValidationBlock({ d }: { d: RequestDetail }) {
         ) : (
           <p className="text-xs">Not checked yet</p>
         )}
+        {v.versionNumber !== undefined && v.versionNumber < d.currentVersion && (
+          <p className="text-xs font-medium">Validation is out of date</p>
+        )}
       </div>
       {(findings.length > 0 || errors.length > 0) && (
         <ul aria-label="Problems" className="list-disc space-y-1 pl-5 text-sm">

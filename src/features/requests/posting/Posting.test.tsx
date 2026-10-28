@@ -39,12 +39,12 @@ function countRequests() {
 async function open(id = 1, as = 'u-admin') {
   mockControl.signInAs(as)
   const r = renderApp(`/statements/${id}`)
-  await screen.findByRole('heading', { name: `SR-${String(id).padStart(6, '0')}` })
+  await screen.findByRole('heading', { level: 1 })
   return r
 }
 
-const actions = () => screen.getByRole('group', { name: 'Request actions' })
-const postButton = () => within(actions()).getByRole('button', { name: 'Post' })
+const saveBar = () => screen.getByRole('region', { name: 'Save bar' })
+const postButton = () => within(saveBar()).getByRole('button', { name: 'Post to QuickBooks' })
 const result = () => screen.getByRole('status', { name: 'Post result' })
 
 async function confirmPost(user: ReturnType<typeof renderApp>['user']) {
@@ -55,7 +55,6 @@ async function confirmPost(user: ReturnType<typeof renderApp>['user']) {
 describe('Post button and dialog', () => {
   test('Post is disabled with the tooltip "Save first" while the draft is dirty', async () => {
     const { user } = await open(1)
-    await screen.findByRole('region', { name: 'Validation' })
     const td = document.querySelector<HTMLElement>('tr[data-row="0"] td[data-field="memo"]')!
     await user.click(td)
     await user.keyboard('{Control>}a{/Control}changed{Enter}')
@@ -209,7 +208,7 @@ describe('outcomes', () => {
     await confirmPost(user)
     await waitFor(() => expect(result()).toHaveTextContent('Eli Editor pressed Post'))
     await waitFor(() => expect(reqs.count('GET', `${API}/1`)).toBeGreaterThan(getsBefore))
-    expect(within(result()).getByRole('link', { name: 'See their attempt' })).toHaveAttribute('href', '/statements/1?tab=attempts')
+    expect(within(result()).getByRole('link', { name: 'See their attempt' })).toHaveAttribute('href', '/statements/1?sheet=1&sheetTab=results')
   })
 
   test('401 on post → exactly 1 POST, the session is refreshed, and the detail reloads', async () => {
@@ -268,7 +267,7 @@ describe('recovery', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     await open(6)
     expect(screen.getByRole('status', { name: 'Posting progress' })).toHaveTextContent('Posting 8 rows to QuickBooks')
-    expect(screen.queryByRole('button', { name: 'Post' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Post to QuickBooks' })).not.toBeInTheDocument()
     const r = record(6)
     r.status = 'posted'
     r.postId = 'api-visa-8890-2026-08'
@@ -299,7 +298,7 @@ describe('isolation between requests', () => {
     await waitFor(() => expect(document.querySelectorAll('tr[data-problem="true"]')).toHaveLength(2))
 
     await user.click(screen.getByRole('link', { name: 'Possible duplicate of SR-000005' }))
-    await screen.findByRole('heading', { name: 'SR-000005' })
+    await screen.findByRole('heading', { level: 1, name: 'Chase statement – Aug 2026 (resent)' })
     await waitFor(() => expect(document.querySelector('tr[data-row="11"]')).not.toBeNull())
     expect(screen.queryByRole('status', { name: 'Post result' })).not.toBeInTheDocument()
     expect(document.querySelectorAll('tr[data-problem="true"]')).toHaveLength(0)
@@ -322,7 +321,7 @@ describe('isolation between requests', () => {
     act(() => {
       void router.navigate('/statements/1')
     })
-    await screen.findByRole('heading', { name: 'SR-000001' })
+    await screen.findByRole('heading', { level: 1, name: 'Chase statement – Aug 2026' })
     await waitFor(() => expect(reqs.count('GET', `${API}/1`)).toBeGreaterThan(1))
     expect(postButton()).toBeDisabled()
     expect(screen.getByRole('status', { name: 'Posting progress' })).toBeInTheDocument()

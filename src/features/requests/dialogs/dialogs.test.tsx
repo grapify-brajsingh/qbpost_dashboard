@@ -20,11 +20,15 @@ const problemResponse = (status: number, title: string, detail: string) =>
 async function open(id: number, as = 'u-admin') {
   mockControl.signInAs(as)
   const r = renderApp(`/statements/${id}`)
-  await screen.findByRole('heading', { name: `SR-${String(id).padStart(6, '0')}` })
+  await screen.findByRole('heading', { level: 1 })
   return r
 }
 
-const actionButton = (name: string) => within(screen.getByRole('group', { name: 'Request actions' })).getByRole('button', { name })
+/** Discard, Restore and Resolve live in the statement header's ⋯ menu. */
+async function choose(user: ReturnType<typeof renderApp>['user'], name: string) {
+  await user.click(screen.getByRole('button', { name: 'More actions' }))
+  await user.click(await screen.findByRole('menuitem', { name }))
+}
 const confirm = () => within(screen.getByRole('dialog')).getByRole('button', { name: 'Confirm' })
 
 function recordBodies() {
@@ -40,7 +44,7 @@ function recordBodies() {
 describe('Discard', () => {
   test('Confirm is disabled until there is a reason; over 500 characters is refused', async () => {
     const { user } = await open(2)
-    await user.click(actionButton('Discard'))
+    await choose(user, 'Discard')
     expect(confirm()).toBeDisabled()
     const reason = screen.getByLabelText('Reason')
     await user.type(reason, 'duplicate email')
@@ -54,7 +58,7 @@ describe('Discard', () => {
 
   test('success closes the dialog and the discarded banner shows the reason', async () => {
     const { user } = await open(2)
-    await user.click(actionButton('Discard'))
+    await choose(user, 'Discard')
     await user.type(screen.getByLabelText('Reason'), 'duplicate email')
     await user.click(confirm())
     expect(await screen.findByText('Discarded: duplicate email')).toBeInTheDocument()
@@ -67,7 +71,7 @@ describe('Discard failure', () => {
   test('a 500 keeps the dialog open, shows the problem and sends no success toast', async () => {
     server.use(http.post('/api/v1/saved-requests/2/discard', () => problemResponse(500, 'Server error', 'Try again later.')))
     const { user } = await open(2)
-    await user.click(actionButton('Discard'))
+    await choose(user, 'Discard')
     await user.type(screen.getByLabelText('Reason'), 'dup')
     await user.click(confirm())
     const d = screen.getByRole('dialog')
@@ -80,7 +84,7 @@ describe('Discard failure', () => {
 describe('Restore', () => {
   test('confirming moves the request back to pending', async () => {
     const { user } = await open(10)
-    await user.click(actionButton('Restore'))
+    await choose(user, 'Restore')
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Confirm' }))
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
     await waitFor(() => expect(screen.queryByText(/^Discarded:/)).not.toBeInTheDocument())
@@ -92,7 +96,7 @@ describe('Resolve', () => {
   test('unknown: shows the evidence before the choices, requires a note, sends not-posted', async () => {
     const bodies = recordBodies()
     const { user } = await open(8)
-    await user.click(actionButton('Resolve'))
+    await choose(user, 'Resolve')
     const d = await screen.findByRole('dialog')
     const evidence = within(d).getByRole('group', { name: 'Evidence' })
     expect(within(evidence).getByText('api-checking-4521-2026-07')).toBeInTheDocument()
@@ -117,7 +121,7 @@ describe('Resolve', () => {
     r.ledgerBatch = null
     r.postId = 'api-checking-4521-2026-07'
     const { user } = await open(8)
-    await user.click(actionButton('Resolve'))
+    await choose(user, 'Resolve')
     const d = await screen.findByRole('dialog')
     expect(within(d).getByText('api-checking-4521-2026-07')).toBeInTheDocument()
     expect(within(d).queryByText(/Ledger batch/)).not.toBeInTheDocument()
@@ -130,7 +134,7 @@ describe('Resolve', () => {
 
   test('partial offers only "Posted (accept as is)" and says to post the rest elsewhere', async () => {
     const { user } = await open(9)
-    await user.click(actionButton('Resolve'))
+    await choose(user, 'Resolve')
     const d = await screen.findByRole('dialog')
     expect(within(d).getAllByRole('radio')).toHaveLength(1)
     expect(within(d).getByRole('radio', { name: 'Posted (accept as is)' })).toBeChecked()
@@ -143,7 +147,7 @@ describe('Resolve', () => {
   test('a failed resolve keeps the dialog open, shows the problem and sends no success toast', async () => {
     server.use(http.post('/api/v1/saved-requests/8/resolve', () => problemResponse(409, 'Already resolved', 'Someone else resolved this request.')))
     const { user } = await open(8)
-    await user.click(actionButton('Resolve'))
+    await choose(user, 'Resolve')
     const d = await screen.findByRole('dialog')
     await user.click(within(d).getByRole('radio', { name: 'Posted' }))
     await user.type(within(d).getByLabelText('Note'), 'checked')

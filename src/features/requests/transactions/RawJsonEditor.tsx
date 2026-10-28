@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { Payload, RequestDetail } from '@/api/schema'
 import { Textarea } from '@/components/ui/textarea'
 import { setDraftDirty } from './draftDirtyStore'
-import { SaveBar } from './SaveBar'
+import { ActionBarFrame, SaveBar } from './SaveBar'
 import { UnsavedGuard } from './UnsavedGuard'
 
 const isObject = (v: unknown): v is Payload => typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -29,7 +29,18 @@ function ReadErrors({ errors }: { errors: string[] }) {
 }
 
 /** A payload that can't be shown as a table: its JSON, under the read errors. Editors can fix it as text. */
-export function RawJsonEditor({ request, etag }: { request: RequestDetail; etag: string }) {
+export function RawJsonEditor({
+  request,
+  etag,
+  validate,
+  post,
+}: {
+  request: RequestDetail
+  etag: string
+  /** The page's Validate and Post buttons, shown in the save bar. */
+  validate?: ReactNode
+  post?: ReactNode
+}) {
   const id = String(request.id)
   const editable = request.allowedActions.includes('edit')
   // Keyed by request too: another request at the same version must never inherit this text.
@@ -55,6 +66,14 @@ export function RawJsonEditor({ request, etag }: { request: RequestDetail; etag:
         <pre data-testid="raw-json" className="max-h-[70vh] overflow-auto rounded-md border bg-muted/40 p-3 text-xs">
           {loaded}
         </pre>
+        {(validate || post) && (
+          <ActionBarFrame>
+            <div className="flex flex-wrap items-center justify-end gap-2.5">
+              {validate}
+              {post}
+            </div>
+          </ActionBarFrame>
+        )}
       </div>
     )
   }
@@ -63,15 +82,6 @@ export function RawJsonEditor({ request, etag }: { request: RequestDetail; etag:
     <div className="space-y-3">
       <UnsavedGuard dirty={dirty} />
       <ReadErrors errors={request.readErrors} />
-      <SaveBar
-        id={id}
-        etag={etag}
-        dirty={dirty}
-        canSave={'payload' in checked}
-        getPayload={() => ('payload' in checked ? checked.payload : request.payload)}
-        getCopyText={() => text}
-        onReset={() => setState({ version, text: loaded })}
-      />
       <Textarea
         aria-label="Payload JSON"
         aria-invalid={'error' in checked}
@@ -85,6 +95,18 @@ export function RawJsonEditor({ request, etag }: { request: RequestDetail; etag:
           {checked.error}
         </p>
       )}
+      <SaveBar
+        id={id}
+        etag={etag}
+        dirty={dirty}
+        summary="Unsaved changes"
+        canSave={'payload' in checked}
+        getPayload={() => ('payload' in checked ? checked.payload : request.payload)}
+        getCopyText={() => text}
+        onReset={() => setState({ version, text: loaded })}
+        validate={validate}
+        post={post}
+      />
     </div>
   )
 }
