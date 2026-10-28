@@ -62,7 +62,7 @@ export function PostResultBanner({ outcome, requestId }: { outcome: PostOutcome;
         </div>
       )}
       {o.kind === 'conflict' && o.attemptId !== undefined && (
-        <Link className="underline" to={`/requests/${requestId}?tab=attempts`}>
+        <Link className="underline" to={`/statements/${requestId}?tab=attempts`}>
           See their attempt
         </Link>
       )}

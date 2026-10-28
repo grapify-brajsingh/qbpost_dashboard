@@ -19,7 +19,7 @@ const problemResponse = (status: number, title: string, detail: string) =>
 
 async function open(id: number, as = 'u-admin') {
   mockControl.signInAs(as)
-  const r = renderApp(`/requests/${id}`)
+  const r = renderApp(`/statements/${id}`)
   await screen.findByRole('heading', { name: `SR-${String(id).padStart(6, '0')}` })
   return r
 }

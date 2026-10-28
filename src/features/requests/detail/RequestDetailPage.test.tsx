@@ -21,7 +21,7 @@ afterEach(() => {
 
 function open(id: number, as = 'u-admin', search = '') {
   mockControl.signInAs(as)
-  return renderApp(`/requests/${id}${search}`)
+  return renderApp(`/statements/${id}${search}`)
 }
 
 function detail(over: Partial<RequestDetail> = {}): RequestDetail {
@@ -82,7 +82,7 @@ describe('header', () => {
   test('duplicate flag links to the other request and shows its status', async () => {
     open(5)
     const link = await screen.findByRole('link', { name: /Possible duplicate of SR-000001/ })
-    expect(link).toHaveAttribute('href', '/requests/1')
+    expect(link).toHaveAttribute('href', '/statements/1')
     expect(screen.getByText(/Other request is pending/)).toBeInTheDocument()
   })
 
@@ -174,7 +174,7 @@ describe('not found', () => {
   test('404 shows Request not found with a link back', async () => {
     open(9999)
     expect(await screen.findByRole('heading', { name: 'Request not found' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Back to Requests' })).toHaveAttribute('href', '/requests')
+    expect(screen.getByRole('link', { name: 'Back to Requests' })).toHaveAttribute('href', '/statements')
   })
 })
 

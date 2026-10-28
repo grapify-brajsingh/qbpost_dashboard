@@ -38,7 +38,7 @@ function countRequests() {
 
 async function open(id = 1, as = 'u-admin') {
   mockControl.signInAs(as)
-  const r = renderApp(`/requests/${id}`)
+  const r = renderApp(`/statements/${id}`)
   await screen.findByRole('heading', { name: `SR-${String(id).padStart(6, '0')}` })
   return r
 }
@@ -209,7 +209,7 @@ describe('outcomes', () => {
     await confirmPost(user)
     await waitFor(() => expect(result()).toHaveTextContent('Eli Editor pressed Post'))
     await waitFor(() => expect(reqs.count('GET', `${API}/1`)).toBeGreaterThan(getsBefore))
-    expect(within(result()).getByRole('link', { name: 'See their attempt' })).toHaveAttribute('href', '/requests/1?tab=attempts')
+    expect(within(result()).getByRole('link', { name: 'See their attempt' })).toHaveAttribute('href', '/statements/1?tab=attempts')
   })
 
   test('401 on post → exactly 1 POST, the session is refreshed, and the detail reloads', async () => {
@@ -316,11 +316,11 @@ describe('isolation between requests', () => {
     await waitFor(() => expect(reqs.count('POST', `${API}/1/post`)).toBe(1))
     server.use(http.get(`${API}/1`, () => HttpResponse.json(before, { headers: { ETag: '"4"' } })))
     act(() => {
-      void router.navigate('/requests')
+      void router.navigate('/statements')
     })
     await screen.findByRole('heading', { name: 'Requests' })
     act(() => {
-      void router.navigate('/requests/1')
+      void router.navigate('/statements/1')
     })
     await screen.findByRole('heading', { name: 'SR-000001' })
     await waitFor(() => expect(reqs.count('GET', `${API}/1`)).toBeGreaterThan(1))

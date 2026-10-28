@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 export function RequestsTable({ items }: { items: RequestSummary[] }) {
   const navigate = useNavigate()
-  const open = (id: number) => void navigate(`/requests/${id}`)
+  const open = (id: number) => void navigate(`/statements/${id}`)
   const onKeyDown = (e: KeyboardEvent<HTMLTableRowElement>, id: number) => {
     // A focused link inside the row handles its own Enter.
     if (e.key === 'Enter' && e.target === e.currentTarget) open(id)
@@ -40,7 +40,7 @@ export function RequestsTable({ items }: { items: RequestSummary[] }) {
             onKeyDown={(e) => onKeyDown(e, r.id)}
           >
             <TableCell className="font-mono">
-              <Link className="underline-offset-4 hover:underline" to={`/requests/${r.id}`} onClick={(e) => e.stopPropagation()}>
+              <Link className="underline-offset-4 hover:underline" to={`/statements/${r.id}`} onClick={(e) => e.stopPropagation()}>
                 {r.publicRef}
               </Link>
             </TableCell>

@@ -7,7 +7,7 @@ import { renderApp } from '@/test/render'
 
 async function open(id: number, tab: string) {
   mockControl.signInAs('u-admin')
-  const r = renderApp(`/requests/${id}?tab=${tab}`)
+  const r = renderApp(`/statements/${id}?tab=${tab}`)
   await screen.findByRole('heading', { name: `SR-${String(id).padStart(6, '0')}` })
   return r
 }

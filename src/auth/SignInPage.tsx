@@ -40,7 +40,7 @@ export function SignInPage() {
   const [busy, setBusy] = useState(false)
 
   if (status === 'restoring') return <FullPageLoading />
-  if (status === 'signed-in') return <Navigate to={safeNext(params.get('next')) ?? '/requests'} replace />
+  if (status === 'signed-in') return <Navigate to={safeNext(params.get('next')) ?? '/statements'} replace />
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()

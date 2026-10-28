@@ -20,7 +20,7 @@ const payloadOf = (id: number) => record(id).versions[record(id).versions.length
 
 async function open(id = 1, as = 'u-admin') {
   mockControl.signInAs(as)
-  const r = renderApp(`/requests/${id}`)
+  const r = renderApp(`/statements/${id}`)
   await screen.findByRole('region', { name: 'Validation' })
   return r
 }
@@ -311,19 +311,19 @@ describe('leaving with unsaved edits', () => {
     expect(before()).toBe(true)
 
     act(() => {
-      void router.navigate('/requests')
+      void router.navigate('/statements')
     })
     const dialog = await screen.findByRole('alertdialog')
     expect(dialog).toHaveTextContent('Leave without saving?')
     await user.click(within(dialog).getByRole('button', { name: 'Stay' }))
-    expect(router.state.location.pathname).toBe('/requests/1')
+    expect(router.state.location.pathname).toBe('/statements/1')
     expect(cell(1, 'payee')).toHaveAttribute('data-dirty', 'true')
 
     act(() => {
-      void router.navigate('/requests')
+      void router.navigate('/statements')
     })
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Leave' }))
-    await waitFor(() => expect(router.state.location.pathname).toBe('/requests'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/statements'))
     expect(before()).toBe(false)
   })
 
@@ -426,7 +426,7 @@ describe('moving between requests', () => {
     const { user, router } = await open(5)
     expect(document.querySelector('tr[data-row="11"]')).not.toBeNull()
     act(() => {
-      void router.navigate('/requests/12')
+      void router.navigate('/statements/12')
     })
     await screen.findByRole('heading', { name: 'SR-000012' })
     await waitFor(() => expect(document.querySelector('tr[data-row="11"]')).toBeNull())
@@ -446,13 +446,13 @@ describe('moving between requests', () => {
     // Visit 12 first so it is cached: going back to it keeps the detail page mounted.
     const { user, router } = await open(12)
     act(() => {
-      void router.navigate('/requests/1')
+      void router.navigate('/statements/1')
     })
     await screen.findByRole('heading', { name: 'SR-000001' })
     await waitFor(() => expect(document.querySelector('tr[data-row="11"]')).not.toBeNull())
     await choosePayee(user, 1, 'ABC Plumbing LLC')
     act(() => {
-      void router.navigate('/requests/12')
+      void router.navigate('/statements/12')
     })
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Leave' }))
     await screen.findByRole('heading', { name: 'SR-000012' })
@@ -461,11 +461,11 @@ describe('moving between requests', () => {
 
     await choosePayee(user, 1, 'ABC Plumbing LLC')
     act(() => {
-      void router.navigate('/requests')
+      void router.navigate('/statements')
     })
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Stay' }))
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
-    expect(router.state.location.pathname).toBe('/requests/12')
+    expect(router.state.location.pathname).toBe('/statements/12')
     expect(cell(1, 'payee')).toHaveAttribute('data-dirty', 'true')
   })
 })

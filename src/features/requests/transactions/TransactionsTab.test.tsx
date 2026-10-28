@@ -9,7 +9,7 @@ afterEach(() => localStorage.clear())
 
 function open(id: number, as = 'u-admin') {
   mockControl.signInAs(as)
-  return renderApp(`/requests/${id}`)
+  return renderApp(`/statements/${id}`)
 }
 
 const rowsOf = () => document.querySelectorAll('tbody tr[data-index]')

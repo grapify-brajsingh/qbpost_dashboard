@@ -65,7 +65,7 @@ function recordRequests() {
 }
 const listCalls = () => seen.length
 
-function signedIn(route = '/requests') {
+function signedIn(route = '/statements') {
   mockControl.signInAs('u-admin')
   recordRequests()
   return renderApp(route)
@@ -170,7 +170,7 @@ describe('requests list', () => {
   })
 
   test('changing the tab resets the page', async () => {
-    const { user, router } = signedIn('/requests?page=2')
+    const { user, router } = signedIn('/statements?page=2')
     await screen.findByRole('tab', { name: /^To do/ })
     await waitFor(() => expect(seen.some((u) => u.searchParams.get('page') === '2')).toBe(true))
     await user.click(screen.getByRole('tab', { name: /^Needs attention/ }))
@@ -197,7 +197,7 @@ describe('requests list', () => {
   test('clicking a row opens the detail page', async () => {
     const { user, router } = signedIn()
     await user.click(await screen.findByText('Chase Visa statement – Jul 2026'))
-    await waitFor(() => expect(router.state.location.pathname).toBe('/requests/9'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/statements/9'))
   })
 
   test('Enter on a focused row opens the detail page', async () => {
@@ -205,7 +205,7 @@ describe('requests list', () => {
     const row = (await screen.findByText('Chase Visa statement – Jul 2026')).closest('tr')!
     row.focus()
     await user.keyboard('{Enter}')
-    await waitFor(() => expect(router.state.location.pathname).toBe('/requests/9'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/statements/9'))
   })
 
   test('empty To do', async () => {

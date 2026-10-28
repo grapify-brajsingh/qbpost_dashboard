@@ -15,7 +15,7 @@ export function FlagChips({ request, linkDuplicate = false }: { request: Request
       )}
       {dupText && (
         <Badge className="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200">
-          {linkDuplicate && dup.of !== null ? <Link to={`/requests/${dup.of}`}>{dupText}</Link> : dupText}
+          {linkDuplicate && dup.of !== null ? <Link to={`/statements/${dup.of}`}>{dupText}</Link> : dupText}
         </Badge>
       )}
     </span>

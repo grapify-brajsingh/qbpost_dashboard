@@ -44,13 +44,13 @@ describe('sign in', () => {
     expect(await screen.findByText('The database is not reachable.')).toBeInTheDocument()
   })
 
-  test('mustChangePassword lands on change password and /requests redirects back', async () => {
+  test('mustChangePassword lands on change password and /statements redirects back', async () => {
     mockDb.users.find((u) => u.id === 'u-editor')!.mustChangePassword = true
     const { user, router } = renderApp('/sign-in')
     await fillSignIn(user, 'eli@example.com')
     expect(await screen.findByRole('heading', { name: 'Change password' })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/change-password')
-    await act(() => router.navigate('/requests'))
+    await act(() => router.navigate('/statements'))
     await waitFor(() => expect(router.state.location.pathname).toBe('/change-password'))
     expect(screen.queryByRole('heading', { name: 'Requests' })).not.toBeInTheDocument()
   })
@@ -106,7 +106,7 @@ describe('change password', () => {
     await user.type(screen.getByLabelText('Confirm new password'), 'a brand new passphrase')
     await user.click(screen.getByRole('button', { name: 'Change password' }))
     expect(await screen.findByRole('heading', { name: 'Requests' })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/requests')
+    expect(router.state.location.pathname).toBe('/statements')
   })
 })
 
@@ -119,12 +119,12 @@ describe('session restore and guards', () => {
   })
 
   test('no session redirects to sign-in with next, and returns after sign-in', async () => {
-    const { user, router } = renderApp('/requests/5')
+    const { user, router } = renderApp('/statements/5')
     await screen.findByLabelText('Email')
-    expect(router.state.location.pathname + router.state.location.search).toBe('/sign-in?next=%2Frequests%2F5')
+    expect(router.state.location.pathname + router.state.location.search).toBe('/sign-in?next=%2Fstatements%2F5')
     await fillSignIn(user, 'asha@example.com')
     expect(await screen.findByRole('heading', { name: 'SR-000005' })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/requests/5')
+    expect(router.state.location.pathname).toBe('/statements/5')
   })
 
   test('sign out calls logout, clears the query cache and goes to sign-in', async () => {
@@ -136,8 +136,7 @@ describe('session restore and guards', () => {
     const { user, router, queryClient } = renderApp('/requests')
     await screen.findByRole('heading', { name: 'Requests' })
     queryClient.setQueryData(['probe'], 'cached')
-    await user.click(screen.getByRole('button', { name: 'Asha K' }))
-    await user.click(await screen.findByRole('menuitem', { name: 'Sign out' }))
+    await user.click(await screen.findByRole('button', { name: 'Sign out' }))
     await screen.findByLabelText('Email')
     expect(router.state.location.pathname).toBe('/sign-in')
     expect(logoutCalled).toBe(true)

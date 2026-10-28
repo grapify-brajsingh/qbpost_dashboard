@@ -59,7 +59,7 @@ export function RequestDetailPage() {
       return (
         <div className="p-6">
           <h1 className="text-xl font-semibold">Request not found</h1>
-          <Link className="underline" to="/requests">
+          <Link className="underline" to="/statements">
             Back to Requests
           </Link>
         </div>

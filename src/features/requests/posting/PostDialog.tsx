@@ -103,7 +103,7 @@ function DuplicateBlock({ duplicate, anyway, onAnyway }: { duplicate: DuplicateI
     <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
       <p className="font-medium">{status ? `Possible duplicate of ${ref} (${status})` : `Possible duplicate of ${ref}`}</p>
       {of !== null && (
-        <Link className="underline" to={`/requests/${of}`} target="_blank" rel="noreferrer">
+        <Link className="underline" to={`/statements/${of}`} target="_blank" rel="noreferrer">
           Open the other request
         </Link>
       )}
