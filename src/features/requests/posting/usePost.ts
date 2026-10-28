@@ -49,6 +49,7 @@ export function usePost(id: string) {
     void qc.invalidateQueries({ queryKey: requestKeys.events(id) })
     void qc.invalidateQueries({ queryKey: [...requestKeys.all, 'list'] })
     void qc.invalidateQueries({ queryKey: requestKeys.stats() })
+    void qc.invalidateQueries({ queryKey: ['audit'] })
   }, [qc, id])
 
   const finish = useCallback(

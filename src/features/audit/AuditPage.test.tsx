@@ -129,6 +129,22 @@ describe('Audit trail page', () => {
     expect(router.state.location.search).toContain('requestId=12')
   })
 
+  test('Statement filter sends pushId when the value looks like a push id (prefix, dashes or not), else reference', async () => {
+    feed([event('a')])
+    open('/audit?reference=7f3a9c1e-5b2d')
+    await screen.findByRole('table', { name: 'Audit trail' })
+    expect(lastQuery().get('pushId')).toBe('7f3a9c1e-5b2d')
+    expect(lastQuery().has('reference')).toBe(false)
+    expect(new URL(screen.getByRole('link', { name: /Export CSV/ }).getAttribute('href')!, 'http://x').searchParams.get('pushId')).toBe('7f3a9c1e-5b2d')
+  })
+
+  test('row-added / row-deleted with no old/new fall back to the sentence', async () => {
+    feed([event('a', { action: 'row-added', field: null, old: null, new: null }), event('b', { action: 'row-deleted', field: null, old: null, new: null, row: { externalId: 'r9', index: 8 } })])
+    open()
+    expect(await screen.findByText('Added row 7')).toBeInTheDocument()
+    expect(screen.getByText('Deleted row 9')).toBeInTheDocument()
+  })
+
   test('picking and clearing filters writes the URL and refetches', async () => {
     feed([event('a')])
     const { user, router } = open()
@@ -153,7 +169,7 @@ describe('Audit trail page', () => {
   test('admin sees user events and every user in the User filter', async () => {
     mockDb.userAudit['u-editor'] = [{ id: 1, kind: 'unlocked', actor: { id: 'u-admin', name: 'Asha K' }, detail: null, atUtc: local(0, 8) }]
     const { user } = open()
-    expect(await screen.findByText('Unlocked u-editor')).toBeInTheDocument()
+    expect(await screen.findByText('Unlocked eli@example.com')).toBeInTheDocument()
     expect(screen.getByText('Not a statement')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'User' }))
     const list = await screen.findByRole('listbox')
@@ -173,7 +189,7 @@ describe('Audit trail page', () => {
     )
     const { user } = open('/audit', 'u-viewer')
     await screen.findByRole('table', { name: 'Audit trail' })
-    expect(screen.queryByText('Unlocked u-editor')).not.toBeInTheDocument()
+    expect(screen.queryByText('Unlocked eli@example.com')).not.toBeInTheDocument()
     expect(screen.queryByText('Not a statement')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'User' }))

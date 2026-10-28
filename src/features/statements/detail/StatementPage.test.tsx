@@ -509,17 +509,34 @@ describe('save bar', () => {
   })
 
   test('Validate re-runs validation; the Results tab shows the new check and says when it is out of date', async () => {
+    let who = 'Eli Editor'
+    server.use(
+      http.get('/api/v1/audit-events', () =>
+        HttpResponse.json({
+          items: [{ id: 'v', atUtc: '2026-10-27T08:00:00Z', actor: { id: 'u', name: who, kind: 'user' }, action: 'validated', request: null, row: null, field: null, old: null, new: null, versionNumber: null, detail: null }],
+          page: 1, pageSize: 1, total: 1,
+        }),
+      ),
+    )
     const { user, queryClient } = await open(2)
-    await user.click(within(saveBar()).getByRole('button', { name: 'Validate' }))
     await user.click(screen.getByRole('button', { name: 'Results' }))
     const sheet = await screen.findByRole('dialog')
-    await waitFor(() => expect(within(sheet).getByRole('region', { name: 'Latest validation' })).toHaveTextContent('Validated'))
+    await waitFor(() => expect(within(sheet).getByRole('region', { name: 'Latest validation' })).toHaveTextContent('by Eli Editor'))
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    who = 'Asha K'
+    await user.click(within(saveBar()).getByRole('button', { name: 'Validate' }))
+    // Validate marks the audit queries stale, so the next look at History or Results asks again.
+    await waitFor(() => expect(queryClient.getQueryCache().findAll({ queryKey: ['audit'] }).every((q) => q.state.isInvalidated)).toBe(true))
+    await user.click(screen.getByRole('button', { name: 'Results' }))
+    const again = await screen.findByRole('dialog')
+    await waitFor(() => expect(within(again).getByRole('region', { name: 'Latest validation' })).toHaveTextContent('by Asha K'))
     const key = ['requests', 'detail', '2']
     const cur = queryClient.getQueryData(key) as { request: RequestDetail; etag: string }
     act(() => {
       queryClient.setQueryData(key, { ...cur, request: { ...cur.request, currentVersion: 5, validation: { ...cur.request.validation, versionNumber: 2 } } })
     })
-    expect(await within(sheet).findByText('Validation is out of date')).toBeInTheDocument()
+    expect(await within(again).findByText('Validation is out of date')).toBeInTheDocument()
   })
 
   test('every row switched off → Post disabled with "Every row is marked don\'t post"', async () => {

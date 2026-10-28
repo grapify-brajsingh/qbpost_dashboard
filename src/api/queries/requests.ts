@@ -123,6 +123,7 @@ export function useValidate(id: string) {
     onSuccess: (data) => {
       if (data.etag) qc.setQueryData(requestKeys.detail(id), data)
       else void qc.invalidateQueries({ queryKey: requestKeys.detail(id), exact: true })
+      void qc.invalidateQueries({ queryKey: ['audit'] })
     },
   })
 }
@@ -139,7 +140,7 @@ function useStatusMutation<V extends object | undefined>(id: string, path: strin
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (vars: V) => api.post<RequestDetail>(`/saved-requests/${id}/${path}`, vars),
-    onSuccess: () => qc.invalidateQueries({ queryKey: requestKeys.all }),
+    onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: requestKeys.all }), qc.invalidateQueries({ queryKey: ['audit'] })]),
   })
 }
 
@@ -160,6 +161,7 @@ export function useSaveRequest(id: string) {
     onSuccess: (data) => {
       if (data.etag) qc.setQueryData(requestKeys.detail(id), data)
       else void qc.invalidateQueries({ queryKey: requestKeys.detail(id), exact: true })
+      void qc.invalidateQueries({ queryKey: ['audit'] })
     },
   })
 }

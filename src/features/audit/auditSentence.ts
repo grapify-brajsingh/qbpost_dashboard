@@ -7,7 +7,7 @@ export const ACTION_LABEL: Record<AuditAction, string> = {
   'row-added': 'Added',
   'row-deleted': 'Deleted',
   'row-post-off': "Don't post",
-  'row-post-on': 'Post',
+  'row-post-on': 'Marked post',
   'control-total-changed': 'Control total',
   validated: 'Validated',
   'post-started': 'Post started',
@@ -29,6 +29,7 @@ export const ACTION_LABEL: Record<AuditAction, string> = {
 }
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 
 /** "row 7" (1-based position), else the row's external id, else null. */
@@ -78,11 +79,11 @@ const SENTENCE: Record<AuditAction, (e: AuditEvent) => string> = {
   resolved: () => 'Resolved the statement',
   'user-created': (e) => {
     const role = str(e.detail?.role)
-    return `Created user ${subject(e)}${role ? ` as ${role}` : ''}`
+    return `Created user ${subject(e)}${role ? ` as ${cap(role)}` : ''}`
   },
   'user-role-changed': (e) => {
     const role = str(e.detail?.role)
-    return `Changed the role of ${subject(e)}${role ? ` to ${role}` : ''}`
+    return `Changed the role of ${subject(e)}${role ? ` to ${cap(role)}` : ''}`
   },
   'user-disabled': (e) => `Disabled ${subject(e)}`,
   'user-enabled': (e) => `Enabled ${subject(e)}`,

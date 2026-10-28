@@ -40,6 +40,21 @@ describe('GET /audit-events', () => {
     expect((await feed('q=PAYEE&requestId=1')).items.map((e) => e.field)).toEqual(['payee'])
   })
 
+  it('pushId matches a prefix, with or without dashes', async () => {
+    expect((await feed('pushId=7f3a9c1e-5b2d')).total).toBe(4)
+    expect((await feed('pushId=7F3A9C1E5B')).total).toBe(4)
+    expect((await feed('pushId=ffff')).total).toBe(0)
+  })
+
+  it('posted events carry postedCount and postId; user events carry email, displayName and role', async () => {
+    const posted = (await feed('action=posted&pageSize=200')).items
+    expect(posted.length).toBeGreaterThan(0)
+    expect(posted.every((e) => typeof e.detail?.postedCount === 'number' && e.detail?.postId)).toBe(true)
+    mockDb.userAudit['u-editor'] = [{ id: 1, kind: 'created', actor: { id: 'u-admin', name: 'Asha K' }, detail: null, atUtc: '2026-10-28T11:00:00Z' }]
+    const ev = (await feed('action=user-created')).items[0]
+    expect(ev.detail).toMatchObject({ userId: 'u-editor', email: 'eli@example.com', displayName: 'Eli Editor', role: 'editor' })
+  })
+
   it('pages 50 by default, rejects pageSize > 200 with 400', async () => {
     const page = await feed()
     expect(page.pageSize).toBe(50)

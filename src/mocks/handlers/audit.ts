@@ -37,7 +37,7 @@ function filterEvents(url: URL, role: Parameters<typeof deriveAuditEvents>[0]): 
     if (actor && e.actor.id !== actor) return false
     if (requestId !== null && e.request?.id !== requestId) return false
     if (reference && e.request?.reference !== reference) return false
-    if (pushId && e.request?.pushId?.toLowerCase().replace(/-/g, '') !== pushId) return false
+    if (pushId && !e.request?.pushId?.toLowerCase().replace(/-/g, '').startsWith(pushId)) return false
     if (actions.length && !actions.includes(e.action)) return false
     if (q) {
       const hay = [text(e.old), text(e.new), e.field ?? '', e.request?.reference ?? '', e.request?.pushId ?? '']

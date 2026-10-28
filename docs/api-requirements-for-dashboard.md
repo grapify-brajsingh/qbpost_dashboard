@@ -222,6 +222,8 @@ when". Today the data is spread over `saved_request_events`, `saved_request_vers
          "versionNumber": 3, "detail": null } ],
      "page": 1, "pageSize": 50, "total": 812 }
    ```
+   `posted` events carry `detail.postedCount` and `detail.postId`; user events carry `detail.userId`, `detail.email`
+   and `detail.displayName` of the user concerned (plus `detail.role` for created and role-changed).
    `actor.kind` is `user` or `api-client` (name = client id, e.g. `n8n-mailbox`). `request` and `row` are null for
    user events. `old`/`new` are JSON values (string, number, boolean, object for whole rows) or null.
 4. **Actions** (enum, in OpenAPI): `received`, `row-edited` (one event per changed field), `row-added`,

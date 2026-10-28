@@ -27,6 +27,9 @@ const FILTER_SPEC = {
   action: { kind: 'enumList', values: AUDIT_ACTIONS },
 } as const
 
+/** What a person pastes for a push id (hex and dashes); anything else is a reference. */
+const PUSH_ID_RE = /^[0-9a-f-]{8,}$/i
+
 /** The API client n8n posts statements with. */
 const N8N_ACTOR = 'api-client:n8n-mailbox'
 
@@ -116,7 +119,7 @@ export function AuditPage() {
     // Through the end of the chosen day: local midnight of the day after.
     to: f.to ? localMidnightUtc(f.to, 1) : undefined,
     requestId: f.requestId,
-    reference: f.reference,
+    ...(f.reference && PUSH_ID_RE.test(f.reference) ? { pushId: f.reference } : { reference: f.reference }),
     action: f.action,
   }
   const events = useAuditEvents({ ...filterParams, page: pageNo, pageSize: AUDIT_PAGE_SIZE })

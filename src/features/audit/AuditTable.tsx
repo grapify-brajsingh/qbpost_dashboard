@@ -105,7 +105,7 @@ function Change({ e }: { e: AuditEvent }) {
       )
     case 'row-added':
     case 'row-deleted':
-      return <ValueDiff old={e.old} new={e.new} />
+      return e.old == null && e.new == null ? <>{auditSentence(e)}</> : <ValueDiff old={e.old} new={e.new} />
     default:
       return <>{auditSentence(e)}</>
   }

@@ -81,7 +81,7 @@ function requestEvents(r: RequestRecord): AuditEvent[] {
   for (const a of r.attempts) {
     if (a.outcome === 'in-progress') continue
     const action: AuditAction = a.outcome === 'posted' ? 'posted' : 'post-failed'
-    const detail: Record<string, unknown> = { attemptId: a.id, outcome: a.outcome, httpStatus: a.httpStatus, postId: a.postId }
+    const detail: Record<string, unknown> = { attemptId: a.id, outcome: a.outcome, httpStatus: a.httpStatus, postId: a.postId, ...(a.outcome === 'posted' ? { postedCount: a.counts?.posted ?? 0 } : {}) }
     out.push({ ...base, id: `p${r.id}-${a.id}`, atUtc: a.finishedUtc ?? a.startedUtc, actor: actorOf(a.startedBy), action, versionNumber: a.versionNumber, detail })
   }
   return out
@@ -92,9 +92,12 @@ function userEvents(): AuditEvent[] {
     rows.flatMap((row): AuditEvent[] => {
       const action = USER_ACTIONS[row.kind]
       if (!action) return []
+      const subject = mockDb.users.find((u) => u.id === userId)
+      const who = subject ? { email: subject.email, displayName: subject.displayName } : {}
+      const role = row.kind === 'created' || row.kind === 'role-changed' ? { role: subject?.role } : {}
       return [{
         id: `u${row.id}`, atUtc: row.atUtc, actor: actorOf(row.actor), action, request: null, row: null,
-        field: null, old: null, new: null, versionNumber: null, detail: { ...row.detail, userId },
+        field: null, old: null, new: null, versionNumber: null, detail: { ...role, ...row.detail, ...who, userId },
       }]
     }),
   )

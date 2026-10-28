@@ -14,6 +14,7 @@ describe('auditSentence', () => {
     expect(auditSentence(ev('row-added', { row: { externalId: 'dash-1', index: 134 } }))).toBe('Added row 135')
     expect(auditSentence(ev('posted', { detail: { postedCount: 61, batch: 'api-amex-2026-09' } }))).toBe('Posted 61 rows (batch api-amex-2026-09)')
     expect(auditSentence(ev('user-password-reset', { detail: { email: 'eli@example.com' } }))).toBe('Reset the password for eli@example.com')
+    expect(auditSentence(ev('user-created', { detail: { email: 'eli@example.com', role: 'editor' } }))).toBe('Created user eli@example.com as Editor')
     expect(auditSentence(ev('post-failed', { detail: { outcome: 'busy' } }))).toBe('Post failed (busy)')
   })
 
