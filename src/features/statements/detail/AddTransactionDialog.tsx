@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { parseAmount, parseDate } from '@/features/requests/transactions/cells/parse'
 
 const TEXT_FIELDS = ['payee', 'account', 'lineAccount', 'memo'] as const
@@ -98,25 +99,20 @@ function Body({ lists, onAdd, onCancel }: { lists: QbLists | undefined; onAdd: (
         <DialogTitle>Add transaction</DialogTitle>
         <DialogDescription>Adds a row to this push. It's saved with your other changes.</DialogDescription>
       </DialogHeader>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         {field('date', 'Date', { placeholder: 'yyyy-MM-dd' })}
         <div className="grid gap-1.5">
           <Label htmlFor="add-kind">Kind</Label>
-          <select
-            id="add-kind"
-            className="h-9 rounded-md border bg-background px-2 text-sm focus-visible:ring-2 focus-visible:ring-ring"
-            value={f.kind}
-            onChange={(e) => set('kind')(e.target.value)}
-          >
-            <option value="">Choose a kind</option>
+          <NativeSelect id="add-kind" wrapperClassName="w-full" value={f.kind} onChange={(e) => set('kind')(e.target.value)}>
+            <NativeSelectOption value="">Choose a kind</NativeSelectOption>
             {TXN_KINDS.map((k) => (
-              <option key={k} value={k}>
+              <NativeSelectOption key={k} value={k}>
                 {k}
-              </option>
+              </NativeSelectOption>
             ))}
-          </select>
+          </NativeSelect>
         </div>
-        {field('payee', 'Payee', { list: 'add-payees', className: 'col-span-2' })}
+        {field('payee', 'Payee', { list: 'add-payees', className: 'sm:col-span-2' })}
         {field('account', 'Account', { list: 'add-accounts' })}
         {field('lineAccount', 'Line account', { list: 'add-accounts' })}
         {field('amount', 'Amount', { placeholder: '0.00' })}

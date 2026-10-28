@@ -1,5 +1,5 @@
 import type { KeyboardEvent } from 'react'
-import { ArrowDownIcon, ArrowUpIcon } from 'lucide-react'
+import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon, CheckIcon, MinusIcon, TriangleAlertIcon } from 'lucide-react'
 import { Link, useNavigate } from 'react-router'
 import type { RequestSummary } from '@/api/schema'
 import { Money } from '@/components/Money'
@@ -7,6 +7,7 @@ import { PushId } from '@/components/PushId'
 import { StatusBadge } from '@/components/StatusBadge'
 import { StatusDot } from '@/components/StatusDot'
 import { Timestamp } from '@/components/Timestamp'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
@@ -31,13 +32,14 @@ function validationLabel(r: RequestSummary): string {
   }
 }
 
-function validationClass(r: RequestSummary): string {
-  if (r.status === 'posted' && r.postSummary) return 'bg-success-soft text-success'
+function validationTone(r: RequestSummary): 'success' | 'danger' | 'muted' {
+  if (r.status === 'posted' && r.postSummary) return 'success'
   const v = r.validationSummary
-  if (v.problemCount > 0 || v.state === 'unreadable' || v.state === 'refused' || v.state === 'held')
-    return 'bg-destructive/10 text-destructive'
-  return v.state === 'ok' ? 'bg-success-soft text-success' : 'bg-muted text-muted-foreground'
+  if (v.problemCount > 0 || v.state === 'unreadable' || v.state === 'refused' || v.state === 'held') return 'danger'
+  return v.state === 'ok' ? 'success' : 'muted'
 }
+
+const VALIDATION_ICON = { success: CheckIcon, danger: TriangleAlertIcon, muted: MinusIcon } as const
 
 function SortHead({
   label,
@@ -58,13 +60,31 @@ function SortHead({
     <TableHead className={className} aria-sort={active ? (sort === sortKey ? 'ascending' : 'descending') : 'none'}>
       <button
         type="button"
-        className={cn('inline-flex items-center gap-1 font-medium', active && 'text-foreground')}
+        className={cn(
+          'group/sort -mx-1.5 inline-flex items-center gap-1 rounded px-1.5 py-1 font-medium transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 focus-visible:outline-none',
+          active && 'text-foreground',
+        )}
         onClick={() => onSort(nextSort(sort, sortKey))}
       >
         {label}
-        {active && <Icon className="size-3.5" aria-hidden />}
+        {active ? (
+          <Icon className="size-3.5" aria-hidden />
+        ) : (
+          <ArrowUpDownIcon className="size-3.5 opacity-0 transition-opacity group-hover/sort:opacity-50" aria-hidden />
+        )}
       </button>
     </TableHead>
+  )
+}
+
+function ValidationBadge({ r }: { r: RequestSummary }) {
+  const tone = validationTone(r)
+  const Icon = VALIDATION_ICON[tone]
+  return (
+    <Badge variant={tone}>
+      <Icon aria-hidden />
+      {validationLabel(r)}
+    </Badge>
   )
 }
 
@@ -94,8 +114,8 @@ export function StatementsTable({
   }
 
   return (
-    <Table>
-      <TableHeader>
+    <Table className="min-w-[920px]">
+      <TableHeader className="bg-muted/40">
         <TableRow>
           <SortHead label="Received" sortKey="received" sort={sort} onSort={onSort} />
           <TableHead>Email</TableHead>
@@ -114,7 +134,7 @@ export function StatementsTable({
           <TableRow
             key={r.id}
             tabIndex={0}
-            className="cursor-pointer"
+            className="group/row cursor-pointer outline-none focus-visible:bg-accent focus-visible:shadow-[inset_2px_0_0_var(--primary)]"
             onClick={() => open(r.id)}
             onKeyDown={(e) => onKeyDown(e, r.id)}
           >
@@ -127,9 +147,9 @@ export function StatementsTable({
               )}
               {r.email?.receivedUtc ? <Timestamp utc={r.email.receivedUtc} /> : '—'}
             </TableCell>
-            <TableCell className="max-w-72">
+            <TableCell className="w-full max-w-0 min-w-56">
               <Link
-                className="block truncate underline-offset-4 hover:underline"
+                className="block truncate font-medium underline-offset-4 group-hover/row:text-primary hover:underline"
                 to={`/statements/${r.id}`}
                 onClick={(e) => e.stopPropagation()}
               >
@@ -138,28 +158,30 @@ export function StatementsTable({
               <span className="block truncate text-xs text-muted-foreground">{r.email?.from ?? '—'}</span>
             </TableCell>
             <TableCell>
-              <span className="block">{r.reference ?? '—'}</span>
+              <span className="block text-[13px]">{r.reference ?? '—'}</span>
               <span onClick={(e) => e.stopPropagation()}>
                 <PushId value={r.pushId} fallback={r.publicRef} />
               </span>
             </TableCell>
-            <TableCell className="text-right tabular-nums">{r.transactionCount}</TableCell>
-            <TableCell>
+            <TableCell className="text-right text-muted-foreground tabular-nums">{r.transactionCount}</TableCell>
+            <TableCell className="font-medium">
               <Money value={r.controlTotal} />
             </TableCell>
             <TableCell>
               <StatusBadge status={r.status} />
             </TableCell>
             <TableCell>
-              <span className={cn('rounded-full px-2 py-0.5 text-xs', validationClass(r))}>{validationLabel(r)}</span>
+              <ValidationBadge r={r} />
             </TableCell>
             <TableCell className="whitespace-nowrap text-right" onClick={(e) => e.stopPropagation()}>
-              <Button type="button" variant="outline" size="sm" onClick={() => onOpenSheet(r.id, 'history')}>
-                History {r.historyCount}
-              </Button>{' '}
-              <Button type="button" variant="outline" size="sm" onClick={() => onOpenSheet(r.id, 'results')}>
-                Results
-              </Button>
+              <div className="inline-flex gap-0.5">
+                <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={() => onOpenSheet(r.id, 'history')}>
+                  History <span className="tabular-nums">{r.historyCount}</span>
+                </Button>
+                <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={() => onOpenSheet(r.id, 'results')}>
+                  Results
+                </Button>
+              </div>
             </TableCell>
           </TableRow>
         ))}

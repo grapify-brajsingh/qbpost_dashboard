@@ -8,6 +8,7 @@ import { SignInPage } from '@/auth/SignInPage'
 import { hasScope, useSession } from '@/auth/useSession'
 import { AccountPage } from '@/features/account/AccountPage'
 import { AuditPage } from '@/features/audit/AuditPage'
+import { HomePage } from '@/features/home/HomePage'
 import { StatementPage } from '@/features/statements/detail/StatementPage'
 import { StatementsPage } from '@/features/statements/list/StatementsPage'
 import { UserPage } from '@/features/users/UserPage'
@@ -68,7 +69,7 @@ export const routes: RouteObject[] = [
           </RequireAuth>
         ),
         children: [
-          { path: '/', element: <RedirectToStatements /> },
+          { path: '/', element: <HomePage />, handle: { crumb: 'Home' } },
           { path: '/requests', element: <RedirectToStatements /> },
           { path: '/requests/:id', element: <RedirectToStatements /> },
           {

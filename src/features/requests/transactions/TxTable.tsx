@@ -320,11 +320,11 @@ export function TxTable({ rows, edit, findings, readErrors, toolbar, highlight =
   return (
     <TooltipProvider>
       <div className="space-y-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="min-w-0 flex-1">{toolbar}</div>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0 flex-1 basis-[36rem]">{toolbar}</div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" className="ml-auto">
                 <Columns3 aria-hidden /> Columns
               </Button>
             </DropdownMenuTrigger>
@@ -337,15 +337,15 @@ export function TxTable({ rows, edit, findings, readErrors, toolbar, highlight =
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <div ref={scrollRef} data-testid="tx-scroll" className="h-[70vh] overflow-auto rounded-[10px] border bg-card">
+        <div ref={scrollRef} data-testid="tx-scroll" className="h-[70vh] min-h-80 overflow-auto rounded-lg border bg-card">
           <table className="w-full table-fixed border-collapse text-[13px]">
-            <thead className="sticky top-0 z-10 bg-card">
-              <tr className="border-b">
+            <thead className="sticky top-0 z-10 bg-card shadow-[0_1px_0_var(--border)]">
+              <tr className="bg-muted/40">
                 {columns.map((c) => (
                   <th
                     key={c.id}
                     scope="col"
-                    className={cn('px-3 py-2.5 text-left font-medium whitespace-nowrap text-muted-foreground', c.width, c.align === 'right' && 'text-right')}
+                    className={cn('px-3 py-2.5 text-left text-[12.5px] font-medium whitespace-nowrap text-muted-foreground', c.width, c.align === 'right' && 'text-right')}
                   >
                     {c.srHeader ? <span className="sr-only">{c.header}</span> : c.header}
                   </th>
@@ -379,9 +379,9 @@ export function TxTable({ rows, edit, findings, readErrors, toolbar, highlight =
                     data-highlight={lit ? 'true' : undefined}
                     style={{ height: heightOf(r) }}
                     className={cn(
-                      'border-b transition-colors hover:bg-muted/40',
+                      'border-b transition-colors duration-150 hover:bg-accent/50',
                       deleted && 'text-muted-foreground line-through',
-                      lit && 'bg-primary/10 ring-2 ring-primary ring-inset',
+                      lit && 'bg-primary-soft ring-2 ring-primary ring-inset',
                     )}
                   >
                     {columns.map((c) => {
@@ -444,13 +444,13 @@ export function TxTable({ rows, edit, findings, readErrors, toolbar, highlight =
                           }}
                           onKeyDown={(e) => onCellKeyDown(e, pos, editable)}
                           className={cn(
-                            'group/cell px-3 py-1 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                            'group/cell px-3 py-1 outline-none transition-colors duration-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
                             !isEditing && 'truncate',
                             c.align === 'right' && 'text-right tabular-nums',
                             editable && !isEditing && 'cursor-text hover:bg-primary/5',
                             skip && !deleted && 'text-muted-foreground line-through decoration-muted-foreground/60',
                             unreadable && 'bg-destructive/15 text-destructive outline outline-1 -outline-offset-1 outline-destructive',
-                            dirty && 'bg-primary/10',
+                            dirty && 'bg-primary-soft',
                           )}
                         >
                           {c.id === 'index' ? (

@@ -1,13 +1,14 @@
+import { CheckCircle2Icon, CircleAlertIcon, InfoIcon, TriangleAlertIcon } from 'lucide-react'
 import { Link } from 'react-router'
-import { cn } from '@/lib/utils'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import type { PostOutcome } from './outcome'
 
 const TONE = {
-  success: 'border-green-300 bg-green-50 text-green-900 dark:border-green-800 dark:bg-green-950 dark:text-green-100',
-  warning: 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100',
-  info: 'border-blue-300 bg-blue-50 text-blue-900 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-100',
-  error: 'border-destructive/50 bg-destructive/10',
-}
+  success: { variant: 'success', icon: CheckCircle2Icon },
+  warning: { variant: 'warning', icon: TriangleAlertIcon },
+  info: { variant: 'info', icon: InfoIcon },
+  error: { variant: 'destructive', icon: CircleAlertIcon },
+} as const
 
 const TONE_OF: Record<PostOutcome['kind'], keyof typeof TONE> = {
   posted: 'success',
@@ -29,43 +30,48 @@ const TONE_OF: Record<PostOutcome['kind'], keyof typeof TONE> = {
 export function PostResultBanner({ outcome, requestId }: { outcome: PostOutcome; requestId: string }) {
   const o = outcome
   const rows = o.findings?.length ?? 0
+  const tone = TONE[TONE_OF[o.kind]]
+  const Icon = tone.icon
   return (
-    <div role="status" aria-label="Post result" className={cn('space-y-1 rounded-md border p-3 text-sm', TONE[TONE_OF[o.kind]])}>
-      <p className="font-medium">{o.title}</p>
-      {o.detail && <p>{o.detail}</p>}
-      {o.postId && (
-        <p>
-          Post ID: <span className="font-mono">{o.postId}</span>
-        </p>
-      )}
-      {o.errors && o.errors.length > 0 && (
-        <ul className="list-disc pl-5">
-          {o.errors.map((e, i) => (
-            <li key={i}>{e}</li>
-          ))}
-        </ul>
-      )}
-      {(o.kind === 'held' || o.kind === 'partial') && rows > 0 && (
-        <div>
+    <Alert role="status" aria-label="Post result" variant={tone.variant}>
+      <Icon aria-hidden />
+      <AlertDescription className="gap-1.5 text-current">
+        <p className="font-medium">{o.title}</p>
+        {o.detail && <p>{o.detail}</p>}
+        {o.postId && (
           <p>
-            {rows} {rows === 1 ? 'row is' : 'rows are'} held. They are marked in the table below.
+            Post ID: <span className="font-mono text-[0.92em]">{o.postId}</span>
           </p>
-          <ul aria-label="Held rows" className="list-disc pl-5">
-            {o.findings!.map((f, i) => (
-              <li key={i}>
-                Row {f.index + 1}
-                {f.externalId ? ` (${f.externalId})` : ''}: {f.reason}
-                {f.detail ? ` — ${f.detail}` : ''}
-              </li>
+        )}
+        {o.errors && o.errors.length > 0 && (
+          <ul className="list-disc pl-5 text-foreground/85">
+            {o.errors.map((e, i) => (
+              <li key={i}>{e}</li>
             ))}
           </ul>
-        </div>
-      )}
-      {o.kind === 'conflict' && o.attemptId !== undefined && (
-        <Link className="underline" to={`/statements/${requestId}?sheet=${requestId}&sheetTab=results`}>
-          See their attempt
-        </Link>
-      )}
-    </div>
+        )}
+        {(o.kind === 'held' || o.kind === 'partial') && rows > 0 && (
+          <div>
+            <p>
+              {rows} {rows === 1 ? 'row is' : 'rows are'} held. They are marked in the table below.
+            </p>
+            <ul aria-label="Held rows" className="list-disc pl-5 text-foreground/85">
+              {o.findings!.map((f, i) => (
+                <li key={i}>
+                  Row {f.index + 1}
+                  {f.externalId ? ` (${f.externalId})` : ''}: {f.reason}
+                  {f.detail ? ` — ${f.detail}` : ''}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {o.kind === 'conflict' && o.attemptId !== undefined && (
+          <Link className="underline" to={`/statements/${requestId}?sheet=${requestId}&sheetTab=results`}>
+            See their attempt
+          </Link>
+        )}
+      </AlertDescription>
+    </Alert>
   )
 }

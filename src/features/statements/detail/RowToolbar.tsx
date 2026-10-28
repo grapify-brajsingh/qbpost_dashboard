@@ -26,7 +26,7 @@ function KindChip({ value, onChange }: { value: Kind[] | undefined; onChange: (k
     <FilterChip label="Kind" value={chosen.length > 0 ? chosen.join(', ') : undefined} onChange={() => onChange(undefined)}>
       <div role="group" aria-label="Kinds" className="grid p-1">
         {TXN_KINDS.map((k) => (
-          <label key={k} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted">
+          <label key={k} className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-accent">
             <Checkbox checked={chosen.includes(k)} onCheckedChange={(c) => toggle(k, c === true)} />
             {k}
           </label>
@@ -42,7 +42,7 @@ function ToggleChip({ label, on, onChange }: { label: string; on: boolean; onCha
     <button
       type="button"
       aria-pressed={on}
-      className={cn(chipClass, on ? 'border-solid border-primary/40 bg-primary/10 text-foreground' : 'border-dashed text-muted-foreground')}
+      className={cn(chipClass, on ? 'border-solid border-primary/35 bg-primary-soft font-medium text-foreground' : 'border-dashed text-muted-foreground')}
       onClick={() => onChange(!on)}
     >
       {on ? <CheckIcon className="size-3.5" aria-hidden /> : <PlusIcon className="size-3.5" aria-hidden />}
@@ -67,9 +67,9 @@ export function RowToolbar({
   onAdd?: () => void
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <div role="search" aria-label="Row filters" className="flex flex-wrap items-center gap-2">
-        <SearchBox value={values.rq} onChange={(v) => onSet({ rq: v.trim() || undefined })} label="Search rows" placeholder="Search payee, memo or account" />
+    <div className="flex flex-wrap items-start gap-2">
+      <div role="search" aria-label="Row filters" className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+        <SearchBox value={values.rq} onChange={(v) => onSet({ rq: v.trim() || undefined })} label="Search rows" placeholder="Search payee, memo or account" className="sm:max-w-72" />
         <FilterChip label="Post or don't post" value={values.rpost} options={POST_OPTIONS} onChange={(v) => onSet({ rpost: v as RowFilterValues['rpost'] })} />
         <KindChip value={values.rkind} onChange={(rkind) => onSet({ rkind })} />
         <DateRangeChip label="Date" from={values.rfrom} to={values.rto} onChange={(r) => onSet({ rfrom: r.from, rto: r.to })} />
@@ -78,7 +78,7 @@ export function RowToolbar({
         {activeCount > 0 && <ClearFilters onClear={onClear} />}
       </div>
       {onAdd && (
-        <Button className="ml-auto" onClick={onAdd}>
+        <Button size="sm" className="ml-auto shrink-0" onClick={onAdd}>
           <PlusIcon aria-hidden /> Add transaction
         </Button>
       )}

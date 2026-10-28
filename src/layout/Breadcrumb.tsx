@@ -1,5 +1,13 @@
-import { useContext } from 'react'
+import { Fragment, useContext } from 'react'
 import { Link, useMatches } from 'react-router'
+import {
+  Breadcrumb as BreadcrumbRoot,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb'
 import { BreadcrumbContext } from './useBreadcrumb'
 
 export type CrumbHandle = { crumb?: string | ((data: unknown) => string) }
@@ -17,23 +25,25 @@ export function Breadcrumb() {
   const last = crumbs.length - 1
   if (title) crumbs[last] = { ...crumbs[last], label: title }
   return (
-    <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground">
-      <ol className="flex items-center gap-1.5">
+    <BreadcrumbRoot aria-label="Breadcrumb" className="min-w-0">
+      <BreadcrumbList className="flex-nowrap">
         {crumbs.map((c, i) => (
-          <li key={c.to} className="flex items-center gap-1.5">
-            {i > 0 && <span aria-hidden="true">/</span>}
-            {i === last ? (
-              <b aria-current="page" title={c.label} className="block max-w-[40ch] truncate font-medium text-foreground">
-                {c.label}
-              </b>
-            ) : (
-              <Link to={c.to} className="hover:text-foreground">
-                {c.label}
-              </Link>
-            )}
-          </li>
+          <Fragment key={c.to}>
+            {i > 0 && <BreadcrumbSeparator className="hidden sm:block" />}
+            <BreadcrumbItem className={i === last ? 'min-w-0' : 'hidden shrink-0 sm:inline-flex'}>
+              {i === last ? (
+                <BreadcrumbPage title={c.label} className="block max-w-[48ch] truncate font-medium">
+                  {c.label}
+                </BreadcrumbPage>
+              ) : (
+                <BreadcrumbLink asChild>
+                  <Link to={c.to}>{c.label}</Link>
+                </BreadcrumbLink>
+              )}
+            </BreadcrumbItem>
+          </Fragment>
         ))}
-      </ol>
-    </nav>
+      </BreadcrumbList>
+    </BreadcrumbRoot>
   )
 }

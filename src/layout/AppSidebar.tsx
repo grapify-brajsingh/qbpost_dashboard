@@ -1,8 +1,11 @@
-import { FileTextIcon, HistoryIcon, LogOutIcon, MoonIcon, SearchIcon, SunIcon, UserIcon, UsersIcon } from 'lucide-react'
+import { FileTextIcon, HistoryIcon, LayoutDashboardIcon, LogOutIcon, MoonIcon, SearchIcon, SunIcon, UserIcon, UsersIcon, type LucideIcon } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { NavLink, useLocation } from 'react-router'
 import { useStats } from '@/api/queries/requests'
 import { hasScope, useSession } from '@/auth/useSession'
+import { BrandMark } from '@/components/BrandMark'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
 import {
   Sidebar,
   SidebarContent,
@@ -14,7 +17,9 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from '@/components/ui/sidebar'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean)
@@ -23,8 +28,23 @@ function initials(name: string): string {
 
 const ROLE_LABEL = { admin: 'Admin', editor: 'Editor', viewer: 'Viewer' } as const
 
-const footerButton =
-  'grid size-[30px] place-items-center rounded-md border border-[#1f2a3d] text-[#9fb0c8] hover:bg-sidebar-accent'
+function NavItem({ to, icon: Icon, label, active }: { to: string; icon: LucideIcon; label: string; active: boolean }) {
+  const { isMobile, setOpenMobile } = useSidebar()
+  return (
+    <SidebarMenuButton
+      asChild
+      isActive={active}
+      tooltip={label}
+      className="h-9 data-[active=true]:text-primary data-[active=true]:shadow-[inset_2px_0_0_var(--primary)]"
+    >
+      {/* On phones the menu is a sheet: close it once a page is picked. */}
+      <NavLink to={to} end={to === '/'} onClick={() => isMobile && setOpenMobile(false)}>
+        <Icon />
+        <span>{label}</span>
+      </NavLink>
+    </SidebarMenuButton>
+  )
+}
 
 export function AppSidebar({ onOpenSearch }: { onOpenSearch(): void }) {
   const { me, signOut } = useSession()
@@ -37,53 +57,48 @@ export function AppSidebar({ onOpenSearch }: { onOpenSearch(): void }) {
   const toReview = stats ? stats.byStatus.pending + (isAdmin ? stats.byStatus.partial + stats.byStatus.unknown : 0) : 0
   const on = (prefix: string) => pathname === prefix || pathname.startsWith(`${prefix}/`)
   const dark = resolvedTheme === 'dark'
+  const themeLabel = dark ? 'Switch to light theme' : 'Switch to dark theme'
 
   return (
     <Sidebar collapsible="icon" aria-label="Main menu">
-      <SidebarHeader>
-        <div className="flex items-center gap-2.5 px-1 py-1.5 font-semibold text-white">
-          <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-linear-to-br from-[#22d3ee] to-[#0e7490] text-[13px] font-bold text-[#04202a] shadow-[0_0_18px_rgba(34,211,238,.35)]">
-            Qb
+      <SidebarHeader className="gap-3 px-3 pt-4">
+        <div className="flex items-center gap-2.5 px-0.5 group-data-[collapsible=icon]:px-0">
+          <BrandMark className="size-7 shrink-0" />
+          <div className="grid leading-tight group-data-[collapsible=icon]:hidden">
+            <span className="text-[15px] font-semibold tracking-[-0.01em] text-foreground">QbAutopost</span>
+            <span className="text-xs text-muted-foreground">Statement review</span>
           </div>
-          <span className="group-data-[collapsible=icon]:hidden">QbAutopost</span>
         </div>
         <button
           type="button"
           onClick={onOpenSearch}
-          className="flex items-center gap-2 rounded-lg border border-[#1f2a3d] px-2.5 py-1.5 text-[13px] text-[#7c8aa3] hover:bg-sidebar-accent group-data-[collapsible=icon]:hidden"
+          className="flex h-9 items-center gap-2 rounded-md border border-input bg-card px-2.5 text-[13px] text-muted-foreground shadow-xs transition-colors duration-150 outline-none hover:border-ring/40 hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 group-data-[collapsible=icon]:hidden"
         >
-          <SearchIcon className="size-[15px]" />
+          <SearchIcon className="size-4" aria-hidden />
           Search or jump to…
-          <kbd className="ml-auto rounded border border-[#2a3850] px-1.5 text-[11px]">Ctrl K</kbd>
+          <kbd className="ml-auto rounded border bg-muted px-1.5 font-sans text-[11px] text-muted-foreground">Ctrl K</kbd>
         </button>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="px-1">
         <SidebarGroup>
           <SidebarGroupLabel>Work</SidebarGroupLabel>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={on('/statements')} tooltip="Statements">
-                <NavLink to="/statements">
-                  <FileTextIcon />
-                  <span>Statements</span>
-                </NavLink>
-              </SidebarMenuButton>
+              <NavItem to="/" icon={LayoutDashboardIcon} label="Home" active={pathname === '/'} />
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <NavItem to="/statements" icon={FileTextIcon} label="Statements" active={on('/statements')} />
               {toReview > 0 && (
                 <SidebarMenuBadge
                   aria-label={`${toReview} to review`}
-                  className="rounded-full bg-primary-soft px-2 text-[11px] text-sidebar-primary"
+                  className="top-2 rounded-full bg-primary-soft px-1.5 text-[11px] font-semibold text-primary tabular-nums"
                 >
                   {toReview}
                 </SidebarMenuBadge>
               )}
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={on('/audit')} tooltip="Audit trail">
-                <NavLink to="/audit">
-                  <HistoryIcon />
-                  <span>Audit trail</span>
-                </NavLink>
-              </SidebarMenuButton>
+              <NavItem to="/audit" icon={HistoryIcon} label="Audit trail" active={on('/audit')} />
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
@@ -92,46 +107,43 @@ export function AppSidebar({ onOpenSearch }: { onOpenSearch(): void }) {
           <SidebarMenu>
             {isAdmin && (
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={on('/users')} tooltip="Users">
-                  <NavLink to="/users">
-                    <UsersIcon />
-                    <span>Users</span>
-                  </NavLink>
-                </SidebarMenuButton>
+                <NavItem to="/users" icon={UsersIcon} label="Users" active={on('/users')} />
               </SidebarMenuItem>
             )}
             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={on('/account')} tooltip="My account">
-                <NavLink to="/account">
-                  <UserIcon />
-                  <span>My account</span>
-                </NavLink>
-              </SidebarMenuButton>
+              <NavItem to="/account" icon={UserIcon} label="My account" active={on('/account')} />
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter>
-        <div className="flex items-center gap-2.5 border-t border-sidebar-border p-2.5">
-          <div className="grid size-[30px] shrink-0 place-items-center rounded-full bg-[#1e3a52] text-xs font-semibold text-[#a5f3fc]">
-            {initials(me?.displayName ?? '')}
+      <SidebarFooter className="border-t border-sidebar-border p-3 group-data-[collapsible=icon]:p-2">
+        <div className="flex items-center gap-2.5">
+          <Avatar className="size-8 group-data-[collapsible=icon]:hidden">
+            <AvatarFallback className="bg-primary-soft text-xs font-semibold text-primary">
+              {initials(me?.displayName ?? '')}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1 text-sm leading-tight group-data-[collapsible=icon]:hidden">
+            <div className="truncate font-medium text-foreground">{me?.displayName}</div>
+            <div className="text-xs text-muted-foreground">{me ? ROLE_LABEL[me.role] : ''}</div>
           </div>
-          <div className="min-w-0 text-sm leading-tight group-data-[collapsible=icon]:hidden">
-            <div className="truncate text-white">{me?.displayName}</div>
-            <small className="text-xs text-[#6b7a94]">{me ? ROLE_LABEL[me.role] : ''}</small>
-          </div>
-          <div className="ml-auto flex gap-1.5 group-data-[collapsible=icon]:hidden">
-            <button
-              type="button"
-              aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'}
-              onClick={() => setTheme(dark ? 'light' : 'dark')}
-              className={footerButton}
-            >
-              {dark ? <SunIcon className="size-[15px]" /> : <MoonIcon className="size-[15px]" />}
-            </button>
-            <button type="button" aria-label="Sign out" onClick={() => void signOut()} className={footerButton}>
-              <LogOutIcon className="size-[15px]" />
-            </button>
+          <div className="flex gap-0.5 group-data-[collapsible=icon]:flex-col">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon-sm" aria-label={themeLabel} onClick={() => setTheme(dark ? 'light' : 'dark')}>
+                  {dark ? <SunIcon /> : <MoonIcon />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">{themeLabel}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon-sm" aria-label="Sign out" onClick={() => void signOut()}>
+                  <LogOutIcon />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Sign out</TooltipContent>
+            </Tooltip>
           </div>
         </div>
       </SidebarFooter>

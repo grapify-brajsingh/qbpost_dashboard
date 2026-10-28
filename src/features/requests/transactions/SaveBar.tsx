@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { Loader2Icon } from 'lucide-react'
 import { ApiError, problemCode, type ApiProblem } from '@/api/problem'
 import { requestKeys, useSaveRequest } from '@/api/queries/requests'
 import type { Payload } from '@/api/schema'
@@ -36,7 +37,7 @@ export function ActionBarFrame({ children }: { children: ReactNode }) {
     <div
       role="region"
       aria-label="Save bar"
-      className="sticky bottom-0 z-20 -mx-4 mt-4 space-y-2 border-t bg-card/90 px-4 py-3 backdrop-blur-md md:-mx-7 md:px-7"
+      className="sticky bottom-0 z-20 -mx-4 mt-2 space-y-2 border-t bg-card/90 px-4 py-3 shadow-[0_-8px_24px_-16px_rgb(22_32_28/0.18)] backdrop-blur-md md:-mx-8 md:px-8"
     >
       {children}
     </div>
@@ -85,7 +86,7 @@ export function SaveBar({ id, etag, dirty, summary, breakdown, canSave = true, g
   return (
     <ActionBarFrame>
       {noEtag && !etag && (
-        <div role="alert" className="flex items-center gap-3 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm">
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/30 bg-destructive-soft p-3 text-sm text-destructive">
           <span>This request can’t be saved right now — reload and try again.</span>
           <Button size="sm" variant="outline" onClick={reload}>
             Reload
@@ -95,8 +96,8 @@ export function SaveBar({ id, etag, dirty, summary, breakdown, canSave = true, g
       {error !== null && <ProblemAlert error={error} />}
       <div className="flex flex-wrap items-center gap-2.5">
         {dirty && summary && (
-          <div className="flex items-center gap-2 text-[13px]">
-            <span className="size-2 rounded-full bg-amber-500" aria-hidden />
+          <div className="flex items-center gap-2 text-[13px] animate-in fade-in-0 slide-in-from-bottom-1 duration-200">
+            <span className="size-2 rounded-full bg-warning ring-4 ring-warning/15" aria-hidden />
             <b className="font-semibold">{summary}</b>
             {breakdown && <span className="text-xs text-muted-foreground">{breakdown}</span>}
           </div>
@@ -104,7 +105,7 @@ export function SaveBar({ id, etag, dirty, summary, breakdown, canSave = true, g
         <div className="flex-1" />
         <Input
           aria-label="Note"
-          className="h-8 w-56"
+          className="h-8 w-full sm:w-56"
           placeholder="What did you fix? (optional)"
           value={note}
           onChange={(e) => setNote(e.target.value)}
@@ -116,6 +117,7 @@ export function SaveBar({ id, etag, dirty, summary, breakdown, canSave = true, g
         )}
         {validate}
         <Button size="sm" variant="outline" onClick={onSave} disabled={!dirty || !canSave || save.isPending}>
+          {save.isPending && <Loader2Icon className="animate-spin" aria-hidden />}
           {save.isPending ? 'Saving…' : 'Save'}
         </Button>
         {post}

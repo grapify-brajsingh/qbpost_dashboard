@@ -11,12 +11,13 @@ Built with React, TypeScript, Vite, Tailwind/shadcn, TanStack Query and React Ro
 
 | Route | Page |
 | --- | --- |
+| `/` | Home (landing page after sign-in): the live queue (to review, has errors, possible duplicates, needs a decision), what moved in the last 7 / 30 / 90 days against the period before, a received-vs-posted chart, all statements by status, waiting times and the oldest statements, recent activity. Every figure links to the page that lists it |
 | `/statements` | Statements: status tabs, filters kept in the URL, new-arrivals pill |
 | `/statements/:id` | One statement: reconciliation meter, editable rows with a Post switch per row, Validate, Post; the Results, History and Versions sheet opens beside it |
 | `/audit` | Audit trail: every event across statements and users, visible to every role |
 | `/users`, `/users/:id` | Users: filters, inline actions, activity (needs `users:manage`) |
 | `/account` | My account: change password |
-| `/`, `/requests`, `/requests/:id` | Redirect to the `/statements` equivalents (same id, query string kept) |
+| `/requests`, `/requests/:id` | Old v1 addresses: redirect to the `/statements` equivalents (same id, query string kept) |
 
 ## Run it
 
@@ -60,13 +61,18 @@ relative `/api/v1` URLs. No `.env` is needed in production.
 ## What the fake API assumes
 
 The mock API in `src/mocks/` stands in for endpoints the real API does not have yet. Everything it assumes is
-specified in [docs/api-requirements-for-dashboard.md](docs/api-requirements-for-dashboard.md), R-1 to R-9:
+specified in [docs/api-requirements-for-dashboard.md](docs/api-requirements-for-dashboard.md), which has a tracker of
+every requirement's status, the list of APIs the dashboard needs built, and a changelog:
 
 - R-1 email subject and received time on every saved request; R-2 the API serves the dashboard from the same origin.
 - R-3 and R-4 long-running post and small contract confirmations.
 - R-5 a push ID (GUID) that n8n sends with every push; R-6 per-row "don't post" and rows added in the dashboard.
 - R-7 one audit feed for the Audit trail page; R-8 Statements list summary fields and filters.
 - R-9 users status filter and the row TxnIDs of a posted attempt.
+- R-10 what the Home page relies on today (exact audit-feed totals, inclusive time filters, one event per received /
+  posted / failed / discarded). Home needs no new endpoint.
+- R-11 *(suggested, not mocked)* `GET /dashboard/summary`: Home's figures in one call, plus posted value and time to
+  post. R-12 *(nice to have, not mocked)* posted-time and time-zone-aware filters on the Statements list.
 
 ## Generating API types
 
@@ -86,14 +92,32 @@ production build does not include the mock service worker.
 
 ## Known issues
 
-- The production bundle's main chunk is about 720 kB (about 220 kB gzipped), so Vite prints its 500 kB chunk-size
+- The production bundle's main chunk is about 950 kB (about 285 kB gzipped), so Vite prints its 500 kB chunk-size
   warning. Route-level lazy loading (React Router `lazy`) for the request detail and Users routes was tried, but
   it only brought the main chunk to about 580 kB, still above the limit, and it broke five route tests that
-  expect synchronous rendering, so it was reverted.
+  expect synchronous rendering, so it was reverted. The Home page's chart (Recharts) is loaded with `React.lazy`
+  in its own chunk (about 110 kB gzipped) so it does not add to the main one.
+- Two tests in `src/features/statements/detail/StatementPage.test.tsx` can exceed Vitest's 5 s per-test timeout when
+  the whole suite runs in parallel on a busy machine. They take 2–3 s and pass when that file runs alone.
+- Mock fixtures are dated 2026-10-19 to 2026-10-27, so in mock mode the Home page's "previous period" comparisons
+  read "None in the previous N days", and fixtures drop out of the 7-day view as time passes.
 - True cross-tab session refresh (two tabs sharing the refresh cookie) is covered by the unit test in
   `src/api/session.test.ts`. It cannot be checked in mock mode, where the session is per page, and needs the real API.
 
+## Making changes
+
+Every code change starts with a written spec and plan in `docs/superpowers/specs/` and `docs/superpowers/plans/`,
+written before any code and updated with the results afterwards. A change that needs something new from the API also
+updates `docs/api-requirements-for-dashboard.md` (requirement, tracker row, changelog line) and the mock API in
+`src/mocks/`. The rules, the architecture and the conventions are in [`CLAUDE.md`](CLAUDE.md).
+
 ## Further reading
 
-- Design: [`docs/superpowers/specs/2026-10-27-qbautopost-dashboard-design.md`](docs/superpowers/specs/2026-10-27-qbautopost-dashboard-design.md)
+| | Spec | Plan |
+| --- | --- | --- |
+| v1: foundations, auth, posting, versions | [`2026-10-27-qbautopost-dashboard-design.md`](docs/superpowers/specs/2026-10-27-qbautopost-dashboard-design.md) | [`2026-10-27-qbautopost-dashboard.md`](docs/superpowers/plans/2026-10-27-qbautopost-dashboard.md) |
+| v2: Statements, statement page, Audit trail, Users | [`2026-10-28-dashboard-v2-pages-design.md`](docs/superpowers/specs/2026-10-28-dashboard-v2-pages-design.md) | [`2026-10-28-dashboard-v2-pages.md`](docs/superpowers/plans/2026-10-28-dashboard-v2-pages.md) |
+| Home dashboard | [`2026-10-28-home-dashboard-spec.md`](docs/superpowers/specs/2026-10-28-home-dashboard-spec.md) | [`2026-10-28-home-dashboard-plan.md`](docs/superpowers/plans/2026-10-28-home-dashboard-plan.md) |
+
 - What the dashboard needs from the API: [`docs/api-requirements-for-dashboard.md`](docs/api-requirements-for-dashboard.md)
+- Original product brief: [`qbautopost-dashboard-brief.md`](qbautopost-dashboard-brief.md)

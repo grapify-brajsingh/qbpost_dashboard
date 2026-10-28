@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Outlet } from 'react-router'
+import { Separator } from '@/components/ui/separator'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AppSidebar } from './AppSidebar'
@@ -18,10 +19,11 @@ export function AppShell() {
         <SidebarProvider>
           <AppSidebar onOpenSearch={() => setSearchOpen(true)} />
           <SidebarInset className="min-w-0">
-            <header className="flex h-14 items-center gap-3 border-b bg-card px-4 md:px-7">
-              <SidebarTrigger aria-label="Menu" />
+            <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b bg-background/85 px-3 backdrop-blur-md md:px-6">
+              <SidebarTrigger aria-label="Menu" className="text-muted-foreground" />
+              <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-5" />
               <Breadcrumb />
-              <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="ml-auto flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
                 <DbHealthLight />
                 <span className="hidden sm:inline">API and database</span>
               </div>

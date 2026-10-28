@@ -50,11 +50,11 @@ export function DateRangeChip({ label, from, to, onChange }: DateRangeChipProps)
             type="button"
             className={cn(
               chipClass,
-              isSet ? 'rounded-r-none border-solid text-foreground' : 'border-dashed text-muted-foreground',
+              isSet ? 'rounded-r-none border-solid border-primary/35 bg-primary-soft font-medium text-foreground' : 'border-dashed text-muted-foreground',
             )}
           >
             <CalendarIcon className="size-3.5" aria-hidden />
-            {isSet ? `${label}: ${shown}` : `+ ${label}`}
+            {isSet ? `${label}: ${shown}` : label}
           </button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-auto p-0">
@@ -86,7 +86,7 @@ export function DateRangeChip({ label, from, to, onChange }: DateRangeChipProps)
         <button
           type="button"
           aria-label={`Clear ${label} filter`}
-          className={cn(chipClass, 'rounded-l-none border-l-0 px-1.5 text-muted-foreground')}
+          className={cn(chipClass, 'rounded-l-none border-l-0 border-primary/35 bg-primary-soft px-1.5 text-muted-foreground')}
           onClick={() => onChange({ from: undefined, to: undefined })}
         >
           <XIcon className="size-3.5" aria-hidden />

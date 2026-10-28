@@ -9,17 +9,17 @@ import { ValueDiff } from '@/features/audit/ValueDiff'
 
 function Entry({ e }: { e: AuditEvent }) {
   return (
-    <li className="relative border-l pl-4">
-      <span aria-hidden className="absolute -left-[5px] top-1.5 size-2.5 rounded-full bg-primary" />
+    <li className="relative ml-1 border-l pb-5 pl-5 last:border-transparent last:pb-0">
+      <span aria-hidden className="absolute top-1 -left-[5px] size-2.5 rounded-full bg-primary ring-4 ring-background" />
       <p className="text-sm">
         <span className="font-medium">{e.actor.name}</span> · {auditSentence(e)}
       </p>
       {(e.old != null || e.new != null) && (
-        <p className="text-sm">
+        <p className="mt-1 text-sm">
           <ValueDiff old={e.old} new={e.new} />
         </p>
       )}
-      <p className="text-xs text-muted-foreground">
+      <p className="mt-0.5 text-xs text-muted-foreground">
         <Timestamp utc={e.atUtc} />
       </p>
     </li>
@@ -37,13 +37,13 @@ export function HistoryTimeline({ requestId }: { requestId: number }) {
       {events.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nothing recorded yet.</p>
       ) : (
-        <ul aria-label="History" className="space-y-4">
+        <ul aria-label="History">
           {events.map((e) => (
             <Entry key={e.id} e={e} />
           ))}
         </ul>
       )}
-      <Link className="text-sm text-primary underline" to={`/audit?requestId=${requestId}`}>
+      <Link className="inline-block text-sm font-medium text-primary underline-offset-2 hover:underline" to={`/audit?requestId=${requestId}`}>
         Open in Audit trail
       </Link>
     </div>

@@ -29,19 +29,27 @@ export function StatusTabs({
 }) {
   return (
     <Tabs value={value} onValueChange={(v) => onChange(v as StatusTab)}>
-      <TabsList>
-        {STATUS_TABS.map((t) => (
-          <TabsTrigger key={t.id} value={t.id}>
-            {t.label}
-            {stats && (
-              <>
-                {' '}
-                <span className="text-muted-foreground tabular-nums">{countFor(t.id, stats, isAdmin)}</span>
-              </>
-            )}
-          </TabsTrigger>
-        ))}
-      </TabsList>
+      <div className="-mx-4 overflow-x-auto overflow-y-hidden px-4 [scrollbar-width:none] md:mx-0 md:px-0">
+        <TabsList variant="line" className="h-10 w-full min-w-max justify-start gap-1 rounded-none border-b p-0">
+          {STATUS_TABS.map((t) => (
+            <TabsTrigger
+              key={t.id}
+              value={t.id}
+              className="group/tab h-10 flex-none px-3 after:bg-primary group-data-[orientation=horizontal]/tabs:after:bottom-0 data-[state=active]:text-foreground"
+            >
+              {t.label}
+              {stats && (
+                <>
+                  {' '}
+                  <span className="rounded-md bg-muted px-1.5 py-px text-xs font-medium text-muted-foreground tabular-nums transition-colors group-data-[state=active]/tab:bg-primary-soft group-data-[state=active]/tab:text-primary">
+                    {countFor(t.id, stats, isAdmin)}
+                  </span>
+                </>
+              )}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </div>
     </Tabs>
   )
 }

@@ -27,7 +27,7 @@ interface FilterChipProps {
 }
 
 export const chipClass =
-  'inline-flex h-[30px] items-center gap-1.5 rounded-lg border bg-card px-2.5 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring'
+  'inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-card px-2.5 text-[13px] whitespace-nowrap outline-none transition-colors duration-150 hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40'
 
 /** Dashed "+ Label" when unset; solid "Label: value" with a clear button when set. */
 export function FilterChip({ label, value, options, children, onChange }: FilterChipProps) {
@@ -43,7 +43,7 @@ export function FilterChip({ label, value, options, children, onChange }: Filter
             type="button"
             className={cn(
               chipClass,
-              isSet ? 'rounded-r-none border-solid text-foreground' : 'border-dashed text-muted-foreground',
+              isSet ? 'rounded-r-none border-solid border-primary/35 bg-primary-soft font-medium text-foreground' : 'border-dashed text-muted-foreground',
             )}
           >
             {isSet ? (
@@ -87,7 +87,7 @@ export function FilterChip({ label, value, options, children, onChange }: Filter
         <button
           type="button"
           aria-label={`Clear ${label} filter`}
-          className={cn(chipClass, 'rounded-l-none border-l-0 px-1.5 text-muted-foreground')}
+          className={cn(chipClass, 'rounded-l-none border-l-0 border-primary/35 bg-primary-soft px-1.5 text-muted-foreground')}
           onClick={() => onChange(undefined)}
         >
           <XIcon className="size-3.5" aria-hidden />

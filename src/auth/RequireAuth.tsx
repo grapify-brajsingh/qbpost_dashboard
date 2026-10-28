@@ -1,11 +1,15 @@
 import type { ReactNode } from 'react'
+import { Loader2Icon } from 'lucide-react'
 import { Navigate, useLocation } from 'react-router'
 import { useSession } from './useSession'
 
 export function FullPageLoading() {
   return (
-    <div role="status" className="grid min-h-screen place-items-center text-muted-foreground">
-      Loading…
+    <div role="status" className="grid min-h-screen place-items-center text-sm text-muted-foreground">
+      <span className="flex items-center gap-2.5 animate-in fade-in-0 delay-150 fill-mode-backwards duration-300">
+        <Loader2Icon className="size-4 animate-spin" aria-hidden />
+        Loading…
+      </span>
     </div>
   )
 }

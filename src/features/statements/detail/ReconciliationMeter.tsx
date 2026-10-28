@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { CheckIcon, MinusIcon, PencilIcon, TriangleAlertIcon } from 'lucide-react'
 import { formatCents, formatMoney, toCents } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import type { PostStats } from '@/features/requests/transactions/draft'
@@ -36,26 +37,33 @@ export function ReconciliationMeter({ allCents, controlTotal, postStats, onContr
   else if (diff < 0) label = `Short by ${formatCents(-diff)}`
   else label = `Over by ${formatCents(diff)}`
 
+  const tone = diff === 0 ? 'ok' : 'out'
+  const DeltaIcon = diff === 0 ? CheckIcon : diff === null ? MinusIcon : TriangleAlertIcon
+
   return (
     <section
       aria-label="Reconciliation"
-      className="grid items-center gap-5 rounded-[10px] border bg-card px-[18px] py-4 md:grid-cols-[auto_1fr_auto]"
+      className="grid items-center gap-x-8 gap-y-4 rounded-lg border bg-card px-5 py-4 md:grid-cols-[auto_minmax(0,1fr)_auto]"
     >
-      <div className="text-xs text-muted-foreground">
+      {/* The footing: the figure everything else is measured against. */}
+      <div className="text-[13px] text-muted-foreground">
         Sum of all rows
-        <div data-testid="meter-sum" className="text-[22px] font-semibold tracking-tight text-foreground tabular-nums">
+        <div data-testid="meter-sum" className="mt-0.5 text-[28px] leading-none font-semibold tracking-[-0.02em] text-foreground tabular-nums">
           {formatCents(allCents)}
         </div>
       </div>
-      <div>
-        <div className="relative h-2.5 overflow-hidden rounded-full bg-muted">
+      <div className="min-w-0">
+        <div className="relative h-1.5 overflow-hidden rounded-full bg-muted">
           <div
             data-testid="meter-bar"
-            className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-primary to-cyan-400 transition-[width] duration-500 motion-reduce:transition-none"
+            className={cn(
+              'absolute inset-y-0 left-0 rounded-full transition-[width,background-color] duration-500 ease-out-soft motion-reduce:transition-none',
+              tone === 'ok' ? 'bg-success' : 'bg-primary',
+            )}
             style={{ width: `${width}%` }}
           />
         </div>
-        <div className="mt-[7px] flex flex-wrap justify-between gap-x-4 text-xs text-muted-foreground tabular-nums">
+        <div className="mt-2 flex flex-wrap justify-between gap-x-4 gap-y-1 text-xs text-muted-foreground tabular-nums">
           <span>{`${postStats.posting} of ${postStats.total} rows will post${skipped}`}</span>
           {onControlTotal ? (
             <span className="flex flex-wrap items-center gap-1">
@@ -82,15 +90,13 @@ export function ReconciliationMeter({ allCents, controlTotal, postStats, onContr
                   data-testid="control-total"
                   data-dirty={was ? 'true' : undefined}
                   className={cn(
-                    'group/ct rounded px-1 font-medium text-foreground tabular-nums hover:bg-primary/5 focus-visible:ring-2 focus-visible:ring-ring',
-                    was && 'bg-primary/10',
+                    'group/ct inline-flex items-center gap-1 rounded-md border border-dashed border-input px-1.5 py-0.5 font-medium text-foreground tabular-nums transition-colors outline-none hover:border-primary/50 hover:bg-primary-soft focus-visible:ring-[3px] focus-visible:ring-ring/40',
+                    was && 'border-solid border-primary/40 bg-primary-soft',
                   )}
                   onClick={() => setEditing(true)}
                 >
                   {ct === null ? 'none' : formatCents(ct)}
-                  <span aria-hidden className="ml-1 opacity-0 group-hover/ct:opacity-100">
-                    ✎
-                  </span>
+                  <PencilIcon aria-hidden className="size-3 text-muted-foreground transition-colors group-hover/ct:text-primary" />
                 </button>
               )}
               {was && <span className="text-[11px] text-primary">was {shownTotal(was.value)}</span>}
@@ -101,13 +107,16 @@ export function ReconciliationMeter({ allCents, controlTotal, postStats, onContr
           )}
         </div>
       </div>
+      {/* The result, ruled off twice the way a bookkeeper closes a column. */}
       <div
         data-testid="meter-delta"
         className={cn(
-          'rounded-lg px-2.5 py-1.5 text-[13px] font-semibold tabular-nums',
+          'rule-double flex items-center gap-2 justify-self-start rounded-md px-3 py-2 text-sm font-semibold tabular-nums transition-colors duration-300 md:justify-self-end',
           diff === 0 ? 'bg-success-soft text-success' : 'bg-destructive-soft text-destructive',
         )}
+        style={{ borderTopColor: 'currentColor' }}
       >
+        <DeltaIcon aria-hidden className="size-4 shrink-0" />
         {label}
       </div>
     </section>

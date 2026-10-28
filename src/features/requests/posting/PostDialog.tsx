@@ -64,21 +64,21 @@ function Body({ request, seenPayload, duplicate, changed, onConfirm, onCancel }:
           {' This sends the saved version to QuickBooks.'}
         </DialogDescription>
       </DialogHeader>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 rounded-lg border bg-muted/40 px-4 py-3 text-sm">
         <dt className="text-muted-foreground">Subject</dt>
         <dd>{request.email?.subject ?? 'No subject'}</dd>
         <dt className="text-muted-foreground">Rows</dt>
         <dd>{`${stats.total} ${stats.total === 1 ? 'row' : 'rows'}`}</dd>
         <dt className="text-muted-foreground">Control total</dt>
-        <dd className="tabular-nums">{formatMoney(typeof seenPayload.controlTotal === 'number' ? seenPayload.controlTotal : null)}</dd>
+        <dd className="font-medium tabular-nums">{formatMoney(typeof seenPayload.controlTotal === 'number' ? seenPayload.controlTotal : null)}</dd>
       </dl>
       <div className="space-y-1 text-sm">
         <p>Validation: {STATE_LABEL[v.state]}</p>
-        {v.state !== 'ok' && <p className="text-amber-700 dark:text-amber-400">Validation found problems. The API checks again before posting.</p>}
-        {outdated && <p className="font-medium text-amber-700 dark:text-amber-400">Validation is out of date</p>}
+        {v.state !== 'ok' && <p className="text-warning">Validation found problems. The API checks again before posting.</p>}
+        {outdated && <p className="font-medium text-warning">Validation is out of date</p>}
       </div>
       {changed && (
-        <p role="alert" className="text-sm font-medium text-amber-700 dark:text-amber-400">
+        <p role="alert" className="text-sm font-medium text-warning">
           This request changed while this dialog was open.
         </p>
       )}
@@ -112,7 +112,7 @@ const OTHER_PUSH_STATE: Partial<Record<string, string>> & { pending: string } = 
 
 function OtherPushes({ pushes }: { pushes: OtherPush[] }) {
   return (
-    <div className="space-y-1 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
+    <div className="space-y-1 rounded-lg border border-warning/30 bg-warning-soft p-3 text-sm">
       {pushes.map((p) => (
         <p key={p.id}>
           <Link className="underline" to={`/statements/${p.id}`} target="_blank" rel="noopener noreferrer">
@@ -142,8 +142,8 @@ function DuplicateBlock({ duplicate, anyway, onAnyway }: { duplicate: DuplicateI
   const ref = duplicate.ofRef || other.data?.publicRef || (of !== null ? `#${of}` : 'another request')
   const status = duplicate.ofStatus || other.data?.status
   return (
-    <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
-      <p className="font-medium">{status ? `Possible duplicate of ${ref} (${status})` : `Possible duplicate of ${ref}`}</p>
+    <div className="space-y-2 rounded-lg border border-warning/30 bg-warning-soft p-3 text-sm">
+      <p className="font-medium text-warning">{status ? `Possible duplicate of ${ref} (${status})` : `Possible duplicate of ${ref}`}</p>
       {of !== null && (
         <Link className="underline" to={`/statements/${of}`} target="_blank" rel="noreferrer">
           Open the other request

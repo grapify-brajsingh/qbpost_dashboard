@@ -1,14 +1,22 @@
 import { useState } from 'react'
+import { CheckCircle2Icon, MonitorIcon, MoonIcon, SunIcon } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { ChangePasswordForm } from '@/auth/ChangePasswordPage'
 import { useSession } from '@/auth/useSession'
+import { PageHeader } from '@/components/PageHeader'
+import { SettingsSection } from '@/components/SettingsSection'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
 const ROLE_LABEL = { admin: 'Admin', editor: 'Editor', viewer: 'Viewer' } as const
+const ROLE_HELP = {
+  admin: 'You can review, edit and post statements, restore discarded ones, resolve uncertain posts, and manage users.',
+  editor: 'You can review, edit, discard and post statements.',
+  viewer: 'You can read statements and the audit trail, but not change them.',
+} as const
 const THEMES = [
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-  { value: 'system', label: 'Match computer' },
+  { value: 'light', label: 'Light', icon: SunIcon },
+  { value: 'dark', label: 'Dark', icon: MoonIcon },
+  { value: 'system', label: 'Match computer', icon: MonitorIcon },
 ] as const
 
 export function AccountPage() {
@@ -17,56 +25,52 @@ export function AccountPage() {
   const [changed, setChanged] = useState(false)
   if (!me) return null
   return (
-    <div className="max-w-3xl space-y-6 p-6 md:px-7">
-      <div>
-        <h1 className="text-[22px] font-semibold tracking-tight">My account</h1>
-        <p className="mt-1 text-muted-foreground">Your details, how the dashboard looks, and your password.</p>
+    <div className="page max-w-4xl">
+      <PageHeader title="My account" description="Your details, how the dashboard looks, and your password." />
+
+      <div className="rounded-lg border bg-card px-5 py-7 sm:px-7">
+        <SettingsSection title="Your details" description="Ask an admin to change your name or role.">
+          <dl className="grid grid-cols-[6rem_minmax(0,1fr)] gap-y-3 text-sm">
+            <dt className="text-muted-foreground">Name</dt>
+            <dd className="font-medium">{me.displayName}</dd>
+            <dt className="text-muted-foreground">Email</dt>
+            <dd className="break-all">{me.email}</dd>
+            <dt className="text-muted-foreground">Role</dt>
+            <dd>{ROLE_LABEL[me.role]}</dd>
+          </dl>
+          <p className="mt-3 text-xs text-muted-foreground">{ROLE_HELP[me.role]}</p>
+        </SettingsSection>
+
+        <SettingsSection title="Appearance" description="Saved in this browser.">
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            aria-label="Theme"
+            value={theme ?? 'system'}
+            onValueChange={(v) => v && setTheme(v)}
+            className="flex-wrap"
+          >
+            {THEMES.map((t) => (
+              <ToggleGroupItem key={t.value} value={t.value} className="gap-1.5 px-3 data-[state=on]:bg-primary-soft data-[state=on]:text-primary">
+                <t.icon aria-hidden />
+                {t.label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </SettingsSection>
+
+        <SettingsSection title="Change password" description="Enter your current password, then the new one twice.">
+          {changed && (
+            <p role="status" className="mb-4 flex items-center gap-2 text-sm text-success animate-in fade-in-0 duration-200">
+              <CheckCircle2Icon className="size-4" aria-hidden />
+              Password changed.
+            </p>
+          )}
+          <div className="max-w-sm">
+            <ChangePasswordForm onChanged={() => setChanged(true)} />
+          </div>
+        </SettingsSection>
       </div>
-
-      <section className="space-y-3 rounded-[10px] border bg-card p-5" aria-labelledby="account-details">
-        <h2 id="account-details" className="text-base font-semibold">
-          Your details
-        </h2>
-        <dl className="grid grid-cols-[7rem_1fr] gap-y-2 text-sm">
-          <dt className="text-muted-foreground">Name</dt>
-          <dd>{me.displayName}</dd>
-          <dt className="text-muted-foreground">Email</dt>
-          <dd>{me.email}</dd>
-          <dt className="text-muted-foreground">Role</dt>
-          <dd>{ROLE_LABEL[me.role]}</dd>
-        </dl>
-      </section>
-
-      <section className="space-y-3 rounded-[10px] border bg-card p-5" aria-labelledby="account-theme">
-        <h2 id="account-theme" className="text-base font-semibold">
-          Appearance
-        </h2>
-        <ToggleGroup
-          type="single"
-          variant="outline"
-          aria-label="Theme"
-          value={theme ?? 'system'}
-          onValueChange={(v) => v && setTheme(v)}
-        >
-          {THEMES.map((t) => (
-            <ToggleGroupItem key={t.value} value={t.value}>
-              {t.label}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-      </section>
-
-      <section className="space-y-3 rounded-[10px] border bg-card p-5" aria-labelledby="account-password">
-        <h2 id="account-password" className="text-base font-semibold">
-          Change password
-        </h2>
-        {changed && (
-          <p role="status" className="text-sm text-success">
-            Password changed.
-          </p>
-        )}
-        <ChangePasswordForm onChanged={() => setChanged(true)} />
-      </section>
     </div>
   )
 }

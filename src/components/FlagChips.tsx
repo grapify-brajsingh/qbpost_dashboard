@@ -1,3 +1,4 @@
+import { CopyIcon, TriangleAlertIcon } from 'lucide-react'
 import { Link } from 'react-router'
 import type { RequestSummary } from '@/api/schema'
 import { Badge } from '@/components/ui/badge'
@@ -11,11 +12,21 @@ export function FlagChips({ request, linkDuplicate = false }: { request: Request
   return (
     <span className="flex flex-wrap gap-1">
       {request.needsAttention && (
-        <Badge className="bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-200">Needs attention</Badge>
+        <Badge variant="danger">
+          <TriangleAlertIcon aria-hidden />
+          Needs attention
+        </Badge>
       )}
       {dupText && (
-        <Badge className="bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200">
-          {linkDuplicate && dup.of !== null ? <Link to={`/statements/${dup.of}`}>{dupText}</Link> : dupText}
+        <Badge variant="warning">
+          <CopyIcon aria-hidden />
+          {linkDuplicate && dup.of !== null ? (
+            <Link className="underline-offset-2 hover:underline" to={`/statements/${dup.of}`}>
+              {dupText}
+            </Link>
+          ) : (
+            dupText
+          )}
         </Badge>
       )}
     </span>

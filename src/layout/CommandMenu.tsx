@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { FileTextIcon, HistoryIcon, UserIcon, UsersIcon, type LucideIcon } from 'lucide-react'
+import { FileTextIcon, HistoryIcon, LayoutDashboardIcon, UserIcon, UsersIcon, type LucideIcon } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { useRequestsList } from '@/api/queries/requests'
 import { hasScope, useSession } from '@/auth/useSession'
@@ -23,6 +23,7 @@ interface PageEntry {
 }
 
 const PAGES: PageEntry[] = [
+  { label: 'Home', to: '/', icon: LayoutDashboardIcon },
   { label: 'Statements', to: '/statements', icon: FileTextIcon },
   { label: 'Audit trail', to: '/audit', icon: HistoryIcon },
   { label: 'Users', to: '/users', icon: UsersIcon, adminOnly: true },

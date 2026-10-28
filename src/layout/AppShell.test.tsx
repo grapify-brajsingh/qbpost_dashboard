@@ -28,6 +28,7 @@ describe('sidebar', () => {
     mockControl.signInAs('u-admin')
     const first = renderApp('/statements')
     expect(await screen.findByRole('link', { name: /Statements/ })).toHaveAttribute('href', '/statements')
+    expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/')
     expect(screen.getByRole('link', { name: 'Audit trail' })).toHaveAttribute('href', '/audit')
     expect(screen.getByRole('link', { name: 'My account' })).toHaveAttribute('href', '/account')
     expect(screen.getByRole('link', { name: 'Users' })).toHaveAttribute('href', '/users')
@@ -86,14 +87,15 @@ describe('sidebar', () => {
 })
 
 describe('routes', () => {
-  test('/requests/5?x=1 redirects to /statements/5?x=1; / and /requests go to /statements', async () => {
+  test('/requests/5?x=1 redirects to /statements/5?x=1; /requests goes to /statements; / is Home', async () => {
     mockControl.signInAs('u-admin')
     const { router } = renderApp('/requests/5?x=1')
     await waitFor(() => expect(router.state.location.pathname + router.state.location.search).toBe('/statements/5?x=1'))
     await act(() => router.navigate('/requests'))
     await waitFor(() => expect(router.state.location.pathname).toBe('/statements'))
     await act(() => router.navigate('/'))
-    await waitFor(() => expect(router.state.location.pathname).toBe('/statements'))
+    expect(await screen.findByRole('heading', { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/')
   })
 
   test('the breadcrumb shows the parent trail on a detail page', async () => {

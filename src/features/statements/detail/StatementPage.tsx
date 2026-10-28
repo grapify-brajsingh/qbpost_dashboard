@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { FileQuestionIcon, Loader2Icon, SendIcon, ShieldCheckIcon } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { ApiError } from '@/api/problem'
 import { useRequest, useValidate } from '@/api/queries/requests'
@@ -44,6 +45,22 @@ function allSkipped(request: RequestDetail): boolean {
   return Array.isArray(rows) && rows.length > 0 && rows.every((r) => typeof r === 'object' && r !== null && !isPosting(r as Txn))
 }
 
+/** The page's outline while the statement loads, so the layout does not jump when it arrives. */
+function StatementSkeleton() {
+  return (
+    <div role="status" aria-label="Loading statement" className="page gap-4">
+      <span className="sr-only">Loading…</span>
+      <div className="space-y-3">
+        <Skeleton className="h-7 w-2/5" />
+        <Skeleton className="h-4 w-3/5" />
+      </div>
+      <Skeleton className="h-[84px] w-full rounded-lg" />
+      <Skeleton className="h-8 w-1/2" />
+      <Skeleton className="h-[50vh] w-full rounded-lg" />
+    </div>
+  )
+}
+
 /** `/statements/:id`. Mounted keyed by id: nothing (draft, post state, dialogs) carries over to another statement. */
 export function StatementPage() {
   const { id = '' } = useParams()
@@ -65,20 +82,26 @@ export function StatementPage() {
     if (outcome?.kind === 'duplicate' && sent) setDialog({ dup: outcome.duplicate ?? { of: null }, seen: sent })
   }, [outcome, sent])
 
-  if (q.isPending) return <Skeleton className="m-6 h-40" />
+  if (q.isPending) return <StatementSkeleton />
   if (q.data === undefined) {
     if (q.error instanceof ApiError && q.error.problem.status === 404) {
       return (
-        <div className="p-6">
-          <h1 className="text-xl font-semibold">Statement not found</h1>
-          <Link className="underline" to="/statements">
-            Back to Statements
-          </Link>
+        <div className="page">
+          <div className="grid justify-items-center gap-2 py-16 text-center">
+            <span className="mb-1 grid size-10 place-items-center rounded-full bg-muted text-muted-foreground">
+              <FileQuestionIcon className="size-5" aria-hidden />
+            </span>
+            <h1 className="text-lg font-semibold">Statement not found</h1>
+            <p className="max-w-[44ch] text-sm text-muted-foreground">It may have been removed, or the link is wrong.</p>
+            <Button asChild variant="outline" size="sm" className="mt-2">
+              <Link to="/statements">Back to Statements</Link>
+            </Button>
+          </div>
         </div>
       )
     }
     return (
-      <div className="p-6">
+      <div className="page">
         <ProblemAlert error={q.error} />
       </div>
     )
@@ -111,6 +134,7 @@ export function StatementPage() {
 
   const validateButton = can('validate') ? (
     <Button variant="outline" size="sm" disabled={validate.isPending} onClick={() => validate.mutate()}>
+      {validate.isPending ? <Loader2Icon className="animate-spin" aria-hidden /> : <ShieldCheckIcon aria-hidden />}
       {validate.isPending ? 'Validating…' : 'Validate'}
     </Button>
   ) : undefined
@@ -119,6 +143,7 @@ export function StatementPage() {
       <TooltipTrigger asChild>
         <span tabIndex={0}>
           <Button size="sm" disabled>
+            <SendIcon aria-hidden />
             Post to QuickBooks
           </Button>
         </span>
@@ -127,12 +152,13 @@ export function StatementPage() {
     </Tooltip>
   ) : (
     <Button size="sm" onClick={openPost}>
+      <SendIcon aria-hidden />
       Post to QuickBooks
     </Button>
   )
 
   return (
-    <div className="space-y-4 px-4 pt-6 md:px-7">
+    <div className="page gap-4 pb-0 md:pb-0">
       {q.error && <ProblemAlert error={q.error} />}
       <StatementHeader request={request} title={titleOf(request)} onOpenSheet={(tab) => sheet.open(request.id, tab)} onMenu={setOther} />
       <StatusBanner request={request} />

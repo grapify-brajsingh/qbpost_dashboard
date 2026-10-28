@@ -4,8 +4,10 @@ import { parsePage } from '@/lib/pageParam'
 import { STATS_POLL_MS, useRequestsList, useStats, type ListParams } from '@/api/queries/requests'
 import { useSession, hasScope } from '@/auth/useSession'
 import { useUrlFilters } from '@/components/filters'
+import { InboxIcon, SearchXIcon } from 'lucide-react'
+import { DataPanel, EmptyState, Pager, TableSkeleton } from '@/components/DataPanel'
+import { PageHeader } from '@/components/PageHeader'
 import { ProblemAlert } from '@/components/ProblemAlert'
-import { Button } from '@/components/ui/button'
 import { NewArrivalsPill } from './NewArrivalsPill'
 import { StatementSheet } from '@/features/statements/sheet/StatementSheet'
 import { useStatementSheet } from '@/features/statements/sheet/useStatementSheet'
@@ -94,49 +96,52 @@ export function StatementsPage({ onOpenSheet }: { onOpenSheet?: (id: number, tab
 
   const pages = Math.max(1, Math.ceil(total / pageSize))
 
+  const allClear = tab === 'review' && filters.activeCount === 0
+
   return (
-    <div className="grid gap-4 p-6">
-      <div className="flex items-center gap-4">
-        <h1 className="text-[22px] font-semibold">Statements</h1>
-        {newCount > 0 && <NewArrivalsPill count={newCount} onShow={() => void showNew()} />}
-      </div>
-      <StatusTabs value={tab} stats={stats.data} isAdmin={isAdmin} onChange={(t) => view.set({ tab: t === 'review' ? undefined : t })} />
-      <StatementsToolbar
-        filters={f}
-        onSet={(patch) => filters.set(patch)}
-        onClear={filters.clear}
-        activeCount={filters.activeCount}
+    <div className="page">
+      <PageHeader
+        title="Statements"
+        description="Check each statement against its PDF, fix what n8n read wrong, then post it to QuickBooks."
+        aside={newCount > 0 && <NewArrivalsPill count={newCount} onShow={() => void showNew()} />}
       />
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
+        <StatusTabs value={tab} stats={stats.data} isAdmin={isAdmin} onChange={(t) => view.set({ tab: t === 'review' ? undefined : t })} />
+        <StatementsToolbar
+          filters={f}
+          onSet={(patch) => filters.set(patch)}
+          onClear={filters.clear}
+          activeCount={filters.activeCount}
+        />
+      </div>
       {list.isError ? (
         <ProblemAlert error={list.error} />
-      ) : !list.data ? (
-        <p className="text-muted-foreground">Loading…</p>
-      ) : list.data.items.length === 0 ? (
-        <p className="py-10 text-center text-muted-foreground">
-          {tab === 'review' && filters.activeCount === 0 ? 'All clear. Nothing waiting.' : 'No statements match.'}
-        </p>
       ) : (
-        <StatementsTable
-          items={list.data.items}
-          sort={sort}
-          onSort={(next) => view.set({ sort: next === DEFAULT_SORT ? undefined : next })}
-          lastSeen={seenAt}
-          onOpenSheet={openSheet}
-        />
+        <DataPanel>
+          {!list.data ? (
+            <TableSkeleton columns={6} />
+          ) : list.data.items.length === 0 ? (
+            allClear ? (
+              <EmptyState icon={InboxIcon} title="All clear. Nothing waiting." description="New statements appear here as soon as n8n saves them." />
+            ) : (
+              <EmptyState
+                icon={SearchXIcon}
+                title="No statements match."
+                description={filters.activeCount > 0 ? 'Try another tab, or clear the filters above.' : 'Try another tab.'}
+              />
+            )
+          ) : (
+            <StatementsTable
+              items={list.data.items}
+              sort={sort}
+              onSort={(next) => view.set({ sort: next === DEFAULT_SORT ? undefined : next })}
+              lastSeen={seenAt}
+              onOpenSheet={openSheet}
+            />
+          )}
+        </DataPanel>
       )}
-      {list.data && total > 0 && (
-        <div className="flex items-center justify-end gap-3 text-sm">
-          <span className="text-muted-foreground">
-            Page {list.data.page} of {pages} · {total} total
-          </span>
-          <Button variant="outline" size="sm" disabled={pageNo <= 1} onClick={() => setPage(pageNo - 1)}>
-            Previous
-          </Button>
-          <Button variant="outline" size="sm" disabled={pageNo >= pages} onClick={() => setPage(pageNo + 1)}>
-            Next
-          </Button>
-        </div>
-      )}
+      {list.data && total > 0 && <Pager page={pageNo} shown={list.data.page} pages={pages} total={total} onPage={setPage} />}
       <StatementSheet />
     </div>
   )

@@ -107,7 +107,7 @@ function Body({ request, onClose }: { request: RequestDetail; onClose: () => voi
               {
                 onSuccess: () => {
                   onClose()
-                  toast.success('Request resolved')
+                  toast.success('Statement resolved')
                 },
               },
             )

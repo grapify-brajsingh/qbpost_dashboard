@@ -1,20 +1,27 @@
 import type { ReactNode } from 'react'
+import { CheckCircle2Icon, CircleHelpIcon, CircleSlashIcon, Loader2Icon, SplitIcon, type LucideIcon } from 'lucide-react'
 import type { RequestDetail } from '@/api/schema'
 import { Timestamp } from '@/components/Timestamp'
-import { cn } from '@/lib/utils'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
-const TONE = {
-  info: 'border-blue-300 bg-blue-50 text-blue-900 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-100',
-  success: 'border-green-300 bg-green-50 text-green-900 dark:border-green-800 dark:bg-green-950 dark:text-green-100',
-  warning: 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100',
-  muted: 'border-border bg-muted text-muted-foreground',
+type Tone = 'info' | 'success' | 'warning' | 'muted'
+
+const ICON: Record<Tone, LucideIcon> = {
+  info: Loader2Icon,
+  success: CheckCircle2Icon,
+  warning: CircleHelpIcon,
+  muted: CircleSlashIcon,
 }
 
-function Banner({ tone, children }: { tone: keyof typeof TONE; children: ReactNode }) {
+function Banner({ tone, icon, children }: { tone: Tone; icon?: LucideIcon; children: ReactNode }) {
+  const Icon = icon ?? ICON[tone]
   return (
-    <div role="status" aria-label="Request status" className={cn('rounded-md border p-3 text-sm', TONE[tone])}>
-      {children}
-    </div>
+    <Alert role="status" aria-label="Request status" variant={tone}>
+      <Icon aria-hidden className={tone === 'info' ? 'animate-spin' : undefined} />
+      <AlertDescription className="text-current">
+        <p>{children}</p>
+      </AlertDescription>
+    </Alert>
   )
 }
 
@@ -22,7 +29,7 @@ function PostId({ id }: { id: string | null }) {
   return id ? (
     <>
       {' '}
-      Post ID: <span className="font-mono">{id}</span>
+      Post ID: <span className="font-mono text-[0.92em]">{id}</span>
     </>
   ) : null
 }
@@ -53,7 +60,7 @@ export function StatusBanner({ request }: { request: RequestDetail }) {
       )
     case 'partial':
       return (
-        <Banner tone="warning">
+        <Banner tone="warning" icon={SplitIcon}>
           Some rows posted, some didn't.
           <PostId id={request.postId} />
         </Banner>

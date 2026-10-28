@@ -16,7 +16,7 @@ type Tone = 'ok' | 'warn' | 'bad' | 'edit' | 'plain'
 
 const TONE_CLASS: Record<Tone, string> = {
   ok: 'bg-success-soft text-success',
-  warn: 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200',
+  warn: 'bg-warning-soft text-warning',
   bad: 'bg-destructive-soft text-destructive',
   edit: 'bg-primary-soft text-primary',
   plain: 'bg-muted text-muted-foreground',
@@ -69,7 +69,7 @@ function StatementCell({ e }: { e: AuditEvent }) {
   const r = e.request
   if (!r) return <span className="text-muted-foreground">Not a statement</span>
   return (
-    <Link className="text-primary hover:underline" to={`/statements/${r.id}`}>
+    <Link className="font-medium text-primary underline-offset-2 hover:underline" to={`/statements/${r.id}`}>
       {r.reference ?? r.publicRef}
       {r.pushId && (
         <code className="num ml-1.5 font-mono text-xs text-muted-foreground" title={r.pushId}>
@@ -120,8 +120,8 @@ export function AuditTable({ events, showStatement = true }: { events: readonly 
   const groups = groupByDay(events, new Date())
   const cols = showStatement ? 6 : 4
   return (
-    <Table aria-label="Audit trail">
-      <TableHeader>
+    <Table aria-label="Audit trail" className="min-w-[760px]">
+      <TableHeader className="bg-muted/40">
         <TableRow>
           <TableHead>Time</TableHead>
           <TableHead>Who</TableHead>
@@ -134,14 +134,14 @@ export function AuditTable({ events, showStatement = true }: { events: readonly 
       <TableBody>
         {groups.map((g) => (
           <Fragment key={g.label}>
-            <TableRow className="bg-muted hover:bg-muted">
-              <TableCell colSpan={cols} className="py-1.5 text-xs font-medium text-muted-foreground">
+            <TableRow className="bg-background hover:bg-background">
+              <TableCell colSpan={cols} className="py-2 text-xs font-semibold text-foreground/70">
                 {g.label}
               </TableCell>
             </TableRow>
             {g.items.map((e) => (
               <TableRow key={e.id}>
-                <TableCell className="whitespace-nowrap tabular-nums">
+                <TableCell className="whitespace-nowrap text-muted-foreground tabular-nums">
                   <span title={formatTimestamp(e.atUtc)}>{timeOf(e.atUtc)}</span>
                 </TableCell>
                 <TableCell>

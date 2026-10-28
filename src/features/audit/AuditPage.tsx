@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { DownloadIcon } from 'lucide-react'
+import { DownloadIcon, HistoryIcon, Loader2Icon } from 'lucide-react'
 import { addDays, parse } from 'date-fns'
 import { useSearchParams } from 'react-router'
 import { parsePage } from '@/lib/pageParam'
@@ -9,6 +9,8 @@ import { useUsers } from '@/api/queries/users'
 import { AUDIT_ACTIONS, type AuditAction } from '@/api/schema'
 import { hasScope, useSession } from '@/auth/useSession'
 import { ClearFilters, DateRangeChip, FilterChip, SearchBox, useUrlFilters, type FilterOption } from '@/components/filters'
+import { DataPanel, EmptyState, Pager, TableSkeleton } from '@/components/DataPanel'
+import { PageHeader } from '@/components/PageHeader'
 import { ProblemAlert } from '@/components/ProblemAlert'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -161,27 +163,27 @@ export function AuditPage() {
   const actions = AUDIT_ACTIONS.filter((a) => isAdmin || !a.startsWith('user-'))
 
   return (
-    <div className="grid gap-4 p-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-[22px] font-semibold">Audit trail</h1>
-          <p className="text-sm text-muted-foreground">Who changed what, and when. Nothing here can be edited or deleted.</p>
-        </div>
-        <Button
-          variant="outline"
-          disabled={exporting}
-          onClick={() => {
-            setExporting(true)
-            setExportError(null)
-            downloadCsv(auditCsvPath(filterParams))
-              .catch((e: unknown) => setExportError(e))
-              .finally(() => setExporting(false))
-          }}
-        >
-          <DownloadIcon aria-hidden />
-          Export CSV
-        </Button>
-      </div>
+    <div className="page">
+      <PageHeader
+        title="Audit trail"
+        description="Who changed what, and when. Nothing here can be edited or deleted."
+        actions={
+          <Button
+            variant="outline"
+            disabled={exporting}
+            onClick={() => {
+              setExporting(true)
+              setExportError(null)
+              downloadCsv(auditCsvPath(filterParams))
+                .catch((e: unknown) => setExportError(e))
+                .finally(() => setExporting(false))
+            }}
+          >
+            {exporting ? <Loader2Icon className="animate-spin" aria-hidden /> : <DownloadIcon aria-hidden />}
+            Export CSV
+          </Button>
+        }
+      />
       {exportError !== null && <ProblemAlert error={exportError} />}
 
       <div role="search" aria-label="Filters" className="flex flex-wrap items-center gap-2">
@@ -216,27 +218,23 @@ export function AuditPage() {
 
       {events.isError ? (
         <ProblemAlert error={events.error} />
-      ) : !events.data ? (
-        <p className="text-muted-foreground">Loading…</p>
-      ) : events.data.items.length === 0 ? (
-        <p className="py-10 text-center text-muted-foreground">No audit entries match.</p>
       ) : (
-        <AuditTable events={events.data.items} />
+        <DataPanel>
+          {!events.data ? (
+            <TableSkeleton columns={6} rows={8} />
+          ) : events.data.items.length === 0 ? (
+            <EmptyState
+              icon={HistoryIcon}
+              title="No audit entries match."
+              description={filters.activeCount > 0 ? 'Try a wider date range, or clear the filters above.' : 'Changes appear here as people work.'}
+            />
+          ) : (
+            <AuditTable events={events.data.items} />
+          )}
+        </DataPanel>
       )}
 
-      {events.data && total > 0 && (
-        <div className="flex items-center justify-end gap-3 text-sm">
-          <span className="text-muted-foreground">
-            Page {events.data.page} of {pages} · {total} total
-          </span>
-          <Button variant="outline" size="sm" disabled={pageNo <= 1} onClick={() => setPage(pageNo - 1)}>
-            Previous
-          </Button>
-          <Button variant="outline" size="sm" disabled={pageNo >= pages} onClick={() => setPage(pageNo + 1)}>
-            Next
-          </Button>
-        </div>
-      )}
+      {events.data && total > 0 && <Pager page={pageNo} shown={events.data.page} pages={pages} total={total} onPage={setPage} />}
     </div>
   )
 }

@@ -46,7 +46,7 @@ const text = (id: TxField, header: string, width: string, narrow = false): TxCol
 export const COLUMNS: TxColumn[] = [
   { id: 'post', header: 'Post', width: 'w-14', render: () => null },
   { id: 'index', header: '#', width: 'w-16', render: (_row, index) => index + 1 },
-  text('date', 'Date', 'w-28'),
+  text('date', 'Date', 'w-32'),
   text('kind', 'Kind', 'w-28'),
   text('payee', 'Payee', 'w-56'),
   text('account', 'Account', 'w-52'),

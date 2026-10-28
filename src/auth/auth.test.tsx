@@ -98,15 +98,16 @@ describe('change password', () => {
     expect(await screen.findByText("Passwords don't match")).toBeInTheDocument()
   })
 
-  test('success goes to /requests', async () => {
+  test('success with no next goes to Home', async () => {
     mustChange()
     const { user, router } = renderApp('/change-password')
     await user.type(await screen.findByLabelText('Current password'), MOCK_PASSWORD)
     await user.type(screen.getByLabelText('New password'), 'a brand new passphrase')
     await user.type(screen.getByLabelText('Confirm new password'), 'a brand new passphrase')
     await user.click(screen.getByRole('button', { name: 'Change password' }))
-    expect(await screen.findByRole('heading', { name: 'Statements' })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/statements')
+    // Change-password, a session refresh and the Home page's first queries: allow more than the default second.
+    expect(await screen.findByRole('heading', { level: 1, name: /^Good (morning|afternoon|evening)/ }, { timeout: 4000 })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/')
   })
 })
 

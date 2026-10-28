@@ -9,6 +9,9 @@ async function signIn(page: Page, email = 'asha@example.com') {
   await page.getByLabel('Email').fill(email)
   await page.getByLabel('Password').fill(PASSWORD)
   await page.getByRole('button', { name: 'Sign in' }).click()
+  // Sign-in lands on Home; these tests start from the Statements list.
+  await expect(page.getByRole('heading', { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible()
+  await page.getByRole('link', { name: 'Statements', exact: true }).first().click()
   await expect(page).toHaveURL(/\/statements/)
 }
 

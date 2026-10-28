@@ -12,8 +12,8 @@ export function DbHealthLight() {
           role="img"
           aria-label={label}
           className={cn(
-            'inline-block size-3 rounded-full',
-            isSuccess ? 'bg-green-500' : isError ? 'bg-red-500' : 'bg-muted-foreground/40',
+            'relative inline-block size-2.5 rounded-full ring-4 transition-colors duration-300',
+            isSuccess ? 'bg-success ring-success/15' : isError ? 'bg-destructive ring-destructive/15' : 'bg-muted-foreground/40 ring-transparent',
           )}
         />
       </TooltipTrigger>

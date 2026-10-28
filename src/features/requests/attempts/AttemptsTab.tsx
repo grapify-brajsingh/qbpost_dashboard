@@ -101,7 +101,7 @@ function AttemptRow({ requestId, attempt: a }: { requestId: string; attempt: Att
         aria-expanded={open}
         aria-label={`Attempt ${a.id}`}
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 p-3 text-left text-sm"
+        className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-md p-3 text-left text-sm transition-colors duration-150 outline-none hover:bg-accent/60 focus-visible:ring-[3px] focus-visible:ring-ring/40"
       >
         <span className="font-medium">#{a.id}</span>
         <Badge variant="outline">{a.outcome}</Badge>

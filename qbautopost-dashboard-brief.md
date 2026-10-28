@@ -104,9 +104,11 @@ extension fields. Show `title`/`detail` to the user, and branch on `status` and 
 | `PUT /saved-requests/{id}` | editor, admin | body `{ payload, note? }`. **Header `If-Match: <ETag>` required.** `412` = someone else changed it (response names who/when → offer reload). `409 not-editable` = wrong status. |
 | `POST /saved-requests/{id}/validate` | editor, admin | refreshes the validation snapshot |
 | `POST /saved-requests/{id}/post` | editor, admin | body `{ confirmDuplicate?: boolean }`, send `If-Match`. See §6. |
-| `POST /saved-requests/{id}/discard` | editor, admin | `{ reason }`, required |
-| `POST /saved-requests/{id}/restore` | admin | |
-| `POST /saved-requests/{id}/resolve` | admin | `{ outcome: "posted" \| "not-posted", note }` |
+| `POST /saved-requests/{id}/discard` | editor, admin | `{ reason }`, required, 1–500 chars. `409 not-discardable` if not pending. `If-Match` optional, honoured. |
+| `POST /saved-requests/{id}/restore` | admin | `409 not-restorable` if not discarded. `If-Match` optional. |
+| `POST /saved-requests/{id}/resolve` | admin | `{ outcome: "posted" \| "not-posted", note }`. The note is required (1–500). A partial request can only be resolved as `posted`; anything else is `409 not-resolvable`. |
+
+History lists (`versions`, `attempts`, `events`) come back as `{ "items": [...] }`, newest first. Enum values in these responses are kebab-case (`in-progress`, `not-posted`). An attempt's `error` is short fixed text such as `post-outcome-unknown: TimeoutException`, never a raw server message.
 
 ### 5.3 Supporting
 
@@ -150,7 +152,9 @@ Post is **synchronous and can take minutes** for a large statement. The UI must:
 | `412` | The request changed since you loaded it | Reload before posting. |
 | `503` | Backup stale / QuickBooks down / rules missing / database down | Show `detail`. Retry later. |
 
-Every post response carries `savedRequestId`, `attemptId`, and the request's new `status`.
+Every post response carries `savedRequestId`, `attemptId`, and the request's new status as **`savedRequestStatus`**. The `status` field keeps its validate-and-post meaning: the HTTP number in problem bodies, or the post status in a 200.
+
+A post that QuickBooks received but never confirmed (no response, or a timeout after sending) leaves the request **`unknown`**, never `pending`. Show it as "may have posted; an admin must check QuickBooks". The attempt detail (`GET /saved-requests/{id}/attempts/{attemptId}`) includes a `ledgerBatch` summary (batch id, status, counts, posted rows with `txnId`s) when a batch exists, which is what the admin uses to decide how to resolve.
 
 ## 7. Statuses and flags to render
 
