@@ -343,7 +343,7 @@ describe('add and delete rows', () => {
     await user.click(screen.getByRole('button', { name: 'Add row' }))
     const added = document.querySelector('tr[data-row="12"]')!
     expect(added).not.toBeNull()
-    expect(added.textContent).toBe('13')
+    expect(added.textContent).toMatch(/^13dash-/)
     await user.click(cell(12, 'memo'))
     await user.type(screen.getByRole('textbox', { name: 'Memo' }), 'new line{Enter}')
 
@@ -363,7 +363,7 @@ describe('add and delete rows', () => {
     await waitFor(() => expect(seen).toHaveLength(1))
     const sent = seen[0].body.payload.transactions as Txn[]
     expect(sent).toHaveLength(12)
-    expect(sent).toEqual([...original.filter((_, i) => i !== 2), { memo: 'new line' }])
+    expect(sent).toEqual([...original.filter((_, i) => i !== 2), { externalId: expect.stringMatching(/^dash-/), memo: 'new line' }])
   })
 })
 
