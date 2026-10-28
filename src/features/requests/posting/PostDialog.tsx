@@ -27,8 +27,8 @@ interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
   request: RequestDetail
-  /** The payload of the version the dialog opened on (the one whose ETag is posted); defaults to the live one. */
-  seenPayload?: RequestDetail['payload']
+  /** The payload of the version the dialog opened on (the one whose ETag is posted). */
+  seenPayload: RequestDetail['payload']
   /** The other request when this one may be a duplicate (flagged, or named by a 409 duplicate-unconfirmed). */
   duplicate: DuplicateInfo | null
   /** A newer version arrived while the dialog was open; Confirm still posts the one it opened on (the API answers 412). */
@@ -51,7 +51,7 @@ function Body({ request, seenPayload, duplicate, changed, onConfirm, onCancel }:
   const outdated = v.versionNumber !== undefined && v.versionNumber < request.currentVersion
   const blocked = duplicate !== null && !anyway
   // The dialog only opens on a saved (not dirty) draft, so the saved payload is what will be posted.
-  const stats = postStats(createDraft(seenPayload ?? request.payload))
+  const stats = postStats(createDraft(seenPayload))
   const rowsLabel = `${stats.posting} ${stats.posting === 1 ? 'row' : 'rows'}`
 
   return (

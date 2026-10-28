@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { Page, Role, User, UserAuditRow, UserStatus } from '../schema'
+import type { Page, Role, User, UserStatus } from '../schema'
 import { api } from '../client'
 
 export const USERS_PAGE_SIZE = 25
@@ -17,7 +17,6 @@ export const userKeys = {
   all: ['users'] as const,
   list: (params: UsersParams) => [...userKeys.all, 'list', params] as const,
   detail: (id: string) => [...userKeys.all, 'detail', id] as const,
-  audit: (id: string) => [...userKeys.all, 'detail', id, 'audit'] as const,
 }
 
 function listQuery(params: UsersParams): string {
@@ -51,13 +50,6 @@ export function useUser(id: string) {
       const r = await api.get<User>(`/users/${id}`, { signal })
       return { user: r.data, etag: r.headers.get('ETag') ?? '' }
     },
-  })
-}
-
-export function useUserAudit(id: string) {
-  return useQuery<UserAuditRow[]>({
-    queryKey: userKeys.audit(id),
-    queryFn: ({ signal }) => api.get<UserAuditRow[]>(`/users/${id}/audit`, { signal }).then((r) => r.data),
   })
 }
 

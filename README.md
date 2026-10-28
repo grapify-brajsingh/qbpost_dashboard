@@ -2,9 +2,21 @@
 
 A web dashboard for the QbAutopost API. Bank and card statements arrive by email and n8n saves the extracted
 transactions to the API instead of posting them straight to QuickBooks Desktop. This dashboard puts a person between
-the email and the ledger: the accountant opens each saved request, checks its rows against the statement PDF, fixes a
-wrong payee, account or amount, then presses Post and sees exactly what reached QuickBooks. Admins also manage users.
+the email and the ledger: the accountant opens each statement, checks its rows against the statement PDF, fixes a
+wrong payee, account or amount, switches off rows that should not post, then posts and sees exactly what reached
+QuickBooks. Every change is kept in an audit trail. Admins also manage users.
 Built with React, TypeScript, Vite, Tailwind/shadcn, TanStack Query and React Router.
+
+## Pages and routes
+
+| Route | Page |
+| --- | --- |
+| `/statements` | Statements: status tabs, filters kept in the URL, new-arrivals pill |
+| `/statements/:id` | One statement: reconciliation meter, editable rows with a Post switch per row, Validate, Post; the Results, History and Versions sheet opens beside it |
+| `/audit` | Audit trail: every event across statements and users, visible to every role |
+| `/users`, `/users/:id` | Users: filters, inline actions, activity (needs `users:manage`) |
+| `/account` | My account: change password |
+| `/`, `/requests`, `/requests/:id` | Redirect to the `/statements` equivalents (same id, query string kept) |
 
 ## Run it
 
@@ -18,13 +30,15 @@ npm run dev:mock
 The API is mocked in the browser with MSW, so no server is needed. Sign in as any mock user with the password
 `correct horse battery`:
 
-| Email | Role |
-| --- | --- |
-| `asha@example.com` | admin |
-| `eli@example.com` | editor |
-| `vera@example.com` | viewer |
+| Email | Role | Notes |
+| --- | --- | --- |
+| `asha@example.com` | admin | |
+| `eli@example.com` | editor | |
+| `vera@example.com` | viewer | |
+| `dan@example.com` | editor | disabled account |
+| `lena@example.com` | editor | locked out |
 
-(`dan@example.com` is disabled and `lena@example.com` is locked out, to exercise those errors.) The mock database
+The disabled and locked users exist to exercise those errors. The mock database
 and session live in memory inside the page, so a full page reload signs you out and resets the data.
 
 ### Against a real API
@@ -39,9 +53,20 @@ relative `/api/v1` URLs. No `.env` is needed in production.
 ## Tests
 
 - `npm test` runs the unit and component tests (Vitest, Testing Library, MSW).
-- `npm run e2e` runs the Playwright smoke tests in Chromium against `npm run dev:mock` on port 5174. The first time,
+- `npm run e2e` runs the Playwright end-to-end tests (`e2e/v2.spec.ts`) in Chromium against `npm run dev:mock` on port 5174. The first time,
   run `npx playwright install chromium`.
 - `npm run lint` and `npm run build` (which type-checks) complete the checks.
+
+## What the fake API assumes
+
+The mock API in `src/mocks/` stands in for endpoints the real API does not have yet. Everything it assumes is
+specified in [docs/api-requirements-for-dashboard.md](docs/api-requirements-for-dashboard.md), R-1 to R-9:
+
+- R-1 email subject and received time on every saved request; R-2 the API serves the dashboard from the same origin.
+- R-3 and R-4 long-running post and small contract confirmations.
+- R-5 a push ID (GUID) that n8n sends with every push; R-6 per-row "don't post" and rows added in the dashboard.
+- R-7 one audit feed for the Audit trail page; R-8 Statements list summary fields and filters.
+- R-9 users status filter and the row TxnIDs of a posted attempt.
 
 ## Generating API types
 

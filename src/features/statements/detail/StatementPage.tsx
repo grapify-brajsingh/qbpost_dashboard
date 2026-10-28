@@ -140,20 +140,21 @@ export function StatementPage() {
       {showResult && <PostResultBanner outcome={outcome} requestId={id} />}
       {validate.error && <ProblemAlert error={validate.error} />}
       <TransactionsTab key={request.id} request={request} etag={etag} findingsOverride={heldFindings} validate={validateButton} post={postButton} />
-      <PostDialog
-        open={dialog !== null}
-        onOpenChange={(o) => !o && setDialog(null)}
-        request={request}
-        seenPayload={dialog?.seen.payload}
-        duplicate={dialog?.dup ?? null}
-        changed={dialog !== null && dialog.seen.version !== request.currentVersion}
-        onConfirm={(opts) => {
-          if (!dialog) return
-          setDialog(null)
-          setSent(dialog.seen)
-          post.post({ ...opts, etag: dialog.seen.etag })
-        }}
-      />
+      {dialog && (
+        <PostDialog
+          open
+          onOpenChange={(o) => !o && setDialog(null)}
+          request={request}
+          seenPayload={dialog.seen.payload}
+          duplicate={dialog.dup}
+          changed={dialog.seen.version !== request.currentVersion}
+          onConfirm={(opts) => {
+            setDialog(null)
+            setSent(dialog.seen)
+            post.post({ ...opts, etag: dialog.seen.etag })
+          }}
+        />
+      )}
       <DiscardDialog open={other === 'discard'} onOpenChange={(o) => !o && setOther(null)} requestId={id} />
       <RestoreDialog open={other === 'restore'} onOpenChange={(o) => !o && setOther(null)} requestId={id} />
       <ResolveDialog open={other === 'resolve'} onOpenChange={(o) => !o && setOther(null)} request={request} />
