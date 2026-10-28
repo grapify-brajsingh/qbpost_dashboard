@@ -22,6 +22,8 @@ export interface RequestRecord {
   created: { utc: string; by: Actor }
   updated: { utc: string; by: Actor }
   email: EmailMeta | null
+  /** The GUID n8n sent with the push (R-5); null when absent or malformed. */
+  pushId: string | null
   /** The body exactly as n8n sent it. */
   original: string
   /** Ascending by number; the last one is current. */

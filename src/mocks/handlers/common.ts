@@ -117,7 +117,7 @@ export async function readJson(request: Request): Promise<unknown> {
 
 export type Paged<T> = { items: T[]; page: number; pageSize: number; total: number } | { error: Response }
 
-export function paginate<T>(items: T[], url: URL): Paged<T> {
+export function paginate<T>(items: T[], url: URL, sizes = { default: 25, max: 100 }): Paged<T> {
   const num = (name: string, def: number, min: number, max: number) => {
     const raw = url.searchParams.get(name)
     if (raw === null) return def
@@ -125,9 +125,9 @@ export function paginate<T>(items: T[], url: URL): Paged<T> {
     return Number.isInteger(n) && n >= min && n <= max ? n : NaN
   }
   const page = num('page', 1, 1, 1_000_000)
-  const pageSize = num('pageSize', 25, 1, 100)
+  const pageSize = num('pageSize', sizes.default, 1, sizes.max)
   if (Number.isNaN(page) || Number.isNaN(pageSize)) {
-    return { error: problem(400, 'invalid-query', 'Invalid query', 'page must be >= 1 and pageSize between 1 and 100.') }
+    return { error: problem(400, 'invalid-query', 'Invalid query', `page must be >= 1 and pageSize between 1 and ${sizes.max}.`) }
   }
   return { items: items.slice((page - 1) * pageSize, page * pageSize), page, pageSize, total: items.length }
 }

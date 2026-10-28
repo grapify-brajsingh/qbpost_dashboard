@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from 'react'
+import { CircleAlertIcon, Loader2Icon, LockIcon } from 'lucide-react'
 import { Navigate, useSearchParams } from 'react-router'
 import { ApiError, problemCode, retryAfterSeconds } from '@/api/problem'
 import { ProblemAlert } from '@/components/ProblemAlert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { AuthFrame } from './AuthFrame'
 import { FullPageLoading } from './RequireAuth'
 import { safeNext, useSession } from './useSession'
 
@@ -13,7 +15,8 @@ function ErrorMessage({ error }: { error: unknown }) {
     const { status } = error.problem
     if (status === 401 && problemCode(error.problem) === 'invalid-credentials') {
       return (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="flex items-center gap-2 text-sm text-destructive">
+          <CircleAlertIcon className="size-4 shrink-0" aria-hidden />
           Email or password is wrong.
         </p>
       )
@@ -22,7 +25,8 @@ function ErrorMessage({ error }: { error: unknown }) {
       const seconds = retryAfterSeconds(error.headers)
       const minutes = Math.max(1, Math.ceil((seconds ?? 60) / 60))
       return (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="flex items-center gap-2 text-sm text-destructive">
+          <LockIcon className="size-4 shrink-0" aria-hidden />
           Locked. Try again in {minutes} {minutes === 1 ? 'minute' : 'minutes'}.
         </p>
       )
@@ -40,7 +44,7 @@ export function SignInPage() {
   const [busy, setBusy] = useState(false)
 
   if (status === 'restoring') return <FullPageLoading />
-  if (status === 'signed-in') return <Navigate to={safeNext(params.get('next')) ?? '/requests'} replace />
+  if (status === 'signed-in') return <Navigate to={safeNext(params.get('next')) ?? '/'} replace />
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -55,21 +59,22 @@ export function SignInPage() {
   }
 
   return (
-    <main className="grid min-h-screen place-items-center p-6">
-      <form onSubmit={(e) => void onSubmit(e)} className="w-full max-w-sm space-y-4">
-        <h1 className="text-2xl font-semibold">QbAutopost</h1>
-        <div className="space-y-2">
+    <AuthFrame title="Sign in" description="Review bank and card statements before they reach QuickBooks.">
+      <form onSubmit={(e) => void onSubmit(e)} className="grid gap-5">
+        <div className="grid gap-2">
           <Label htmlFor="email">Email</Label>
           <Input
             id="email"
             type="email"
             autoComplete="username"
+            autoFocus
+            placeholder="you@company.com"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
         </div>
-        <div className="space-y-2">
+        <div className="grid gap-2">
           <Label htmlFor="password">Password</Label>
           <Input
             id="password"
@@ -81,10 +86,11 @@ export function SignInPage() {
           />
         </div>
         {error !== null && <ErrorMessage error={error} />}
-        <Button type="submit" className="w-full" disabled={busy}>
+        <Button type="submit" size="lg" className="w-full" disabled={busy}>
+          {busy && <Loader2Icon className="animate-spin" aria-hidden />}
           Sign in
         </Button>
       </form>
-    </main>
+    </AuthFrame>
   )
 }

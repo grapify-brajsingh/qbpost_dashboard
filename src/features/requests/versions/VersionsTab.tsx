@@ -58,7 +58,7 @@ export function VersionsTab({ requestId }: { requestId: string }) {
                 type="button"
                 aria-pressed={v.number === selected}
                 onClick={() => setPicked(v.number)}
-                className={cn('w-full rounded-md border p-3 text-left text-sm', v.number === selected && 'border-primary bg-accent')}
+                className={cn('w-full rounded-md border p-3 text-left text-sm transition-colors duration-150 outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/40', v.number === selected && 'border-primary/50 bg-primary-soft hover:bg-primary-soft')}
               >
                 <span className="font-medium">v{v.number}</span> · {v.created.by.name} · <Timestamp utc={v.created.utc} />
                 {v.note && <span className="block text-muted-foreground">{v.note}</span>}

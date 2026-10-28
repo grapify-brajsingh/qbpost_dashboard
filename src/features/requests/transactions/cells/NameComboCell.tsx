@@ -8,7 +8,7 @@ const FREE = '\u0000free-text'
 
 /** Shown next to a name that is not in the QuickBooks list (case-sensitive exact match). */
 export function NotInQuickBooks() {
-  return <span className="ml-1.5 shrink-0 rounded bg-amber-100 px-1 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200">not in QuickBooks</span>
+  return <span className="ml-1.5 shrink-0 rounded bg-warning-soft px-1 text-xs text-warning">not in QuickBooks</span>
 }
 
 interface Props extends EditorProps {

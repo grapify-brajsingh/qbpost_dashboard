@@ -4,7 +4,7 @@ import type {
   Page,
   Payload,
   RequestDetail,
-  RequestEvent,
+  RequestStatus,
   RequestSummary,
   Stats,
   Version,
@@ -12,7 +12,25 @@ import type {
 } from '../schema'
 import { useDraftDirty } from '@/features/requests/transactions/draftDirtyStore'
 import { api } from '../client'
-import type { ListParams } from '@/features/requests/list/queue'
+
+export interface ListParams {
+  status?: RequestStatus[]
+  needsAttention?: boolean
+  duplicate?: boolean
+  q?: string
+  receivedFrom?: string
+  receivedTo?: string
+  source?: string
+  emailFrom?: string
+  reference?: string
+  minTotal?: number
+  maxTotal?: number
+  hasErrors?: boolean
+  /** `received`, `created`, `updated`, `controlTotal`, `total`, `rows`; a leading `-` sorts descending. */
+  sort?: string
+  page?: number
+  pageSize?: number
+}
 
 export const STATS_POLL_MS = 60_000
 export const POSTING_POLL_MS = 3000
@@ -26,7 +44,6 @@ export const requestKeys = {
   version: (id: number | string, n: number) => [...requestKeys.detail(id), 'versions', n] as const,
   attempts: (id: number | string) => [...requestKeys.detail(id), 'attempts'] as const,
   attempt: (id: number | string, a: number) => [...requestKeys.detail(id), 'attempts', a] as const,
-  events: (id: number | string) => [...requestKeys.detail(id), 'events'] as const,
   original: (id: number | string) => [...requestKeys.detail(id), 'original'] as const,
 }
 
@@ -40,6 +57,11 @@ export function listQuery(params: ListParams): string {
   if (params.receivedFrom) qs.set('receivedFrom', params.receivedFrom)
   if (params.receivedTo) qs.set('receivedTo', params.receivedTo)
   if (params.source) qs.set('source', params.source)
+  if (params.emailFrom) qs.set('emailFrom', params.emailFrom)
+  if (params.reference) qs.set('reference', params.reference)
+  if (params.minTotal !== undefined) qs.set('minTotal', String(params.minTotal))
+  if (params.maxTotal !== undefined) qs.set('maxTotal', String(params.maxTotal))
+  if (params.hasErrors !== undefined) qs.set('hasErrors', String(params.hasErrors))
   if (params.sort) qs.set('sort', params.sort)
   if (params.page && params.page > 1) qs.set('page', String(params.page))
   if (params.pageSize) qs.set('pageSize', String(params.pageSize))
@@ -99,6 +121,7 @@ export function useValidate(id: string) {
     onSuccess: (data) => {
       if (data.etag) qc.setQueryData(requestKeys.detail(id), data)
       else void qc.invalidateQueries({ queryKey: requestKeys.detail(id), exact: true })
+      void qc.invalidateQueries({ queryKey: ['audit'] })
     },
   })
 }
@@ -115,7 +138,7 @@ function useStatusMutation<V extends object | undefined>(id: string, path: strin
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (vars: V) => api.post<RequestDetail>(`/saved-requests/${id}/${path}`, vars),
-    onSuccess: () => qc.invalidateQueries({ queryKey: requestKeys.all }),
+    onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: requestKeys.all }), qc.invalidateQueries({ queryKey: ['audit'] })]),
   })
 }
 
@@ -136,6 +159,7 @@ export function useSaveRequest(id: string) {
     onSuccess: (data) => {
       if (data.etag) qc.setQueryData(requestKeys.detail(id), data)
       else void qc.invalidateQueries({ queryKey: requestKeys.detail(id), exact: true })
+      void qc.invalidateQueries({ queryKey: ['audit'] })
     },
   })
 }
@@ -174,8 +198,3 @@ export const useAttempt = (id: string, attemptId: number, enabled = true) =>
     enabled,
   })
 
-export const useEvents = (id: string) =>
-  useQuery({
-    queryKey: requestKeys.events(id),
-    queryFn: ({ signal }) => api.get<RequestEvent[]>(`/saved-requests/${id}/events`, { signal }).then((r) => r.data),
-  })

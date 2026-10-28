@@ -9,6 +9,20 @@ export const OLDEST_DATE = '2026-01-01'
 type Obj = Record<string, unknown>
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v)
 
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** A row with `post: false` is sent to validate-and-post as `Skip`; a missing `post` means true (R-6). */
+export const isSkipped = (r: Txn) => r.kind === 'Skip' || r.post === false
+
+/** R-5.1: a bad `pushId` does not stop the save or the post; it only flags the request. */
+export function pushIdErrors(payload: unknown): string[] {
+  if (!isObj(payload) || payload.pushId === undefined || payload.pushId === null) return []
+  return typeof payload.pushId === 'string' && UUID_RE.test(payload.pushId) ? [] : ['$.pushId: not a UUID']
+}
+
+/** Everything the API reports as `readErrors`: binding errors plus the push id check. */
+export const allReadErrors = (payload: unknown): string[] => [...readErrorsOf(payload), ...pushIdErrors(payload)]
+
 /** Binding errors, one per JSON path (the API's `read_errors`). Empty means the payload is readable. */
 export function readErrorsOf(payload: unknown): string[] {
   if (!isObj(payload)) return ['$: expected a JSON object']
@@ -82,7 +96,7 @@ export function computeValidation(
       findings.push({ ...base, reason: 'missing-field', detail: `Missing: ${missing.join(', ')}` })
       return
     }
-    if (row.kind === 'Skip') return
+    if (isSkipped(row)) return
     if (row.date! < OLDEST_DATE) {
       findings.push({ ...base, reason: 'date-too-old', detail: `${row.date} is before ${OLDEST_DATE}` })
     }
@@ -106,7 +120,7 @@ export function computeValidation(
   })
   const errors = controlTotalErrors(payload)
   const heldRows = new Set(findings.map((f) => f.index)).size
-  const skipped = rows.filter((r) => r.kind === 'Skip').length
+  const skipped = rows.filter((r) => isObj(r) && isSkipped(r)).length
   return {
     state: errors.length ? 'refused' : findings.length ? 'held' : 'ok',
     validatedUtc,
@@ -135,14 +149,29 @@ function canonical(v: unknown): string {
   return JSON.stringify(v)
 }
 
-/** `email` is request metadata, so it never takes part in duplicate detection or diffs (R-1). */
-function withoutEmail(payload: Payload): Payload {
-  const { email: _email, ...rest } = payload
+/** `email` and `pushId` are request metadata, so they never take part in duplicate detection or diffs (R-1, R-5). */
+function withoutMeta(payload: Payload): Payload {
+  const { email: _email, pushId: _pushId, ...rest } = payload
   void _email
+  void _pushId
   return rest
 }
 
-export const canonicalPayload = (p: Payload) => canonical(withoutEmail(p))
+/** A row's `post: true` equals a missing `post` (R-6), so canonical text drops it. */
+function withoutDefaultPost(payload: Payload): Payload {
+  if (!Array.isArray(payload.transactions)) return payload
+  return {
+    ...payload,
+    transactions: payload.transactions.map((r: unknown) => {
+      if (!isObj(r) || r.post !== true) return r
+      const { post: _post, ...row } = r
+      void _post
+      return row
+    }),
+  }
+}
+
+export const canonicalPayload = (p: Payload) => canonical(withoutDefaultPost(withoutMeta(p)))
 
 const fingerprint = (r: Txn) => [r.kind, r.date, r.amount, r.account, r.checkNo ?? r.refNumber ?? '', r.payee ?? ''].join('|')
 
@@ -169,10 +198,18 @@ function diffObject(path: string, a: Obj, b: Obj, out: Change[]) {
   for (const k of Object.keys(b)) if (!(k in a)) out.push({ op: 'add', path: `${path}.${k}`, new: b[k] })
 }
 
+/** Rows compare `post` with missing read as true, so `true` to `false` is a replace and `true` to missing is nothing. */
+function diffRow(path: string, a: Obj, b: Obj, out: Change[]) {
+  const { post: pa = true, ...restA } = a
+  const { post: pb = true, ...restB } = b
+  diffObject(path, restA, restB, out)
+  if (!same(pa, pb)) out.push({ op: 'replace', path: `${path}.post`, old: pa, new: pb })
+}
+
 export function diffPayload(oldP: Payload, newP: Payload): Change[] {
   const out: Change[] = []
-  const a = withoutEmail(oldP)
-  const b = withoutEmail(newP)
+  const a = withoutMeta(oldP)
+  const b = withoutMeta(newP)
   const { transactions: ta, ...restA } = a
   const { transactions: tb, ...restB } = b
   diffObject('$', restA, restB, out)
@@ -189,7 +226,7 @@ export function diffPayload(oldP: Payload, newP: Payload): Change[] {
       if (!prev) out.push({ op: 'add', path: `$.transactions[${i}]`, new: r })
       else {
         seen.add(r.externalId!)
-        diffObject(`$.transactions[${i}]`, prev.r, r, out)
+        diffRow(`$.transactions[${i}]`, prev.r, r, out)
       }
     })
     oldById.forEach(({ r, i }, id) => {
@@ -201,7 +238,7 @@ export function diffPayload(oldP: Payload, newP: Payload): Change[] {
   for (let i = 0; i < n; i++) {
     if (i >= ta.length) out.push({ op: 'add', path: `$.transactions[${i}]`, new: tb[i] })
     else if (i >= tb.length) out.push({ op: 'remove', path: `$.transactions[${i}]`, old: ta[i] })
-    else if (isObj(ta[i]) && isObj(tb[i])) diffObject(`$.transactions[${i}]`, ta[i], tb[i], out)
+    else if (isObj(ta[i]) && isObj(tb[i])) diffRow(`$.transactions[${i}]`, ta[i], tb[i], out)
     else if (!same(ta[i], tb[i])) out.push({ op: 'replace', path: `$.transactions[${i}]`, old: ta[i], new: tb[i] })
   }
   return out
@@ -213,7 +250,7 @@ export function diffPayload(oldP: Payload, newP: Payload): Change[] {
 export function toPostedRows(payload: Payload, attemptId: number, only?: (index: number) => boolean): PostedRow[] {
   const out: PostedRow[] = []
   rowsOf(payload).forEach((r, index) => {
-    if (r.kind === 'Skip' || (only && !only(index))) return
+    if (isSkipped(r) || (only && !only(index))) return
     out.push({
       index,
       externalId: r.externalId,

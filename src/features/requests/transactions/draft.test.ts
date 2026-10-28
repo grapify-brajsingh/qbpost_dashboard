@@ -1,10 +1,14 @@
 import type { Payload } from '@/api/schema'
 import {
   addRow,
+  changeBreakdown,
   createDraft,
   dirtyCount,
   draftToPayload,
   isDirty,
+  isPosting,
+  postStats,
+  setPost,
   rowsSumCents,
   setCell,
   setControlTotal,
@@ -43,7 +47,7 @@ test('sum excludes deleted rows and includes added', () => {
   d = setCell(d, 'n0', 'amount', 0.05)
   expect(rowsSumCents(d)).toBe(115)
   expect(dirtyCount(d)).toBe(2)
-  expect(draftToPayload(d).transactions).toEqual([{ amount: 1.1 }, { amount: 'x' }, { amount: 0.05 }])
+  expect(draftToPayload(d).transactions).toEqual([{ amount: 1.1 }, { amount: 'x' }, { externalId: d.added[0].externalId, amount: 0.05 }])
   d = toggleDeleteRow(d, '1')
   expect(rowsSumCents(d)).toBe(335)
   // Deleting an added row removes it.
@@ -73,4 +77,55 @@ test('unedited draft round-trips to a deep-equal payload', () => {
   // An edit that is undone also round-trips.
   const back = draftToPayload(setCell(setCell(createDraft(p), '1', 'payee', 'Q'), '1', 'payee', 'P'))
   expect(back).toStrictEqual(p)
+})
+
+describe('dont-post and row ids', () => {
+  it('setPost(false) then setPost(true) on a row without post leaves no post key and no dirty cell', () => {
+    const d0 = createDraft({ transactions: [{ payee: 'A' }] })
+    const d1 = setPost(d0, '0', false)
+    expect(d1.dirtyCells).toEqual(new Set(['0:post']))
+    expect(isPosting(d1.rows[0])).toBe(false)
+    const d2 = setPost(d1, '0', true)
+    expect('post' in d2.rows[0]).toBe(false)
+    expect(d2.dirtyCells.size).toBe(0)
+    expect(isDirty(d2)).toBe(false)
+  })
+
+  it('setPost(false) on a loaded post:false row is not dirty; draftToPayload keeps post:false', () => {
+    const d0 = createDraft({ transactions: [{ payee: 'A', post: false }] })
+    const d1 = setPost(d0, '0', false)
+    expect(isDirty(d1)).toBe(false)
+    expect(draftToPayload(d1).transactions).toEqual([{ payee: 'A', post: false }])
+    const d2 = setPost(d1, '0', true)
+    expect(d2.dirtyCells).toEqual(new Set(['0:post']))
+    expect(setPost(d2, '0', false).dirtyCells.size).toBe(0)
+  })
+
+  it('addRow gives dash-<uuid> externalId and keeps unknown fields on other rows', () => {
+    const p = { transactions: [{ payee: 'A', confidence: 0.5 }] }
+    const d = addRow(createDraft(p))
+    expect(d.added[0].externalId).toMatch(/^dash-[0-9a-f-]{36}$/)
+    expect(addRow(d, { externalId: 'mine', kind: 'Check' }).added[1]).toEqual({ externalId: 'mine', kind: 'Check' })
+    expect(draftToPayload(d).transactions).toEqual([{ payee: 'A', confidence: 0.5 }, d.added[0]])
+  })
+
+  it('changeBreakdown counts 1 edit, 1 added, 1 post-off separately', () => {
+    let d = createDraft({ transactions: [{ payee: 'A' }, { payee: 'B' }] })
+    d = setCell(d, '0', 'payee', 'X')
+    d = setPost(d, '1', false)
+    d = addRow(d)
+    expect(changeBreakdown(d)).toEqual({ edits: 1, added: 1, deleted: 0, postOff: 1, postOn: 0 })
+    expect(dirtyCount(d)).toBe(3)
+    d = toggleDeleteRow(d, '1')
+    expect(changeBreakdown(d)).toEqual({ edits: 1, added: 1, deleted: 1, postOff: 0, postOn: 0 })
+    const on = setPost(createDraft({ transactions: [{ post: false }] }), '0', true)
+    expect(changeBreakdown(on).postOn).toBe(1)
+  })
+
+  it('postStats counts every non-deleted row; skipped rows stay in allCents', () => {
+    let d = createDraft({ transactions: [{ amount: 10.1 }, { amount: 0.2, post: false }, { amount: 5 }] })
+    d = addRow(d, { amount: 1 })
+    d = toggleDeleteRow(d, '2')
+    expect(postStats(d)).toEqual({ total: 3, posting: 2, skipped: 1, skippedCents: 20, allCents: 1130 })
+  })
 })

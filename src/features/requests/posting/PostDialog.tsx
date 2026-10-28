@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { api } from '@/api/client'
 import { requestKeys } from '@/api/queries/requests'
-import type { RequestDetail } from '@/api/schema'
+import type { OtherPush, RequestDetail } from '@/api/schema'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -15,7 +15,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { formatMoney } from '@/lib/money'
+import { PushId } from '@/components/PushId'
+import { Timestamp } from '@/components/Timestamp'
+import { createDraft, postStats } from '@/features/requests/transactions/draft'
+import { formatCents, formatMoney } from '@/lib/money'
 import type { DuplicateInfo } from './outcome'
 
 const STATE_LABEL = { ok: 'OK', held: 'Held', refused: 'Refused', unreadable: 'Unreadable', unavailable: 'Unavailable' } as const
@@ -24,6 +27,8 @@ interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
   request: RequestDetail
+  /** The payload of the version the dialog opened on (the one whose ETag is posted). */
+  seenPayload: RequestDetail['payload']
   /** The other request when this one may be a duplicate (flagged, or named by a 409 duplicate-unconfirmed). */
   duplicate: DuplicateInfo | null
   /** A newer version arrived while the dialog was open; Confirm still posts the one it opened on (the API answers 412). */
@@ -39,37 +44,45 @@ export function PostDialog({ open, onOpenChange, ...rest }: Props) {
   )
 }
 
-function Body({ request, duplicate, changed, onConfirm, onCancel }: Omit<Props, 'open' | 'onOpenChange'> & { onCancel: () => void }) {
+function Body({ request, seenPayload, duplicate, changed, onConfirm, onCancel }: Omit<Props, 'open' | 'onOpenChange'> & { onCancel: () => void }) {
   const [anyway, setAnyway] = useState(false)
   const [sent, setSent] = useState(false)
   const v = request.validation
   const outdated = v.versionNumber !== undefined && v.versionNumber < request.currentVersion
   const blocked = duplicate !== null && !anyway
+  // The dialog only opens on a saved (not dirty) draft, so the saved payload is what will be posted.
+  const stats = postStats(createDraft(seenPayload))
+  const rowsLabel = `${stats.posting} ${stats.posting === 1 ? 'row' : 'rows'}`
 
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Post to QuickBooks?</DialogTitle>
-        <DialogDescription>This sends the saved version to QuickBooks.</DialogDescription>
+        <DialogTitle>{`Post ${rowsLabel} to QuickBooks?`}</DialogTitle>
+        <DialogDescription>
+          {`${formatCents(stats.allCents - stats.skippedCents)} will post.`}
+          {stats.skipped > 0 && ` ${stats.skipped} ${stats.skipped === 1 ? 'row' : 'rows'} marked don't post ${stats.skipped === 1 ? 'is' : 'are'} skipped.`}
+          {' This sends the saved version to QuickBooks.'}
+        </DialogDescription>
       </DialogHeader>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 rounded-lg border bg-muted/40 px-4 py-3 text-sm">
         <dt className="text-muted-foreground">Subject</dt>
         <dd>{request.email?.subject ?? 'No subject'}</dd>
         <dt className="text-muted-foreground">Rows</dt>
-        <dd>{`${request.transactionCount} ${request.transactionCount === 1 ? 'row' : 'rows'}`}</dd>
+        <dd>{`${stats.total} ${stats.total === 1 ? 'row' : 'rows'}`}</dd>
         <dt className="text-muted-foreground">Control total</dt>
-        <dd className="tabular-nums">{formatMoney(request.controlTotal)}</dd>
+        <dd className="font-medium tabular-nums">{formatMoney(typeof seenPayload.controlTotal === 'number' ? seenPayload.controlTotal : null)}</dd>
       </dl>
       <div className="space-y-1 text-sm">
         <p>Validation: {STATE_LABEL[v.state]}</p>
-        {v.state !== 'ok' && <p className="text-amber-700 dark:text-amber-400">Validation found problems. The API checks again before posting.</p>}
-        {outdated && <p className="font-medium text-amber-700 dark:text-amber-400">Validation is out of date</p>}
+        {v.state !== 'ok' && <p className="text-warning">Validation found problems. The API checks again before posting.</p>}
+        {outdated && <p className="font-medium text-warning">Validation is out of date</p>}
       </div>
       {changed && (
-        <p role="alert" className="text-sm font-medium text-amber-700 dark:text-amber-400">
+        <p role="alert" className="text-sm font-medium text-warning">
           This request changed while this dialog was open.
         </p>
       )}
+      {request.otherUnpostedPushes.length > 0 && <OtherPushes pushes={request.otherUnpostedPushes} />}
       {duplicate && <DuplicateBlock duplicate={duplicate} anyway={anyway} onAnyway={setAnyway} />}
       <DialogFooter>
         <Button variant="outline" onClick={onCancel}>
@@ -82,10 +95,39 @@ function Body({ request, duplicate, changed, onConfirm, onCancel }: Omit<Props, 
             onConfirm(duplicate ? { confirmDuplicate: true } : {})
           }}
         >
-          Confirm
+          {`Post ${rowsLabel}`}
         </Button>
       </DialogFooter>
     </>
+  )
+}
+
+/** What to say about another push that has not finished, by its status. */
+const OTHER_PUSH_STATE: Partial<Record<string, string>> & { pending: string } = {
+  pending: "and isn't posted.",
+  posting: 'and is still posting.',
+  partial: 'and is partly posted.',
+  unknown: 'and may have posted.',
+}
+
+function OtherPushes({ pushes }: { pushes: OtherPush[] }) {
+  return (
+    <div className="space-y-1 rounded-lg border border-warning/30 bg-warning-soft p-3 text-sm">
+      {pushes.map((p) => (
+        <p key={p.id}>
+          <Link className="underline" to={`/statements/${p.id}`} target="_blank" rel="noopener noreferrer">
+            Push <PushId value={p.pushId} fallback={p.publicRef} />
+          </Link>
+          {p.receivedUtc && (
+            <>
+              {' arrived at '}
+              <Timestamp utc={p.receivedUtc} />
+            </>
+          )}
+          {` ${OTHER_PUSH_STATE[p.status] ?? OTHER_PUSH_STATE.pending} Make sure you're not posting the same statement twice.`}
+        </p>
+      ))}
+    </div>
   )
 }
 
@@ -100,10 +142,10 @@ function DuplicateBlock({ duplicate, anyway, onAnyway }: { duplicate: DuplicateI
   const ref = duplicate.ofRef || other.data?.publicRef || (of !== null ? `#${of}` : 'another request')
   const status = duplicate.ofStatus || other.data?.status
   return (
-    <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
-      <p className="font-medium">{status ? `Possible duplicate of ${ref} (${status})` : `Possible duplicate of ${ref}`}</p>
+    <div className="space-y-2 rounded-lg border border-warning/30 bg-warning-soft p-3 text-sm">
+      <p className="font-medium text-warning">{status ? `Possible duplicate of ${ref} (${status})` : `Possible duplicate of ${ref}`}</p>
       {of !== null && (
-        <Link className="underline" to={`/requests/${of}`} target="_blank" rel="noreferrer">
+        <Link className="underline" to={`/statements/${of}`} target="_blank" rel="noreferrer">
           Open the other request
         </Link>
       )}

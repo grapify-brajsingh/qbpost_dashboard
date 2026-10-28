@@ -58,8 +58,37 @@ export function setCell(d: Draft, rowKey: string, field: keyof Txn, value: unkno
   return added ? { ...d, added: copy, dirtyCells } : { ...d, rows: copy, dirtyCells }
 }
 
-export function addRow(d: Draft): Draft {
-  return { ...d, added: [...d.added, {}] }
+/** Appends a row. Dashboard-made rows get a `dash-<uuid>` externalId unless one is given. */
+export function addRow(d: Draft, row?: Partial<Txn>): Draft {
+  const added: Txn = { externalId: `dash-${crypto.randomUUID()}`, ...row }
+  return { ...d, added: [...d.added, added] }
+}
+
+/** A row's `post` missing means true. */
+export const isPosting = (row: Txn): boolean => row.post !== false
+
+/** Switches a row between post and don't post. Never removes data; a row with no `post` field gets none back. */
+export function setPost(d: Draft, rowKey: string, post: boolean): Draft {
+  const added = isAddedKey(rowKey)
+  const i = Number(added ? rowKey.slice(1) : rowKey)
+  const list = added ? d.added : d.rows
+  const current = list[i]
+  if (current === undefined) return d
+  const original: Txn = added ? {} : baseRows(d.base)[i]
+  const key = `${rowKey}:post`
+  const next: Txn = { ...current }
+  const dirtyCells = new Set(d.dirtyCells)
+  if (post === isPosting(original)) {
+    if ('post' in original) next.post = original.post
+    else delete next.post
+    dirtyCells.delete(key)
+  } else {
+    next.post = post
+    dirtyCells.add(key)
+  }
+  const copy = [...list]
+  copy[i] = next
+  return added ? { ...d, added: copy, dirtyCells } : { ...d, rows: copy, dirtyCells }
 }
 
 /** Marks or unmarks a loaded row for deletion. An added row is removed outright (later added rows move up). */
@@ -112,9 +141,51 @@ export function dirtyCount(d: Draft): number {
   return n
 }
 
+export interface ChangeBreakdown {
+  edits: number
+  added: number
+  deleted: number
+  postOff: number
+  postOn: number
+}
+
+/** The parts of `dirtyCount`: cell edits (and a changed control total), added and deleted rows, post switches. */
+export function changeBreakdown(d: Draft): ChangeBreakdown {
+  const out: ChangeBreakdown = { edits: controlTotalChanged(d) ? 1 : 0, added: d.added.length, deleted: d.deleted.size, postOff: 0, postOn: 0 }
+  for (const c of d.dirtyCells) {
+    const [rk, field] = c.split(':')
+    if (isAddedKey(rk) || d.deleted.has(Number(rk))) continue
+    if (field !== 'post') out.edits++
+    else if (isPosting(d.rows[Number(rk)])) out.postOn++
+    else out.postOff++
+  }
+  return out
+}
+
 export const isDirty = (d: Draft) => dirtyCount(d) > 0
 
 export function rowsSumCents(d: Draft): number {
   const kept = d.rows.filter((_, i) => !d.deleted.has(i))
   return sumCents([...kept, ...d.added].map((r) => r.amount))
+}
+
+export interface PostStats {
+  total: number
+  posting: number
+  skipped: number
+  skippedCents: number
+  allCents: number
+}
+
+/** Counts over every non-deleted row (loaded and added). Skipped rows stay in `allCents`. */
+export function postStats(d: Draft): PostStats {
+  const kept = [...d.rows.filter((_, i) => !d.deleted.has(i)), ...d.added]
+  const skipped = kept.filter((r) => !isPosting(r))
+  return {
+    total: kept.length,
+    posting: kept.length - skipped.length,
+    skipped: skipped.length,
+    skippedCents: sumCents(skipped.map((r) => r.amount)),
+    allCents: sumCents(kept.map((r) => r.amount)),
+  }
 }

@@ -1,8 +1,8 @@
 import { http, HttpResponse } from 'msw'
-import type { Attempt, Payload, VersionSummary } from '@/api/schema'
+import type { Attempt, EmailMeta, Payload, VersionSummary } from '@/api/schema'
 import { DEFAULT_POST_DELAY_MS, mockControl, mockDb, type RequestRecord } from '../db'
 import type { MockUser } from '../fixtures/users'
-import { diffPayload } from '../payloadRules'
+import { allReadErrors, computeValidation, diffPayload, rowsOf, UUID_RE } from '../payloadRules'
 import { API, actorOf, authenticate, nowUtc, notFound, parseIfMatch, problem, readJson } from './common'
 import {
   addEvent,
@@ -59,6 +59,10 @@ async function postRequest(request: Request, r: RequestRecord, user: MockUser) {
   if (r.status !== 'pending') return invalidState(r, 'posted')
   const ifMatch = parseIfMatch(request)
   if (ifMatch !== undefined && ifMatch !== r.rowVersion) return stale(r)
+  const rows = rowsOf(current(r).payload)
+  if (rows.length > 0 && rows.every((row) => row.post === false)) {
+    return problem(400, 'nothing-to-post', 'Nothing to post', "Every row is marked don't post.", id)
+  }
   if (r.duplicate.of !== null && !confirm) {
     const other = mockDb.requests.find((x) => x.id === r.duplicate.of)
     return problem(409, 'duplicate-unconfirmed', 'Possible duplicate', 'This request may duplicate another. Confirm to post it anyway.', {
@@ -148,6 +152,62 @@ function applyEdit(r: RequestRecord, payload: Payload, note: string | null, user
   addEvent(r, 'validated', actorOf(user), { state: r.validation.state })
 }
 
+// ---- save (n8n push) ----
+
+/** Rows without an `externalId` get `row-<n>` (1-based position) in version 1 (R-6.4). */
+function withRowIds(payload: Payload): Payload {
+  if (!Array.isArray(payload.transactions)) return payload
+  return {
+    ...payload,
+    transactions: payload.transactions.map((row: unknown, i: number) =>
+      isObj(row) && row.externalId === undefined ? { ...row, externalId: `row-${i + 1}` } : row,
+    ),
+  }
+}
+
+function saveRequest(raw: string, user: MockUser) {
+  let body: unknown
+  try {
+    body = JSON.parse(raw)
+  } catch {
+    body = undefined
+  }
+  if (!isObj(body)) return problem(400, 'not-a-json-object', 'Not a JSON object', 'The body must be a JSON object.')
+  const pushId = typeof body.pushId === 'string' && UUID_RE.test(body.pushId) ? body.pushId.toLowerCase() : null
+  const existing = pushId ? mockDb.requests.find((x) => x.pushId === pushId) : undefined
+  if (existing) return detailResponse(existing, user)
+
+  const payload = withRowIds(body as Payload)
+  const utc = nowUtc()
+  const by = actorOf(user)
+  const id = Math.max(0, ...mockDb.requests.map((x) => x.id)) + 1
+  const mail = isObj(body.email) ? (body.email as unknown as EmailMeta) : null
+  const record: RequestRecord = {
+    id,
+    status: 'pending',
+    rowVersion: 1,
+    source: { kind: 'user', id: user.id, name: user.displayName },
+    created: { utc, by },
+    updated: { utc, by },
+    email: mail,
+    pushId,
+    original: raw,
+    versions: [{ number: 1, created: { utc, by }, note: null, changeCount: 0, payload, changes: [] }],
+    readErrors: allReadErrors(payload),
+    validation: computeValidation(payload, mockDb.lists, 1, utc),
+    duplicate: { of: null, reasons: [], acknowledgedBy: null },
+    attempts: [],
+    events: [],
+    postId: null,
+    discardReason: null,
+    ledgerBatch: null,
+  }
+  mockDb.requests.push(record)
+  recheckDuplicate(record)
+  addEvent(record, 'created', by)
+  return detailResponse(record, user, { status: 201 })
+}
+
 // ---- handlers ----
 
 type Found = { r: RequestRecord; user: MockUser } | { error: Response }
@@ -163,6 +223,11 @@ export const requestHandlers = [
   http.get(`${API}/saved-requests`, ({ request }) => {
     const auth = authenticate(request, 'requests:read')
     return 'error' in auth ? auth.error : listRequests(request, auth.user)
+  }),
+
+  http.post(`${API}/saved-requests`, async ({ request }) => {
+    const auth = authenticate(request, 'requests:submit')
+    return 'error' in auth ? auth.error : saveRequest(await request.text(), auth.user)
   }),
 
   http.get(`${API}/saved-requests/stats`, ({ request }) => {

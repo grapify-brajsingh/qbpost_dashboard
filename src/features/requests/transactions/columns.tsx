@@ -9,7 +9,9 @@ export interface TxColumn {
   /** Stable id, also the key persisted when the column is hidden. */
   id: string
   header: string
-  /** Payload field the column shows (and, in Task 9, edits). Absent for the row number. */
+  /** The header is for screen readers only (the delete column). */
+  srHeader?: boolean
+  /** Payload field the column shows and edits. Absent for the post switch, the row number and the delete button. */
   field?: TxField
   /** Narrow columns can be hidden from the column menu. */
   narrow?: boolean
@@ -40,13 +42,16 @@ const text = (id: TxField, header: string, width: string, narrow = false): TxCol
   render: (row) => cellText(row[id]),
 })
 
+/** Post switch first and delete button last (rendered by the table); narrow columns can be hidden. */
 export const COLUMNS: TxColumn[] = [
-  { id: 'index', header: '#', width: 'w-20', render: (_row, index) => index + 1 },
-  text('date', 'Date', 'w-28'),
+  { id: 'post', header: 'Post', width: 'w-14', render: () => null },
+  { id: 'index', header: '#', width: 'w-16', render: (_row, index) => index + 1 },
+  text('date', 'Date', 'w-32'),
   text('kind', 'Kind', 'w-28'),
   text('payee', 'Payee', 'w-56'),
   text('account', 'Account', 'w-52'),
   text('lineAccount', 'Line account', 'w-52'),
+  text('memo', 'Memo', 'w-64'),
   {
     id: 'amount',
     header: 'Amount',
@@ -57,9 +62,9 @@ export const COLUMNS: TxColumn[] = [
   },
   text('checkNo', 'Check no', 'w-24', true),
   text('refNumber', 'Ref no', 'w-24', true),
-  text('memo', 'Memo', 'w-64'),
   text('last4', 'Last 4', 'w-20', true),
   text('externalId', 'External id', 'w-40', true),
+  { id: 'delete', header: 'Delete', srHeader: true, width: 'w-12', render: () => null },
 ]
 
 export const NARROW_COLUMNS = COLUMNS.filter((c) => c.narrow)
