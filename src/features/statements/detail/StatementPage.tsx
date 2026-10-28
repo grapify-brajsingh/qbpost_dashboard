@@ -30,6 +30,12 @@ interface Seen {
   version: number
 }
 
+/** The page title and last crumb: the email subject, or the SR ref when it is missing or blank. */
+function titleOf(request: RequestDetail): string {
+  const subject = request.email?.subject?.trim()
+  return subject ? subject : request.publicRef
+}
+
 /** True when the saved statement has rows and every one is marked don't post. */
 function allSkipped(request: RequestDetail): boolean {
   const rows = request.payload.transactions
@@ -44,7 +50,7 @@ export function StatementPage() {
   const post = usePost(id)
   const validate = useValidate(id)
   const sheet = useStatementSheet()
-  useBreadcrumb(q.data?.request.publicRef ?? '')
+  useBreadcrumb(q.data ? titleOf(q.data.request) : '')
   // The post dialog; `dup` is the other request when this one may be a duplicate. `seen` is the version the dialog
   // opened on: Confirm posts that ETag, never one a reload brought in under the open dialog.
   const [dialog, setDialog] = useState<{ dup: DuplicateInfo | null; seen: Seen } | null>(null)
@@ -126,7 +132,7 @@ export function StatementPage() {
   return (
     <div className="space-y-4 px-4 pt-6 md:px-7">
       {q.error && <ProblemAlert error={q.error} />}
-      <StatementHeader request={request} onOpenSheet={(tab) => sheet.open(request.id, tab)} onMenu={setOther} />
+      <StatementHeader request={request} title={titleOf(request)} onOpenSheet={(tab) => sheet.open(request.id, tab)} onMenu={setOther} />
       <StatusBanner request={request} />
       {(post.isPosting || request.status === 'posting') && <PostingProgress rows={request.transactionCount} />}
       {showResult && <PostResultBanner outcome={outcome} requestId={id} />}

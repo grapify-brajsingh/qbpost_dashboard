@@ -118,3 +118,27 @@ describe('column menu', () => {
     expect(screen.getByRole('columnheader', { name: 'Ref no' })).toBeInTheDocument()
   })
 })
+
+describe('row heights', () => {
+  test('a row that becomes taller (a "was" line under an edited cell) is re-measured, so the spacer above stays right', async () => {
+    const { user } = open(2)
+    await screen.findByRole('columnheader', { name: 'Payee' })
+    const box = screen.getByTestId('tx-scroll')
+    const padTop = () => {
+      const first = box.querySelector<HTMLElement>('tbody tr[aria-hidden]')
+      return first && box.querySelector('tbody tr')?.getAttribute('aria-hidden') ? parseFloat(first.style.height) : 0
+    }
+    const scrollTo = (top: number) => fireEvent.scroll(box, { target: { scrollTop: top } })
+    // Rows are 40 px, rows with a finding 56 px (row 17 is one of them, above the scrolled-to window).
+    scrollTo(3020)
+    await waitFor(() => expect(padTop()).toBeGreaterThan(0))
+    expect(padTop() % 40).toBe(16)
+
+    scrollTo(0)
+    await waitFor(() => expect(document.querySelector('tr[data-row="0"]')).not.toBeNull())
+    await user.click(document.querySelector<HTMLElement>('tr[data-row="0"] td[data-field="memo"]')!)
+    await user.type(screen.getByRole('textbox', { name: 'Memo' }), ' x{Enter}')
+    scrollTo(3020)
+    await waitFor(() => expect(padTop() % 40).toBe(32))
+  })
+})

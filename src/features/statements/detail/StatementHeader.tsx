@@ -29,10 +29,13 @@ function Meta({ label, children }: { label: string; children: ReactNode }) {
 /** Subject as the title, the meta line, History / Results (the sheet) and the ⋯ menu per allowedActions. */
 export function StatementHeader({
   request,
+  title,
   onOpenSheet,
   onMenu,
 }: {
   request: RequestDetail
+  /** The email subject, or the SR ref when there is none. */
+  title: string
   onOpenSheet: (tab: SheetTab) => void
   onMenu: (action: MenuAction) => void
 }) {
@@ -41,7 +44,7 @@ export function StatementHeader({
   return (
     <header className="flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-0">
-        <h1 className="text-[22px] font-semibold tracking-tight break-words">{request.email?.subject ?? request.publicRef}</h1>
+        <h1 className="text-[22px] font-semibold tracking-tight break-words">{title}</h1>
         <div data-testid="statement-meta" className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[13px] text-muted-foreground">
           <dl className="contents">
             <Meta label="Received">{request.email?.receivedUtc ? <Timestamp utc={request.email.receivedUtc} /> : '—'}</Meta>

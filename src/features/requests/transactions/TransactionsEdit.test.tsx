@@ -154,15 +154,16 @@ describe('editing cells', () => {
   })
 })
 
-// v1's totals bar is now the reconciliation meter: the control total is shown, never edited, and never written.
+// v1's totals bar is now the reconciliation meter: the app never writes the control total; only the user edits it.
 describe('reconciliation meter', () => {
-  test('the sum and the difference follow edits live; the control total is not editable and is saved as loaded', async () => {
+  test('the sum and the difference follow edits live; the control total is saved as loaded unless the user edits it', async () => {
     seedTotals()
     const { user } = await open(1)
     const meter = screen.getByRole('region', { name: 'Reconciliation' })
     expect(within(meter).getByTestId('meter-sum')).toHaveTextContent('4,830.17')
     expect(within(meter).getByTestId('meter-delta')).toHaveTextContent('Over by 10.00')
-    expect(meter).toHaveTextContent('Control total 4,820.17, never changed by the app')
+    expect(within(meter).getByTestId('control-total')).toHaveTextContent('4,820.17')
+    expect(meter).toHaveTextContent('never changed by the app')
     expect(within(meter).queryByRole('textbox')).not.toBeInTheDocument()
 
     await user.click(cell(0, 'amount'))

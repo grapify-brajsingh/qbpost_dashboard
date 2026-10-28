@@ -23,6 +23,7 @@ import {
   draftToPayload,
   postStats,
   setCell,
+  setControlTotal,
   setPost,
   toggleDeleteRow,
   type ChangeBreakdown,
@@ -166,7 +167,13 @@ function TableEditor({ request, etag, findings, validate, post }: Props & { find
   return (
     <div className="space-y-4">
       <UnsavedGuard dirty={dirty} />
-      <ReconciliationMeter allCents={stats.allCents} controlTotal={draft.top.controlTotal} postStats={stats} />
+      <ReconciliationMeter
+        allCents={stats.allCents}
+        controlTotal={draft.top.controlTotal}
+        postStats={stats}
+        onControlTotal={editable ? (ct) => update((d) => setControlTotal(d, ct)) : undefined}
+        was={Object.is(draft.top.controlTotal, draft.base.controlTotal) ? undefined : { value: draft.base.controlTotal }}
+      />
       <TxTable
         rows={visible}
         edit={edit}

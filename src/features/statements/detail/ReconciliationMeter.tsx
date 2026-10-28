@@ -1,16 +1,30 @@
-import { formatCents, toCents } from '@/lib/money'
+import { useState } from 'react'
+import { formatCents, formatMoney, toCents } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import type { PostStats } from '@/features/requests/transactions/draft'
+import { parseAmount, type ParseResult } from '@/features/requests/transactions/cells/parse'
+import { TextCell } from '@/features/requests/transactions/cells/TextCell'
+import { cellText } from '@/features/requests/transactions/columns'
 
 interface Props {
   /** Sum of every non-deleted row, including don't-post rows, in cents. */
   allCents: number
   controlTotal: unknown
   postStats: PostStats
+  /** Present when the user may edit the control total. Only the user's typing changes it, never the sum. */
+  onControlTotal?: (v: number | null) => void
+  /** The saved control total, present while the draft's differs from it. */
+  was?: { value: unknown }
 }
 
+const asText = (v: unknown) => (typeof v === 'number' ? String(v) : cellText(v))
+const shownTotal = (v: unknown) => (typeof v === 'number' ? formatMoney(v) : cellText(v) || 'empty')
+/** Same rules as an amount cell; an empty field removes the control total. */
+const parseTotal = (t: string): ParseResult => (t.trim() === '' ? { value: null } : parseAmount(t))
+
 /** Sum of all rows against the control total. Never filtered; the control total is shown, never changed. */
-export function ReconciliationMeter({ allCents, controlTotal, postStats }: Props) {
+export function ReconciliationMeter({ allCents, controlTotal, postStats, onControlTotal, was }: Props) {
+  const [editing, setEditing] = useState(false)
   const ct = typeof controlTotal === 'number' && Number.isFinite(controlTotal) ? toCents(controlTotal) : null
   const diff = ct === null ? null : allCents - ct
   const width = ct === null || ct <= 0 ? 0 : Math.max(0, Math.min(100, (allCents / ct) * 100))
@@ -43,7 +57,47 @@ export function ReconciliationMeter({ allCents, controlTotal, postStats }: Props
         </div>
         <div className="mt-[7px] flex flex-wrap justify-between gap-x-4 text-xs text-muted-foreground tabular-nums">
           <span>{`${postStats.posting} of ${postStats.total} rows will post${skipped}`}</span>
-          <span>{ct === null ? 'No control total' : `Control total ${formatCents(ct)}, never changed by the app`}</span>
+          {onControlTotal ? (
+            <span className="flex flex-wrap items-center gap-1">
+              Control total
+              {editing ? (
+                <span className="w-32">
+                  <TextCell
+                    label="Control total"
+                    initial={asText(controlTotal)}
+                    align="right"
+                    parse={parseTotal}
+                    onCommit={(v) => {
+                      setEditing(false)
+                      if (!Object.is(v, controlTotal)) onControlTotal(v as number | null)
+                    }}
+                    onCancel={() => setEditing(false)}
+                  />
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  aria-label="Edit control total"
+                  data-testid="control-total"
+                  data-dirty={was ? 'true' : undefined}
+                  className={cn(
+                    'group/ct rounded px-1 font-medium text-foreground tabular-nums hover:bg-primary/5 focus-visible:ring-2 focus-visible:ring-ring',
+                    was && 'bg-primary/10',
+                  )}
+                  onClick={() => setEditing(true)}
+                >
+                  {ct === null ? 'none' : formatCents(ct)}
+                  <span aria-hidden className="ml-1 opacity-0 group-hover/ct:opacity-100">
+                    ✎
+                  </span>
+                </button>
+              )}
+              {was && <span className="text-[11px] text-primary">was {shownTotal(was.value)}</span>}
+              <span className="-ml-1">, never changed by the app</span>
+            </span>
+          ) : (
+            <span>{ct === null ? 'No control total' : `Control total ${formatCents(ct)}, never changed by the app`}</span>
+          )}
         </div>
       </div>
       <div

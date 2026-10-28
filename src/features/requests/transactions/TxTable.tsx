@@ -16,7 +16,7 @@ import { KindCell } from './cells/KindCell'
 import { NameComboCell, NotInQuickBooks } from './cells/NameComboCell'
 import { TextCell, type Move } from './cells/TextCell'
 import { cellText, COLUMNS, isEditableField, isKnownKind, NARROW_COLUMNS, type TxColumn, type TxField } from './columns'
-import { isPosting, type Draft } from './draft'
+import { isAddedKey, isPosting, type Draft } from './draft'
 
 const STORAGE_KEY = 'qbpost-tx-columns'
 const ROW_HEIGHT = 40
@@ -195,17 +195,31 @@ export function TxTable({ rows, edit, findings, readErrors, toolbar, highlight =
   const isDirtyCell = (key: string, field: TxField | undefined) => edit !== undefined && field !== undefined && edit.draft.dirtyCells.has(`${key}:${field}`)
   const canEdit = (r: DisplayRow, col: TxColumn) => edit !== undefined && isEditableField(col.field) && !r.deleted
 
-  const tall = (r: DisplayRow) =>
-    findings.has(r.index) || (edit !== undefined && !r.added && [...edit.draft.dirtyCells].some((c) => c.startsWith(`${r.key}:`) && !c.endsWith(':post')))
+  // Rows with a line under a cell ("was …" or a problem reason) are taller. Worked out once per render.
+  const tallKeys = new Set<string>()
+  for (const r of rows) if (findings.has(r.index)) tallKeys.add(r.key)
+  if (edit) {
+    for (const c of edit.draft.dirtyCells) {
+      const [rk, field] = c.split(':')
+      if (field !== 'post' && !isAddedKey(rk)) tallKeys.add(rk)
+    }
+  }
+  const heightOf = (r: DisplayRow) => (tallKeys.has(r.key) ? TALL_ROW_HEIGHT : ROW_HEIGHT)
 
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: (i) => (rows[i] && tall(rows[i]) ? TALL_ROW_HEIGHT : ROW_HEIGHT),
+    estimateSize: (i) => (rows[i] ? heightOf(rows[i]) : ROW_HEIGHT),
     overscan: 8,
     initialRect: FALLBACK_RECT,
     observeElementRect: (instance, cb) => observeElementRect(instance, (rect) => cb(rect.height === 0 ? FALLBACK_RECT : rect)),
   })
+  // The virtualizer caches sizes; re-measure whenever the shown rows or their heights change (an edit, a save,
+  // a validation, a post's findings, a filter that swaps rows at the same count).
+  const layout = rows.map((r) => `${r.key}${tallKeys.has(r.key) ? '+' : ''}`).join(',')
+  useLayoutEffect(() => {
+    virtualizer.measure()
+  }, [layout, virtualizer])
   const items = virtualizer.getVirtualItems()
   const padTop = items.length > 0 ? items[0].start : 0
   const padBottom = items.length > 0 ? virtualizer.getTotalSize() - items[items.length - 1].end : 0
@@ -363,7 +377,7 @@ export function TxTable({ rows, edit, findings, readErrors, toolbar, highlight =
                     data-added={added ? 'true' : undefined}
                     data-skip={skip ? 'true' : undefined}
                     data-highlight={lit ? 'true' : undefined}
-                    style={{ height: tall(r) ? TALL_ROW_HEIGHT : ROW_HEIGHT }}
+                    style={{ height: heightOf(r) }}
                     className={cn(
                       'border-b transition-colors hover:bg-muted/40',
                       deleted && 'text-muted-foreground line-through',

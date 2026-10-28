@@ -21,14 +21,13 @@ afterEach(() => {
 
 const record = (id: number) => mockDb.requests.find((r) => r.id === id)!
 const payloadOf = (id: number) => record(id).versions[record(id).versions.length - 1].payload
-const ref = (id: number) => `SR-${String(id).padStart(6, '0')}`
 
 /** Opens a statement and waits until its page (not just the shell) is on screen. */
 async function open(id: number, search = '', as = 'u-admin') {
   mockControl.signInAs(as)
   const r = renderApp(`/statements/${id}${search}`)
-  await screen.findByRole('heading', { level: 1 })
-  await within(screen.getByRole('navigation', { name: 'Breadcrumb' })).findByText(ref(id))
+  const h1 = await screen.findByRole('heading', { level: 1 })
+  await within(screen.getByRole('navigation', { name: 'Breadcrumb' })).findByText(h1.textContent!)
   return r
 }
 
@@ -166,9 +165,18 @@ describe('header', () => {
     expect(await screen.findByLabelText('Reason')).toBeInTheDocument()
   })
 
-  test('the breadcrumb names the statement by its ref', async () => {
-    await open(5)
-    expect(within(screen.getByRole('navigation', { name: 'Breadcrumb' })).getByText('SR-000005')).toHaveAttribute('aria-current', 'page')
+  test('the breadcrumb names the statement by its subject, or its ref when the subject is missing or blank', async () => {
+    const crumb = () => within(screen.getByRole('navigation', { name: 'Breadcrumb' }))
+    const first = await open(5)
+    expect(crumb().getByText('Chase statement – Aug 2026 (resent)')).toHaveAttribute('aria-current', 'page')
+    first.unmount()
+    const second = await open(12)
+    expect(crumb().getByText('SR-000012')).toHaveAttribute('aria-current', 'page')
+    second.unmount()
+    record(13).email = { subject: '   ', receivedUtc: null }
+    await open(13)
+    expect(screen.getByRole('heading', { level: 1, name: 'SR-000013' })).toBeInTheDocument()
+    expect(crumb().getByText('SR-000013')).toHaveAttribute('aria-current', 'page')
   })
 
   test('404 shows Statement not found with a link back', async () => {
@@ -337,7 +345,8 @@ describe('row filters', () => {
     expect(saveBar()).toHaveTextContent('2 unsaved changes')
 
     await user.click(screen.getByRole('button', { name: 'Kind' }))
-    await user.click(await screen.findByRole('option', { name: 'CcCredit' }))
+    await user.click(await screen.findByRole('checkbox', { name: 'CcCredit' }))
+    await user.keyboard('{Escape}')
     await waitFor(() => expect(shownRows()).toEqual([3]))
     expect(new URLSearchParams(router.state.location.search).get('rkind')).toBe('CcCredit')
     expect(meter().textContent).toBe(before)
@@ -353,6 +362,20 @@ describe('row filters', () => {
 
     await user.click(screen.getByRole('button', { name: 'Clear filters' }))
     await waitFor(() => expect(shownRows()).toEqual([0, 1, 2, 3, 4, 5]))
+  })
+
+  test('Kind takes several kinds', async () => {
+    const { user, router } = await open(13)
+    await user.click(screen.getByRole('button', { name: 'Kind' }))
+    await user.click(await screen.findByRole('checkbox', { name: 'Deposit' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Check' }))
+    await waitFor(() => expect(shownRows()).toEqual([0, 2, 4, 5]))
+    expect(new URLSearchParams(router.state.location.search).get('rkind')).toBe('Check,Deposit')
+    expect(screen.getByText('Showing 4 of 6 rows (filtered)')).toBeInTheDocument()
+    await user.click(screen.getByRole('checkbox', { name: 'Deposit' }))
+    await waitFor(() => expect(shownRows()).toEqual([0, 4, 5]))
+    await user.keyboard('{Escape}')
+    expect(screen.getByRole('button', { name: 'Kind: Check' })).toBeInTheDocument()
   })
 
   test('filters come from the URL; search, post and garbage values', async () => {
@@ -415,6 +438,47 @@ describe('?row=', () => {
       await vi.advanceTimersByTimeAsync(2100)
     })
     expect(rowEl(6)).not.toHaveAttribute('data-highlight')
+  })
+})
+
+describe('control total', () => {
+  test('editing the control total updates the meter, marks the draft dirty and is saved', async () => {
+    const { user } = await open(13)
+    const sum = within(meter()).getByTestId('meter-sum').textContent!
+    expect(within(meter()).getByTestId('meter-delta')).toHaveTextContent('Matches to the cent')
+    await user.click(within(meter()).getByRole('button', { name: 'Edit control total' }))
+    const input = within(meter()).getByRole('textbox', { name: 'Control total' })
+    await user.clear(input)
+    await user.type(input, '1.234{Enter}')
+    expect(within(meter()).getByText('Up to 2 decimals')).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    expect(within(meter()).queryByRole('textbox')).not.toBeInTheDocument()
+    expect(saveBar()).not.toHaveTextContent(/unsaved/)
+
+    await user.click(within(meter()).getByRole('button', { name: 'Edit control total' }))
+    const again = within(meter()).getByRole('textbox', { name: 'Control total' })
+    await user.clear(again)
+    await user.type(again, '10{Enter}')
+    expect(within(meter()).getByTestId('control-total')).toHaveTextContent('10.00')
+    expect(within(meter()).getByTestId('control-total')).toHaveAttribute('data-dirty', 'true')
+    expect(within(meter()).getByText(`was ${sum}`)).toBeInTheDocument()
+    expect(within(meter()).getByTestId('meter-delta')).toHaveTextContent(/^Over by /)
+    expect(saveBar()).toHaveTextContent('1 unsaved change')
+    expect(saveBar()).toHaveTextContent('1 edit')
+    expect(postButton()).toBeDisabled()
+
+    const seen = capturePut()
+    await user.click(within(saveBar()).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(seen).toHaveLength(1))
+    expect(seen[0].body.payload.controlTotal).toBe(10)
+    await waitFor(() => expect(saveBar()).not.toHaveTextContent(/unsaved/))
+    expect(within(meter()).getByTestId('control-total')).not.toHaveAttribute('data-dirty')
+  })
+
+  test('a viewer sees the control total as text only', async () => {
+    await open(13, '', 'u-viewer')
+    expect(within(meter()).queryByRole('button', { name: 'Edit control total' })).not.toBeInTheDocument()
+    expect(meter()).toHaveTextContent(/Control total [0-9,.]+, never changed by the app/)
   })
 })
 
@@ -484,7 +548,7 @@ describe('moving between statements', () => {
       void router.navigate('/statements/5')
     })
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Leave' }))
-    await within(screen.getByRole('navigation', { name: 'Breadcrumb' })).findByText('SR-000005')
+    await within(screen.getByRole('navigation', { name: 'Breadcrumb' })).findByText('Chase statement – Aug 2026 (resent)')
     await waitFor(() => expect(screen.getByRole('switch', { name: 'Post row 2' })).toBeChecked())
     expect(saveBar()).not.toHaveTextContent(/unsaved/)
     expect(cell(0, 'memo')).not.toHaveAttribute('data-dirty')
