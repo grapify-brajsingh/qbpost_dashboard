@@ -93,6 +93,7 @@ function build(o: Opts): RequestRecord {
     updated: { utc: events[events.length - 1].atUtc, by: lastBy },
     email: o.email === undefined ? null : o.email,
     pushId: o.pushId ?? null,
+    upload: null,
     original: JSON.stringify(first),
     versions,
     readErrors: readErrorsOf(current.payload),

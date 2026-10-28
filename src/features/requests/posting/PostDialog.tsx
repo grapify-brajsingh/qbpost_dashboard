@@ -20,6 +20,7 @@ import { Timestamp } from '@/components/Timestamp'
 import { createDraft, postStats } from '@/features/requests/transactions/draft'
 import { formatCents, formatMoney } from '@/lib/money'
 import type { DuplicateInfo } from './outcome'
+import { statementSubject } from '@/lib/statementTitle'
 
 const STATE_LABEL = { ok: 'OK', held: 'Held', refused: 'Refused', unreadable: 'Unreadable', unavailable: 'Unavailable' } as const
 
@@ -65,8 +66,8 @@ function Body({ request, seenPayload, duplicate, changed, onConfirm, onCancel }:
         </DialogDescription>
       </DialogHeader>
       <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 rounded-lg border bg-muted/40 px-4 py-3 text-sm">
-        <dt className="text-muted-foreground">Subject</dt>
-        <dd>{request.email?.subject ?? 'No subject'}</dd>
+        <dt className="text-muted-foreground">{request.email?.subject?.trim() || !request.upload ? 'Subject' : 'File'}</dt>
+        <dd className="break-all">{statementSubject(request) ?? 'No subject'}</dd>
         <dt className="text-muted-foreground">Rows</dt>
         <dd>{`${stats.total} ${stats.total === 1 ? 'row' : 'rows'}`}</dd>
         <dt className="text-muted-foreground">Control total</dt>

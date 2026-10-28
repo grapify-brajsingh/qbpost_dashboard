@@ -73,7 +73,13 @@ const REASON_FIELD: Partial<Record<string, TxField>> = {
   'unknown-account': 'account',
   'date-too-old': 'date',
 }
-const reasonField = (f: Finding): TxField => REASON_FIELD[f.reason] ?? 'payee'
+/** `empty-<field>` (upload review) belongs under that field's cell. */
+const EMPTY_REASON = /^empty-(\w+)$/
+const emptyField = (reason: string): TxField | undefined => {
+  const field = EMPTY_REASON.exec(reason)?.[1]
+  return COLUMNS.find((c) => c.field === field)?.field
+}
+const reasonField = (f: Finding): TxField => REASON_FIELD[f.reason] ?? emptyField(f.reason) ?? 'payee'
 
 /** Columns the keyboard moves between; the switch and the delete button are ordinary controls. */
 const isNavColumn = (c: TxColumn) => c.id !== 'post' && c.id !== 'delete'

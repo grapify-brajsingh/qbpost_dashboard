@@ -173,28 +173,80 @@ function saveRequest(raw: string, user: MockUser) {
     body = undefined
   }
   if (!isObj(body)) return problem(400, 'not-a-json-object', 'Not a JSON object', 'The body must be a JSON object.')
+  if (isObj(body.upload)) return saveUpload(body, raw, user)
   const pushId = typeof body.pushId === 'string' && UUID_RE.test(body.pushId) ? body.pushId.toLowerCase() : null
   const existing = pushId ? mockDb.requests.find((x) => x.pushId === pushId) : undefined
   if (existing) return detailResponse(existing, user)
 
   const payload = withRowIds(body as Payload)
+  const mail = isObj(body.email) ? (body.email as unknown as EmailMeta) : null
+  const record = createRecord(user, raw, [{ payload, note: null }], { email: mail, pushId, upload: null })
+  addEvent(record, 'created', actorOf(user), { source: 'email' })
+  return detailResponse(record, user, { status: 201 })
+}
+
+/** R-14: the model's rows become version 1 (with the reference and total the user typed), review edits version 2. */
+function saveUpload(body: Record<string, unknown>, raw: string, user: MockUser) {
+  const id = String((body.upload as Record<string, unknown>).extractionId)
+  const x = mockDb.extractions.find((e) => e.id === id)
+  if (!x || x.expiresUtc <= nowUtc()) {
+    return problem(410, 'extraction-expired', 'Upload expired', 'This upload has expired. Upload the PDF again.')
+  }
+  if (x.userId !== user.id) return notFound('Extraction')
+  if (x.savedRequestId !== null) {
+    return problem(409, 'extraction-already-saved', 'Already saved', 'This upload was already saved.', {
+      savedRequestId: x.savedRequestId,
+      publicRef: publicRef(x.savedRequestId),
+    })
+  }
+
+  const { upload: _upload, ...reviewed } = body
+  void _upload
+  const header = { reference: reviewed.reference ?? null, controlTotal: reviewed.controlTotal ?? null }
+  const read: Payload = { ...header, transactions: x.payload.transactions }
+  const final = withRowIds({ ...reviewed, ...header } as Payload)
+  const versions = [{ payload: read, note: `Read from ${x.file.name}` }]
+  if (diffPayload(read, final).length > 0) versions.push({ payload: final, note: 'Reviewed before saving' })
+  const upload = {
+    fileName: x.file.name,
+    sizeBytes: x.file.sizeBytes,
+    sha256: x.file.sha256,
+    model: x.model,
+    promptVersion: x.promptVersion,
+    extractedUtc: x.extractedUtc,
+  }
+  const record = createRecord(user, raw, versions, { email: null, pushId: null, upload })
+  x.savedRequestId = record.id
+  addEvent(record, 'created', actorOf(user), { source: 'upload', fileName: x.file.name })
+  return detailResponse(record, user, { status: 201 })
+}
+
+/** A new pending request saved by `user`; later versions carry their change lists. */
+function createRecord(
+  user: MockUser,
+  raw: string,
+  payloads: { payload: Payload; note: string | null }[],
+  meta: Pick<RequestRecord, 'email' | 'pushId' | 'upload'>,
+): RequestRecord {
   const utc = nowUtc()
   const by = actorOf(user)
-  const id = Math.max(0, ...mockDb.requests.map((x) => x.id)) + 1
-  const mail = isObj(body.email) ? (body.email as unknown as EmailMeta) : null
+  const versions = payloads.map(({ payload, note }, i) => {
+    const changes = i === 0 ? [] : diffPayload(payloads[i - 1].payload, payload)
+    return { number: i + 1, created: { utc, by }, note, changeCount: changes.length, payload, changes }
+  })
+  const last = versions[versions.length - 1]
   const record: RequestRecord = {
-    id,
+    id: Math.max(0, ...mockDb.requests.map((r) => r.id)) + 1,
     status: 'pending',
-    rowVersion: 1,
+    rowVersion: versions.length,
     source: { kind: 'user', id: user.id, name: user.displayName },
     created: { utc, by },
     updated: { utc, by },
-    email: mail,
-    pushId,
+    ...meta,
     original: raw,
-    versions: [{ number: 1, created: { utc, by }, note: null, changeCount: 0, payload, changes: [] }],
-    readErrors: allReadErrors(payload),
-    validation: computeValidation(payload, mockDb.lists, 1, utc),
+    versions,
+    readErrors: allReadErrors(last.payload),
+    validation: computeValidation(last.payload, mockDb.lists, last.number, utc),
     duplicate: { of: null, reasons: [], acknowledgedBy: null },
     attempts: [],
     events: [],
@@ -204,8 +256,7 @@ function saveRequest(raw: string, user: MockUser) {
   }
   mockDb.requests.push(record)
   recheckDuplicate(record)
-  addEvent(record, 'created', by)
-  return detailResponse(record, user, { status: 201 })
+  return record
 }
 
 // ---- handlers ----

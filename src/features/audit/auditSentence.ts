@@ -53,6 +53,8 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 const SENTENCE: Record<AuditAction, (e: AuditEvent) => string> = {
   received: (e) => {
+    const file = e.detail?.source === 'upload' ? str(e.detail.fileName) : null
+    if (file) return `Uploaded ${file}`
     const n = num(e.detail?.rowCount) ?? num(e.detail?.rows)
     return n === null ? 'Received the statement' : `Received ${plural(n, 'row')}`
   },

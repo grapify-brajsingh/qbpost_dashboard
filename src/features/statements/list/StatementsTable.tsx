@@ -1,5 +1,5 @@
 import type { KeyboardEvent } from 'react'
-import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon, CheckIcon, MinusIcon, TriangleAlertIcon } from 'lucide-react'
+import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon, CheckIcon, MinusIcon, TriangleAlertIcon, UploadIcon } from 'lucide-react'
 import { Link, useNavigate } from 'react-router'
 import type { RequestSummary } from '@/api/schema'
 import { Money } from '@/components/Money'
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 import { nextSort, type SortKey, type SortValue } from './statusTabs'
+import { statementSubject } from '@/lib/statementTitle'
 
 export type SheetTab = 'history' | 'results'
 
@@ -118,7 +119,7 @@ export function StatementsTable({
       <TableHeader className="bg-muted/40">
         <TableRow>
           <SortHead label="Received" sortKey="received" sort={sort} onSort={onSort} />
-          <TableHead>Email</TableHead>
+          <TableHead>Email or file</TableHead>
           <TableHead>Reference</TableHead>
           <SortHead label="Rows" sortKey="rows" sort={sort} onSort={onSort} className="text-right" />
           <SortHead label="Total" sortKey="total" sort={sort} onSort={onSort} className="text-right" />
@@ -145,7 +146,7 @@ export function StatementsTable({
                   <span className="sr-only">New</span>
                 </>
               )}
-              {r.email?.receivedUtc ? <Timestamp utc={r.email.receivedUtc} /> : '—'}
+              {r.email?.receivedUtc ? <Timestamp utc={r.email.receivedUtc} /> : r.upload ? <Timestamp utc={r.created.utc} /> : '—'}
             </TableCell>
             <TableCell className="w-full max-w-0 min-w-56">
               <Link
@@ -153,9 +154,16 @@ export function StatementsTable({
                 to={`/statements/${r.id}`}
                 onClick={(e) => e.stopPropagation()}
               >
-                {r.email?.subject ?? '—'}
+                {statementSubject(r) ?? '—'}
               </Link>
-              <span className="block truncate text-xs text-muted-foreground">{r.email?.from ?? '—'}</span>
+              {r.upload && !r.email ? (
+                <span className="flex items-center gap-1 truncate text-xs text-muted-foreground">
+                  <UploadIcon className="size-3 shrink-0" aria-hidden />
+                  Uploaded by {r.source.name}
+                </span>
+              ) : (
+                <span className="block truncate text-xs text-muted-foreground">{r.email?.from ?? '—'}</span>
+              )}
             </TableCell>
             <TableCell>
               <span className="block text-[13px]">{r.reference ?? '—'}</span>

@@ -11,6 +11,7 @@ import { AuditPage } from '@/features/audit/AuditPage'
 import { HomePage } from '@/features/home/HomePage'
 import { StatementPage } from '@/features/statements/detail/StatementPage'
 import { StatementsPage } from '@/features/statements/list/StatementsPage'
+import { UploadPage } from '@/features/statements/upload/UploadPage'
 import { UserPage } from '@/features/users/UserPage'
 import { UsersPage } from '@/features/users/UsersPage'
 import { AppShell } from '@/layout/AppShell'
@@ -26,9 +27,14 @@ function NotFound() {
   )
 }
 
-function RequireAdmin({ children }: { children: ReactNode }) {
+/** Pages for some roles only: anyone else gets Page not found. The API enforces the same scope. */
+function RequireScope({ scope, children }: { scope: string; children: ReactNode }) {
   const { me } = useSession()
-  return hasScope(me, 'users:manage') ? children : <NotFound />
+  return hasScope(me, scope) ? children : <NotFound />
+}
+
+function RequireAdmin({ children }: { children: ReactNode }) {
+  return <RequireScope scope="users:manage">{children}</RequireScope>
 }
 
 /** Keyed by id: nothing on the page (draft, post state, dialogs) carries over to another statement. */
@@ -77,6 +83,15 @@ export const routes: RouteObject[] = [
             handle: { crumb: 'Statements' },
             children: [
               { index: true, element: <StatementsPage /> },
+              {
+                path: 'upload',
+                element: (
+                  <RequireScope scope="requests:submit">
+                    <UploadPage />
+                  </RequireScope>
+                ),
+                handle: { crumb: 'Upload PDF' },
+              },
               { path: ':id', element: <StatementRoute />, handle: { crumb: 'Statement' } },
             ],
           },

@@ -77,6 +77,42 @@ export interface EmailMeta {
   messageId?: string | null
 }
 
+/** Where an uploaded statement came from (R-14.4). Null for statements saved by n8n. */
+export interface UploadMeta {
+  fileName: string
+  sizeBytes: number
+  sha256: string
+  model: string
+  promptVersion: string
+  extractedUtc: string
+}
+
+export type DuplicateReason = 'same-file' | 'same-reference' | 'overlapping-rows' | 'same-payload'
+
+/** A statement an upload may repeat (R-13.9). A warning only. */
+export interface PossibleDuplicate {
+  id: number
+  publicRef: string
+  reference: string | null
+  status: RequestStatus
+  receivedUtc: string | null
+  source: 'email' | 'upload' | 'other'
+  reasons: DuplicateReason[]
+}
+
+/** `POST /statement-extractions` answer (R-13.7): the rows read from a PDF, nothing saved yet. */
+export interface Extraction {
+  extractionId: string
+  file: { name: string; sizeBytes: number; sha256: string; pageCount: number }
+  model: string
+  promptVersion: string
+  extractedUtc: string
+  expiresUtc: string
+  isBankStatement: boolean
+  payload: Payload
+  possibleDuplicates?: PossibleDuplicate[]
+}
+
 export interface ValidationSummary {
   state: ValidationSnapshot['state'] | 'none'
   problemCount: number
@@ -127,6 +163,8 @@ export interface RequestSummary {
   } | null
   postId: string | null
   email: EmailMeta | null
+  /** Set for statements uploaded from the dashboard (R-14.4); missing on an older API means null. */
+  upload?: UploadMeta | null
   pushId: string | null
   historyCount: number
   validationSummary: ValidationSummary

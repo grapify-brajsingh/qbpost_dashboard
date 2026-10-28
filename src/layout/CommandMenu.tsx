@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { FileTextIcon, HistoryIcon, LayoutDashboardIcon, UserIcon, UsersIcon, type LucideIcon } from 'lucide-react'
+import { FileTextIcon, FileUpIcon, HistoryIcon, LayoutDashboardIcon, UserIcon, UsersIcon, type LucideIcon } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { useRequestsList } from '@/api/queries/requests'
 import { hasScope, useSession } from '@/auth/useSession'
@@ -12,6 +12,7 @@ import {
   CommandList,
 } from '@/components/ui/command'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { statementSubject } from '@/lib/statementTitle'
 
 const SEARCH_DEBOUNCE_MS = 200
 
@@ -19,14 +20,16 @@ interface PageEntry {
   label: string
   to: string
   icon: LucideIcon
-  adminOnly?: boolean
+  /** Shown only to users with this scope. */
+  scope?: string
 }
 
 const PAGES: PageEntry[] = [
   { label: 'Home', to: '/', icon: LayoutDashboardIcon },
   { label: 'Statements', to: '/statements', icon: FileTextIcon },
+  { label: 'Upload PDF', to: '/statements/upload', icon: FileUpIcon, scope: 'requests:submit' },
   { label: 'Audit trail', to: '/audit', icon: HistoryIcon },
-  { label: 'Users', to: '/users', icon: UsersIcon, adminOnly: true },
+  { label: 'Users', to: '/users', icon: UsersIcon, scope: 'users:manage' },
   { label: 'My account', to: '/account', icon: UserIcon },
 ]
 
@@ -76,7 +79,7 @@ function CommandBody({ close }: { close(): void }) {
 
   const needle = text.trim().toLowerCase()
   const pages = PAGES.filter(
-    (p) => (!p.adminOnly || hasScope(me, 'users:manage')) && p.label.toLowerCase().includes(needle),
+    (p) => (!p.scope || hasScope(me, p.scope)) && p.label.toLowerCase().includes(needle),
   )
   const go = (to: string) => {
     close()
@@ -95,7 +98,7 @@ function CommandBody({ close }: { close(): void }) {
               <CommandItem key={r.id} value={`statement-${r.id}`} onSelect={() => go(`/statements/${r.id}`)}>
                 <FileTextIcon />
                 <span className="num font-mono text-xs">{r.publicRef}</span>
-                <span className="truncate text-muted-foreground">{r.email?.subject ?? r.reference ?? ''}</span>
+                <span className="truncate text-muted-foreground">{statementSubject(r) ?? r.reference ?? ''}</span>
               </CommandItem>
             ))}
           </CommandGroup>

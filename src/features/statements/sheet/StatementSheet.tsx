@@ -6,13 +6,14 @@ import { VersionsTab } from '@/features/requests/versions/VersionsTab'
 import { HistoryTimeline } from './HistoryTimeline'
 import { ResultsTab } from './ResultsTab'
 import { useStatementSheet, type SheetTab } from './useStatementSheet'
+import { statementSubject } from '@/lib/statementTitle'
 
 function Heading({ id }: { id: number }) {
   const q = useRequest(String(id))
   const d = q.data?.request
   return (
     <SheetHeader>
-      <SheetTitle>{d ? (d.email?.subject ?? d.publicRef) : `Statement ${id}`}</SheetTitle>
+      <SheetTitle>{d ? (statementSubject(d) ?? d.publicRef) : `Statement ${id}`}</SheetTitle>
       <SheetDescription asChild>
         <div>{d ? <PushId value={d.pushId} fallback={d.publicRef} /> : null}</div>
       </SheetDescription>

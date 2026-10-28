@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { formatRelative, formatTimestamp } from '@/lib/dates'
 import { CardError, CardSkeleton } from './CardState'
 import { ageBuckets, receivedAt, type AgeBucket } from './homeMetrics'
+import { statementSubject } from '@/lib/statementTitle'
 
 const OLDEST_SHOWN = 5
 
@@ -90,7 +91,7 @@ export function WaitingCard({ queue, now }: { queue: UseQueryResult<Page<Request
                 </TableHeader>
                 <TableBody>
                   {items.slice(0, OLDEST_SHOWN).map((r) => {
-                    const title = r.email?.subject ?? r.reference ?? '—'
+                    const title = statementSubject(r) ?? r.reference ?? '—'
                     return (
                       <TableRow key={r.id}>
                         <TableCell className="max-w-0 pl-6 sm:max-w-[22rem]">
