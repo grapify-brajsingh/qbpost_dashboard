@@ -40,6 +40,8 @@ export interface Txn {
   refNumber?: string
   memo?: string
   last4?: string
+  /** Missing means true. `false` sends the row to QuickBooks as `Skip` (R-6). */
+  post?: boolean
   [k: string]: unknown
 }
 
@@ -75,6 +77,28 @@ export interface EmailMeta {
   messageId?: string | null
 }
 
+export interface ValidationSummary {
+  state: ValidationSnapshot['state'] | 'none'
+  problemCount: number
+  validatedUtc: string | null
+  versionNumber: number | null
+}
+
+export interface PostSummary {
+  postId: string
+  postedCount: number
+  postedUtc: string
+  postedBy: Actor
+}
+
+export interface OtherPush {
+  id: number
+  publicRef: string
+  pushId: string | null
+  receivedUtc: string | null
+  status: RequestStatus
+}
+
 export interface RequestSummary {
   id: number
   publicRef: string
@@ -103,6 +127,11 @@ export interface RequestSummary {
   } | null
   postId: string | null
   email: EmailMeta | null
+  pushId: string | null
+  historyCount: number
+  validationSummary: ValidationSummary
+  postSummary: PostSummary | null
+  skipCount: number
   discardReason?: string | null
   created: { utc: string; by: Actor }
   updated: { utc: string; by: Actor }
@@ -112,6 +141,7 @@ export interface RequestSummary {
 export interface RequestDetail extends RequestSummary {
   payload: Payload
   readErrors: string[]
+  otherUnpostedPushes: OtherPush[]
   validation: ValidationSnapshot
   ledgerBatch?: {
     postId: string
@@ -132,6 +162,7 @@ export interface Stats {
   byStatus: Record<RequestStatus, number>
   needsAttention: { pending: number; all: number }
   duplicate: { pending: number; all: number }
+  hasErrors: { pending: number; all: number }
 }
 
 export interface VersionSummary {
@@ -196,6 +227,8 @@ export interface Me {
   scopes: string[]
 }
 
+export type UserStatus = 'active' | 'must-change-password' | 'locked' | 'disabled'
+
 export interface User {
   id: string
   email: string
@@ -203,6 +236,7 @@ export interface User {
   role: Role
   disabled: boolean
   lockedOutUntilUtc: string | null
+  mustChangePassword: boolean
   lastLoginUtc: string | null
   rowVersion: number
 }

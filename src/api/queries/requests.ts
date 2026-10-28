@@ -5,6 +5,7 @@ import type {
   Payload,
   RequestDetail,
   RequestEvent,
+  RequestStatus,
   RequestSummary,
   Stats,
   Version,
@@ -12,7 +13,25 @@ import type {
 } from '../schema'
 import { useDraftDirty } from '@/features/requests/transactions/draftDirtyStore'
 import { api } from '../client'
-import type { ListParams } from '@/features/requests/list/queue'
+
+export interface ListParams {
+  status?: RequestStatus[]
+  needsAttention?: boolean
+  duplicate?: boolean
+  q?: string
+  receivedFrom?: string
+  receivedTo?: string
+  source?: string
+  emailFrom?: string
+  reference?: string
+  minTotal?: number
+  maxTotal?: number
+  hasErrors?: boolean
+  /** `received`, `created`, `updated`, `controlTotal`, `total`, `rows`; a leading `-` sorts descending. */
+  sort?: string
+  page?: number
+  pageSize?: number
+}
 
 export const STATS_POLL_MS = 60_000
 export const POSTING_POLL_MS = 3000
@@ -40,6 +59,11 @@ export function listQuery(params: ListParams): string {
   if (params.receivedFrom) qs.set('receivedFrom', params.receivedFrom)
   if (params.receivedTo) qs.set('receivedTo', params.receivedTo)
   if (params.source) qs.set('source', params.source)
+  if (params.emailFrom) qs.set('emailFrom', params.emailFrom)
+  if (params.reference) qs.set('reference', params.reference)
+  if (params.minTotal !== undefined) qs.set('minTotal', String(params.minTotal))
+  if (params.maxTotal !== undefined) qs.set('maxTotal', String(params.maxTotal))
+  if (params.hasErrors !== undefined) qs.set('hasErrors', String(params.hasErrors))
   if (params.sort) qs.set('sort', params.sort)
   if (params.page && params.page > 1) qs.set('page', String(params.page))
   if (params.pageSize) qs.set('pageSize', String(params.pageSize))

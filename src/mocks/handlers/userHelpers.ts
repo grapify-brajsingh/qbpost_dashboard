@@ -1,4 +1,4 @@
-import type { Actor, User } from '@/api/schema'
+import type { Actor, User, UserStatus } from '@/api/schema'
 import { mockDb } from '../db'
 import type { MockUser } from '../fixtures/users'
 import { nowUtc } from './common'
@@ -11,9 +11,17 @@ export function toUser(u: MockUser): User {
     role: u.role,
     disabled: u.disabled,
     lockedOutUntilUtc: u.lockedOutUntilUtc,
+    mustChangePassword: u.mustChangePassword,
     lastLoginUtc: u.lastLoginUtc,
     rowVersion: u.rowVersion,
   }
+}
+
+/** Disabled wins over locked, which wins over must-change-password; an expired lock no longer counts. */
+export function userStatusOf(u: MockUser): UserStatus {
+  if (u.disabled) return 'disabled'
+  if (u.lockedOutUntilUtc !== null && u.lockedOutUntilUtc > nowUtc()) return 'locked'
+  return u.mustChangePassword ? 'must-change-password' : 'active'
 }
 
 export function addUserAudit(userId: string, kind: string, actor: Actor, detail: Record<string, unknown> | null) {

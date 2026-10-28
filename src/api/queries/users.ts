@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { Page, Role, User, UserAuditRow } from '../schema'
+import type { Page, Role, User, UserAuditRow, UserStatus } from '../schema'
 import { api } from '../client'
 
 export const USERS_PAGE_SIZE = 25
@@ -9,6 +9,7 @@ export interface UsersParams {
   role?: Role
   /** `false` hides disabled users; leave out to list everyone. */
   disabled?: boolean
+  status?: UserStatus[]
   page?: number
 }
 
@@ -24,6 +25,7 @@ function listQuery(params: UsersParams): string {
   if (params.q) qs.set('q', params.q)
   if (params.role) qs.set('role', params.role)
   if (params.disabled !== undefined) qs.set('disabled', String(params.disabled))
+  for (const s of params.status ?? []) qs.append('status', s)
   if (params.page && params.page > 1) qs.set('page', String(params.page))
   qs.set('pageSize', String(USERS_PAGE_SIZE))
   return qs.toString()

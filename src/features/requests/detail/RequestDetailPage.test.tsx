@@ -41,11 +41,17 @@ function detail(over: Partial<RequestDetail> = {}): RequestDetail {
     lastAttempt: null,
     postId: null,
     email: { subject: 'Subject 6', receivedUtc: '2026-10-27T07:12:44Z' },
+    pushId: null,
+    historyCount: 0,
+    validationSummary: { state: 'ok', problemCount: 0, validatedUtc: null, versionNumber: null },
+    postSummary: null,
+    skipCount: 0,
     created: { utc: '2026-10-27T07:12:50Z', by: { id: 'x', name: 'n8n' } },
     updated: { utc: '2026-10-28T09:30:00Z', by: { id: 'u-admin', name: 'Asha K' } },
     allowedActions: [],
     payload: { transactions: [] },
     readErrors: [],
+    otherUnpostedPushes: [],
     ...over,
   }
 }

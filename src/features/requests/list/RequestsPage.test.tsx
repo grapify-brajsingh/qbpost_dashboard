@@ -28,6 +28,11 @@ function summary(over: Partial<RequestSummary> & { id: number }): RequestSummary
     lastAttempt: null,
     postId: null,
     email: { subject: `Subject ${over.id}`, receivedUtc: '2026-10-27T07:12:44Z' },
+    pushId: null,
+    historyCount: 0,
+    validationSummary: { state: 'ok', problemCount: 0, validatedUtc: null, versionNumber: null },
+    postSummary: null,
+    skipCount: 0,
     created: { utc: '2026-10-27T07:12:50Z', by: { id: 'x', name: 'n8n' } },
     updated: { utc: '2026-10-28T09:30:00Z', by: { id: 'x', name: 'n8n' } },
     allowedActions: [],
@@ -47,6 +52,7 @@ const STATS_FIXED: Stats = {
   byStatus: { pending: 7, posting: 1, posted: 4, partial: 1, unknown: 1, discarded: 2 },
   needsAttention: { pending: 2, all: 3 },
   duplicate: { pending: 1, all: 1 },
+  hasErrors: { pending: 2, all: 3 },
 }
 
 let seen: URL[] = []
@@ -92,7 +98,7 @@ describe('requests list', () => {
     expect(await screen.findByRole('tab', { name: 'To do 9' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tab', { name: 'Needs attention 2' })).toBeInTheDocument()
     const refs = (await screen.findAllByRole('link', { name: /^SR-/ })).map((a) => a.textContent)
-    expect(refs).toEqual(['SR-000009', 'SR-000008', 'SR-000012', 'SR-000004', 'SR-000003', 'SR-000011', 'SR-000002', 'SR-000001', 'SR-000005'])
+    expect(refs).toEqual(['SR-000009', 'SR-000008', 'SR-000012', 'SR-000004', 'SR-000003', 'SR-000011', 'SR-000002', 'SR-000001', 'SR-000005', 'SR-000013'])
     const first = seen.find((u) => u.searchParams.has('sort'))!
     expect(first.search).toContain('status=pending&status=partial&status=unknown')
     expect(first.searchParams.get('sort')).toBe('received')

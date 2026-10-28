@@ -1,20 +1,10 @@
 // Pure definitions of the queue tabs: which list parameters each tab sends and which stats count it shows.
-import type { RequestStatus, Stats } from '@/api/schema'
+import type { ListParams } from '@/api/queries/requests'
+import type { Stats } from '@/api/schema'
 
 export type QueueTab = 'todo' | 'attention' | 'duplicates' | 'posting' | 'posted' | 'discarded' | 'all'
 
-export interface ListParams {
-  status?: RequestStatus[]
-  needsAttention?: boolean
-  duplicate?: boolean
-  q?: string
-  receivedFrom?: string
-  receivedTo?: string
-  source?: string
-  sort?: string
-  page?: number
-  pageSize?: number
-}
+export type { ListParams } from '@/api/queries/requests'
 
 export const QUEUE_TABS: { id: QueueTab; label: string }[] = [
   { id: 'todo', label: 'To do' },

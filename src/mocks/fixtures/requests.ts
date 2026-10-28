@@ -2,7 +2,8 @@
 //  1 clean pending (12 rows, 3 versions, extra `email` / `confidence` fields)   2 pending 210 rows, 3 findings, total off by 10.00
 //  3 unreadable (kind "Cheque")   4 transactions not an array   5 duplicate of 1   6 posting   7 posted
 //  8 unknown (+ledgerBatch)   9 partial (+ledgerBatch)   10 discarded   11 pending, hostile subject, last attempt busy
-//  12 pending, no email metadata
+//  12 pending, no email metadata, no pushId, one row marked don't post
+//  13 pending, second push of 11's reference (5 h later, one more row)
 import type { Actor, Attempt, EmailMeta, Payload, RequestEvent, RequestStatus, Txn } from '@/api/schema'
 import type { RequestRecord } from '../db'
 import { computeValidation, diffPayload, readErrorsOf, sumCents, toPostedRows } from '../payloadRules'
@@ -50,6 +51,7 @@ interface Opts {
   payload: Payload
   createdUtc: string
   email?: EmailMeta | null
+  pushId?: string | null
   rowVersion?: number
   attempts?: Attempt[]
   extraEvents?: Omit<RequestEvent, 'id'>[]
@@ -90,6 +92,7 @@ function build(o: Opts): RequestRecord {
     created: { utc: o.createdUtc, by: N8N },
     updated: { utc: events[events.length - 1].atUtc, by: lastBy },
     email: o.email === undefined ? null : o.email,
+    pushId: o.pushId ?? null,
     original: JSON.stringify(first),
     versions,
     readErrors: readErrorsOf(current.payload),
@@ -124,6 +127,7 @@ export function buildRequests(): RequestRecord[] {
   ;(v1.transactions as Txn[])[0].payee = 'ABC PLUMBING'
   const r1 = build({
     id: 1,
+    pushId: '7f3a9c1e-5b2d-4e6a-9d10-3c8b1a2e4f01',
     payload: final1,
     original: v1,
     createdUtc: '2026-10-27T07:12:50Z',
@@ -142,19 +146,20 @@ export function buildRequests(): RequestRecord[] {
   rows2[139].date = '2019-12-30'
   const p2 = payloadOf('zemen-2026-08', rows2)
   p2.controlTotal = sumCents(p2) / 100 + 10
-  const r2 = build({ id: 2, payload: p2, createdUtc: '2026-10-27T06:40:00Z', email: email('Zemen Bank statement – 2026-08', '2026-10-27T06:31:00Z', 'statements@zemenbank.example') })
+  const r2 = build({ id: 2, pushId: '2b8d4e7a-91c3-4f5b-a6e2-0d7c9b3a1f02', payload: p2, createdUtc: '2026-10-27T06:40:00Z', email: email('Zemen Bank statement – 2026-08', '2026-10-27T06:31:00Z', 'statements@zemenbank.example') })
 
   // 3: unreadable kind
   const rows3 = makeRows(6, 3)
   rows3[3].kind = 'Cheque'
-  const r3 = build({ id: 3, payload: payloadOf('legacy-import-3', rows3), createdUtc: '2026-10-26T15:20:00Z', email: email('Old format statement', '2026-10-26T15:11:00Z', 'noreply@legacy.example') })
+  const r3 = build({ id: 3, pushId: 'c41e6a0b-3d7f-4a92-8b5c-6e1f2d9a0c03', payload: payloadOf('legacy-import-3', rows3), createdUtc: '2026-10-26T15:20:00Z', email: email('Old format statement', '2026-10-26T15:11:00Z', 'noreply@legacy.example') })
 
   // 4: transactions is not an array
-  const r4 = build({ id: 4, payload: payloadOf('broken-shape', 'not-an-array'), createdUtc: '2026-10-26T14:00:00Z', email: email('Broken export', '2026-10-26T13:55:00Z', 'export@legacy.example') })
+  const r4 = build({ id: 4, pushId: '9d2f5b8c-0a6e-4c13-b7d4-1a3e5c7f9b04', payload: payloadOf('broken-shape', 'not-an-array'), createdUtc: '2026-10-26T14:00:00Z', email: email('Broken export', '2026-10-26T13:55:00Z', 'export@legacy.example') })
 
   // 5: duplicate of 1
   const r5 = build({
     id: 5,
+    pushId: 'e6a1c3f7-2d94-4b0a-8e5f-7b9c1d3a5e05',
     payload: structuredClone(final1),
     createdUtc: '2026-10-27T07:30:00Z',
     email: email('Chase statement – Aug 2026 (resent)', '2026-10-27T07:29:10Z'),
@@ -165,6 +170,7 @@ export function buildRequests(): RequestRecord[] {
   const p6 = payloadOf('visa-8890-2026-08', makeRows(8, 6))
   const r6 = build({
     id: 6,
+    pushId: '3c7e9a1d-8f20-4d6b-a1c5-9e2b4d6f8a06',
     status: 'posting',
     payload: p6,
     createdUtc: '2026-10-27T05:00:00Z',
@@ -179,6 +185,7 @@ export function buildRequests(): RequestRecord[] {
   const rows7 = toPostedRows(p7, 2)
   const r7 = build({
     id: 7,
+    pushId: 'a8d0f2b4-6c1e-4a3d-9f7b-5c3e1a9d7b07',
     status: 'posted',
     payload: p7,
     createdUtc: '2026-10-20T07:00:00Z',
@@ -207,6 +214,7 @@ export function buildRequests(): RequestRecord[] {
   const p8 = payloadOf('checking-4521-2026-07', makeRows(6, 8))
   const r8 = build({
     id: 8,
+    pushId: '5e9b1d3f-7a2c-4e8d-b0a6-2f4c6e8a0d08',
     status: 'unknown',
     payload: p8,
     createdUtc: '2026-10-19T07:00:00Z',
@@ -229,6 +237,7 @@ export function buildRequests(): RequestRecord[] {
   const p9 = payloadOf('visa-8890-2026-07', makeRows(6, 9))
   const r9 = build({
     id: 9,
+    pushId: 'd2c4e6a8-0b1f-4c3e-a5d7-9b1f3a5c7e09',
     status: 'partial',
     payload: p9,
     createdUtc: '2026-10-18T07:00:00Z',
@@ -266,6 +275,7 @@ export function buildRequests(): RequestRecord[] {
   // 10: discarded
   const r10 = build({
     id: 10,
+    pushId: '1f3b5d7e-9a0c-4b2e-8d4f-6a8c0e2b4d10',
     status: 'discarded',
     payload: payloadOf('test-statement', makeRows(5, 10)),
     createdUtc: '2026-10-17T07:00:00Z',
@@ -278,6 +288,7 @@ export function buildRequests(): RequestRecord[] {
   // 11: hostile subject, last attempt busy
   const r11 = build({
     id: 11,
+    pushId: 'b4a6c8e0-2d1f-4a3b-9c5e-7d9f1b3a5c11',
     payload: payloadOf('savings-1177-2026-08', makeRows(5, 11)),
     createdUtc: '2026-10-27T06:00:00Z',
     email: email('<img src=x onerror=alert(1)> Savings statement', '2026-10-27T05:55:00Z', 'statements@bank.example'),
@@ -300,7 +311,18 @@ export function buildRequests(): RequestRecord[] {
   })
 
   // 12: no email metadata (older n8n workflow)
-  const r12 = build({ id: 12, payload: payloadOf('manual-entry-12', makeRows(4, 12)), createdUtc: '2026-10-25T10:00:00Z', email: null })
+  const rows12 = makeRows(4, 12)
+  rows12[1] = { ...rows12[1], memo: 'Transfer to Operating Savings', post: false }
+  const r12 = build({ id: 12, payload: payloadOf('manual-entry-12', rows12), createdUtc: '2026-10-25T10:00:00Z', email: null })
 
-  return [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12]
+  // 13: a second push of 11's reference, 5 h after the first, with one more row (R-5, R-8.5)
+  const r13 = build({
+    id: 13,
+    pushId: 'f0e2d4c6-8a1b-4c3d-b5e7-9a1c3e5d7f13',
+    payload: payloadOf('savings-1177-2026-08', makeRows(6, 11)),
+    createdUtc: '2026-10-27T11:00:00Z',
+    email: email('Savings statement – Aug 2026 (second push)', '2026-10-27T10:55:00Z', 'statements@bank.example'),
+  })
+
+  return [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13]
 }
