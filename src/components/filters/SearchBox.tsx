@@ -1,0 +1,53 @@
+import { useEffect, useRef, useState } from 'react'
+import { SearchIcon } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+
+interface SearchBoxProps {
+  value: string | undefined
+  onChange: (value: string) => void
+  placeholder?: string
+  label?: string
+}
+
+const DEBOUNCE_MS = 250
+
+/**
+ * Debounced search input. What the user types is passed on exactly as typed
+ * (inner and edge whitespace included); trimming for a query is the caller's choice.
+ */
+export function SearchBox({ value, onChange, placeholder, label }: SearchBoxProps) {
+  const [text, setText] = useState(value ?? '')
+  const [seen, setSeen] = useState(value)
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  // Follow outside changes (clear filters, back button), but not a caller that
+  // echoes our own text back trimmed.
+  if (value !== seen) {
+    setSeen(value)
+    if ((value ?? '').trim() !== text.trim()) setText(value ?? '')
+  }
+
+  useEffect(() => () => clearTimeout(timer.current), [])
+
+  return (
+    <div className="relative w-full max-w-sm">
+      <SearchIcon
+        className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+        aria-hidden
+      />
+      <Input
+        type="search"
+        className="pl-8"
+        aria-label={label ?? placeholder ?? 'Search'}
+        placeholder={placeholder}
+        value={text}
+        onChange={(e) => {
+          const next = e.target.value
+          setText(next)
+          clearTimeout(timer.current)
+          timer.current = setTimeout(() => onChange(next), DEBOUNCE_MS)
+        }}
+      />
+    </div>
+  )
+}
