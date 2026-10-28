@@ -79,4 +79,43 @@ describe('SearchBox', () => {
     rerender(<SearchBox value={undefined} onChange={() => {}} />)
     expect(screen.getByRole('searchbox')).toHaveValue('')
   })
+
+  it('drops a pending keystroke when the value is changed from outside', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ delay: null })
+    const onChange = vi.fn()
+    const { rerender } = render(<SearchBox value="old" onChange={onChange} />)
+    await user.type(screen.getByRole('searchbox'), 'x')
+    rerender(<SearchBox value={undefined} onChange={onChange} />)
+    act(() => {
+      vi.advanceTimersByTime(500)
+    })
+    expect(onChange).not.toHaveBeenCalled()
+    expect(screen.getByRole('searchbox')).toHaveValue('')
+  })
+
+  it('flushes a pending keystroke on unmount', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ delay: null })
+    const onChange = vi.fn()
+    const { unmount } = render(<SearchBox value={undefined} onChange={onChange} />)
+    await user.type(screen.getByRole('searchbox'), 'abc')
+    expect(onChange).not.toHaveBeenCalled()
+    unmount()
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(onChange).toHaveBeenCalledWith('abc')
+  })
+
+  it('does not call onChange on unmount when nothing is pending', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ delay: null })
+    const onChange = vi.fn()
+    const { unmount } = render(<SearchBox value={undefined} onChange={onChange} />)
+    await user.type(screen.getByRole('searchbox'), 'a')
+    act(() => {
+      vi.advanceTimersByTime(250)
+    })
+    unmount()
+    expect(onChange).toHaveBeenCalledTimes(1)
+  })
 })

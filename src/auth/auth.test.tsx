@@ -52,7 +52,7 @@ describe('sign in', () => {
     expect(router.state.location.pathname).toBe('/change-password')
     await act(() => router.navigate('/statements'))
     await waitFor(() => expect(router.state.location.pathname).toBe('/change-password'))
-    expect(screen.queryByRole('heading', { name: 'Requests' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Statements' })).not.toBeInTheDocument()
   })
 
   test('a 403 password-change-required from any call sends the user to change password', async () => {
@@ -105,7 +105,7 @@ describe('change password', () => {
     await user.type(screen.getByLabelText('New password'), 'a brand new passphrase')
     await user.type(screen.getByLabelText('Confirm new password'), 'a brand new passphrase')
     await user.click(screen.getByRole('button', { name: 'Change password' }))
-    expect(await screen.findByRole('heading', { name: 'Requests' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Statements' })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/statements')
   })
 })
@@ -114,7 +114,7 @@ describe('session restore and guards', () => {
   test('valid refresh cookie signs in without showing the form', async () => {
     mockControl.signInAs('u-admin')
     renderApp('/requests')
-    expect(await screen.findByRole('heading', { name: 'Requests' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Statements' })).toBeInTheDocument()
     expect(screen.queryByLabelText('Email')).not.toBeInTheDocument()
   })
 
@@ -134,7 +134,7 @@ describe('session restore and guards', () => {
       if (request.url.endsWith('/auth/logout')) logoutCalled = true
     })
     const { user, router, queryClient } = renderApp('/requests')
-    await screen.findByRole('heading', { name: 'Requests' })
+    await screen.findByRole('heading', { name: 'Statements' })
     queryClient.setQueryData(['probe'], 'cached')
     await user.click(await screen.findByRole('button', { name: 'Sign out' }))
     await screen.findByLabelText('Email')

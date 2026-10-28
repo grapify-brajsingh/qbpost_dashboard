@@ -318,7 +318,7 @@ describe('isolation between requests', () => {
     act(() => {
       void router.navigate('/statements')
     })
-    await screen.findByRole('heading', { name: 'Requests' })
+    await screen.findByRole('heading', { name: 'Statements' })
     act(() => {
       void router.navigate('/statements/1')
     })

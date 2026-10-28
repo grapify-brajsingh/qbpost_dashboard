@@ -5,7 +5,8 @@ import type { Page, RequestSummary, Stats } from '@/api/schema'
 import { formatTimestamp } from '@/lib/dates'
 import { mockControl } from '@/mocks/db'
 import { server } from '@/mocks/server'
-import { renderApp } from '@/test/render'
+import { renderWithProviders } from '@/test/render'
+import { RequestsPage } from './RequestsPage'
 import { countFor, QUEUE_PRESETS } from './queue'
 
 const LIST = '/api/v1/saved-requests'
@@ -68,7 +69,7 @@ const listCalls = () => seen.length
 function signedIn(route = '/statements') {
   mockControl.signInAs('u-admin')
   recordRequests()
-  return renderApp(route)
+  return renderWithProviders(<RequestsPage />, { route })
 }
 
 afterEach(() => {

@@ -8,7 +8,7 @@ import { SignInPage } from '@/auth/SignInPage'
 import { hasScope, useSession } from '@/auth/useSession'
 import { AccountPage } from '@/features/account/AccountPage'
 import { RequestDetailPage } from '@/features/requests/detail/RequestDetailPage'
-import { RequestsPage } from '@/features/requests/list/RequestsPage'
+import { StatementsPage } from '@/features/statements/list/StatementsPage'
 import { UserPage } from '@/features/users/UserPage'
 import { UsersPage } from '@/features/users/UsersPage'
 import { AppShell } from '@/layout/AppShell'
@@ -79,7 +79,7 @@ export const routes: RouteObject[] = [
             path: '/statements',
             handle: { crumb: 'Statements' },
             children: [
-              { index: true, element: <RequestsPage /> },
+              { index: true, element: <StatementsPage /> },
               { path: ':id', element: <RequestDetailRoute />, handle: { crumb: 'Statement' } },
             ],
           },
