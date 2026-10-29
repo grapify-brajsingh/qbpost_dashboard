@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mockControl, mockDb } from '@/mocks/db'
 import type { Page, RequestDetail, RequestSummary, Stats } from '@/api/schema'
 
-const API = '/api/v1'
+const API = '/api/v2'
 let token = ''
 
 function call(path: string, init: RequestInit & { as?: string } = {}) {

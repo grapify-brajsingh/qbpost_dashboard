@@ -1,6 +1,6 @@
 # API requirements from the dashboard
 
-**Date**: 2026-10-27 · **Last updated**: 2026-10-28 (manual PDF upload, R-13 and R-14; see [Changelog](#changelog))
+**Date**: 2026-10-27 · **Last updated**: 2026-10-29 (integration against the real API: R-15, R-7.3 gap; see [Changelog](#changelog))
 **For**: the qbautopost API project (`D:\qb_post-issue-2`), to be turned into its own spec
 and plan, as an amendment to `docs/saved-requests-postgres.md` (ticket #2) or as a follow-up ticket.
 **From**: the dashboard designs in https://github.com/grapify-brajsingh/qbpost_dashboard:
@@ -22,25 +22,31 @@ this file so the dashboard can be built and tested before the real API exists. *
 project: please update it here (or tell the dashboard project) as each item moves. Every item is **Open** until the API
 project confirms it; nothing below has been confirmed yet.
 
+**As of 2026-10-29** the API serves everything here under **`/api/v2`** (the dashboard calls `/api/v2` only), and the
+dashboard has been tested end to end against it (`e2e-integration/`, `docker-compose.integration.yml`). Shapes the API
+chose differently are listed in the API project's `docs/saved-requests-dashboard-v2.md` §14 and `docs/dashboard-api-m12.md`
+§11; the dashboard follows them.
+
 Status values: **Open** (not started or not yet answered) · **Accepted** (agreed, shape may still change) ·
 **In progress** · **Done** (released, in OpenAPI) · **Rejected** (with the reason in the item).
 
 | ID | Requirement | Kind | Added | Needed by (dashboard) | Mock API | API status |
 |---|---|---|---|---|---|---|
-| R-1 | Email subject and received time on every saved request | New fields + filters | 2026-10-27 (v1) | Statements list and search, statement page, Home queue ages | Implemented | Open |
-| R-2 | Serve the dashboard's static files from the API (same origin) | New hosting | 2026-10-27 (v1) | Deployment; refresh cookie (`SameSite=Strict`) | n/a (Vite dev proxy) | Open |
-| R-3 | Long-running post is not cut off or cancelled | Confirm | 2026-10-27 (v1) | Post dialog | n/a | Open |
-| R-4 | Eleven small contract confirmations (ETag, stats shape, 409/412 bodies, ledger batch, refresh-token grace, …) | Confirm (+ 2 small additions: 4.9, 4.10) | 2026-10-27 (v1) | Every page | Items 1–9 implemented; 10 (refresh grace) and 11 (`partial`) not modelled | Open |
-| R-5 | `pushId` GUID from n8n on every push | New field | 2026-10-28 (v2) | Statements list, statement page, audit filter | Implemented | Open |
-| R-6 | Per-row "don't post" (`post: false` → `Skip`) and dashboard-added rows | New field + behaviour | 2026-10-28 (v2) | Statement page, Post | Implemented | Open |
-| R-7 | `GET /audit-events` feed and `GET /audit-events.csv` | **New endpoints** | 2026-10-28 (v2) | Audit trail, user page, **Home** (period figures, flow chart, recent activity) | Implemented | Open |
-| R-8 | Statements list summary fields and new filters; `stats.hasErrors` | New fields + filters | 2026-10-28 (v2) | Statements list, **Home** ("Has errors") | Implemented | Open |
-| R-9 | Users `status` filter; row TxnIDs on attempt detail | New filter + confirm | 2026-10-28 (v2) | Users page, Results sheet | Implemented | Open |
-| R-10 | Contracts the Home page relies on today (audit totals, time filters, event semantics, queue list) | Confirm | 2026-10-28 (Home) | **Home** | Implemented | Open |
-| R-11 | `GET /dashboard/summary`: period counts, series, posted value, time to post in one call | **New endpoint** *(suggested)* | 2026-10-28 (Home) | **Home** (replaces 8 + up to 10 calls; adds posted value) | Not implemented | Open |
-| R-12 | Statements list: filter and sort by posted time; time-zone-aware received filters | New filters *(nice to have)* | 2026-10-28 (Home) | **Home** drill-downs, Statements list | Not implemented | Open |
-| R-13 | `POST /statement-extractions`: read an uploaded PDF with the n8n prompt and model (OpenRouter), return rows and possible duplicates, store nothing but a short-lived extraction record | **New endpoint** | 2026-10-28 (upload) | **Upload PDF** page | Implemented | Open |
-| R-14 | Save a reviewed upload: `POST /saved-requests` accepts `upload.extractionId`; version 1 = what was read, version 2 = the reviewed rows; `upload` metadata on statements; `received` event detail | New field + behaviour | 2026-10-28 (upload) | Upload PDF page, Statements list, statement page, audit trail | Implemented | Open |
+| R-1 | Email subject and received time on every saved request | New fields + filters | 2026-10-27 (v1) | Statements list and search, statement page, Home queue ages | Implemented | Done (`/api/v2`, M11) |
+| R-2 | Serve the dashboard's static files from the API (same origin) | New hosting | 2026-10-27 (v1) | Deployment; refresh cookie (`SameSite=Strict`) | n/a (Vite dev proxy) | Done (M11 T-1116; the Docker stack uses nginx instead) |
+| R-3 | Long-running post is not cut off or cancelled | Confirm | 2026-10-27 (v1) | Post dialog | n/a | Done (confirmed, M11 §13.2) |
+| R-4 | Eleven small contract confirmations (ETag, stats shape, 409/412 bodies, ledger batch, refresh-token grace, …) | Confirm (+ 2 small additions: 4.9, 4.10) | 2026-10-27 (v1) | Every page | Items 1–9 implemented; 10 (refresh grace) and 11 (`partial`) not modelled | Done (M11 §10; 4.10 grace from the same address only) |
+| R-5 | `pushId` GUID from n8n on every push | New field | 2026-10-28 (v2) | Statements list, statement page, audit filter | Implemented | Done (M11; a repeat with a different body is `409 push-id-reused`) |
+| R-6 | Per-row "don't post" (`post: false` → `Skip`) and dashboard-added rows | New field + behaviour | 2026-10-28 (v2) | Statement page, Post | Implemented | Done (M11; rows keep their kind, reason `not-to-post`) |
+| R-7 | `GET /audit-events` feed and `GET /audit-events.csv` | **New endpoints** | 2026-10-28 (v2) | Audit trail, user page, **Home** (period figures, flow chart, recent activity) | Implemented | In progress: feed and CSV done (M11); 7.3 subject name and email on user events, M13 T-1302 |
+| R-8 | Statements list summary fields and new filters; `stats.hasErrors` | New fields + filters | 2026-10-28 (v2) | Statements list, **Home** ("Has errors") | Implemented | Done (M11) |
+| R-9 | Users `status` filter; row TxnIDs on attempt detail | New filter + confirm | 2026-10-28 (v2) | Users page, Results sheet | Implemented | Done (M11; rows also carry `status`) |
+| R-10 | Contracts the Home page relies on today (audit totals, time filters, event semantics, queue list) | Confirm | 2026-10-28 (Home) | **Home** | Implemented | Done (M12; `to` is exclusive) |
+| R-11 | `GET /dashboard/summary`: period counts, series, posted value, time to post in one call | **New endpoint** *(suggested)* | 2026-10-28 (Home) | **Home** (replaces 8 + up to 10 calls; adds posted value) | Implemented | Done (M12) |
+| R-12 | Statements list: filter and sort by posted time; time-zone-aware received filters | New filters *(nice to have)* | 2026-10-28 (Home) | **Home** drill-downs, Statements list | Not implemented | Done (M12) |
+| R-13 | `POST /statement-extractions`: read an uploaded PDF with the n8n prompt and model (OpenRouter), return rows and possible duplicates, store nothing but a short-lived extraction record | **New endpoint** | 2026-10-28 (upload) | **Upload PDF** page | Implemented | Done (M12; scans answer `422 no-text`) |
+| R-14 | Save a reviewed upload: `POST /saved-requests` accepts `upload.extractionId`; version 1 = what was read, version 2 = the reviewed rows; `upload` metadata on statements; `received` event detail | New field + behaviour | 2026-10-28 (upload) | Upload PDF page, Statements list, statement page, audit trail | Implemented | Done (M12) |
+| R-15 | Users list rows carry `rowVersion` (the user's ETag value), so a row action can send `If-Match` | New field | 2026-10-29 (integration) | Users page: **Enable** from the list | Implemented | In progress (M13 T-1301) |
 
 ### APIs the dashboard needs built
 
@@ -63,6 +69,7 @@ QuickBooks lists) is already in that spec.
 | `GET /saved-requests?postedFrom=&postedTo=&sort=posted`, time-zone-aware received filters | R-12 | Home drill-downs | Could |
 | `POST /statement-extractions` (multipart PDF → extracted payload, possible duplicates; calls OpenRouter) | R-13 | Upload PDF page | **Must** for manual upload |
 | `POST /saved-requests` accepts `upload: { extractionId }`; `upload` on list and detail rows; list `q` matches the file name | R-14 | Upload PDF page, Statements list, statement page | **Must** for manual upload |
+| `GET /users` rows add `rowVersion` | R-15 | Users page (Enable from the list) | Must |
 
 ---
 
@@ -279,6 +286,9 @@ when". Today the data is spread over `saved_request_events`, `saved_request_vers
    ```
    `posted` events carry `detail.postedCount` and `detail.postId`; user events carry `detail.userId`, `detail.email`
    and `detail.displayName` of the user concerned (plus `detail.role` for created and role-changed).
+   *(2026-10-29, found in integration)* The API sends only `detail.userId` on user events, so the Audit trail shows a
+   user id instead of a name ("Created user 8070e704-… as Admin"). The API must add `detail.email` and
+   `detail.displayName` of the user concerned, looked up when the feed is read (the stored detail is not changed).
    `actor.kind` is `user` or `api-client` (name = client id, e.g. `n8n-mailbox`). `request` and `row` are null for
    user events. `old`/`new` are JSON values (string, number, boolean, object for whole rows) or null.
 4. **Actions** (enum, in OpenAPI): `received`, `row-edited` (one event per changed field), `row-added`,
@@ -610,6 +620,27 @@ with the first statement's id; after 24 hours an unsaved extraction returns `410
 
 ---
 
+# Integration findings (2026-10-29)
+
+**From**: `docs/superpowers/specs/2026-10-29-api-integration-spec.md`. The dashboard was switched from the fake API to
+the real one (`/api/v2`) and tested end to end in Docker. Everything worked except the two items below. Shapes that
+differed from this file but are the API's documented choice (lists wrapped in `{ items }`, account objects in the
+QuickBooks lists, the password-change answer carrying a new token) were fixed in the dashboard and its fake API.
+
+## R-15. A version on users list rows (new)
+
+**Need**: the Users list has an **Enable** button on disabled users. `PATCH /users/{id}` requires `If-Match` with the
+user's ETag, but list rows carry no version, so the button cannot send one and always gets `412`. Loading each user
+before the patch would defeat `If-Match` (it would check against a version the admin never saw).
+
+1. `GET /users` rows gain `rowVersion` (string): exactly the value the user's `ETag` carries, without the quotes.
+2. Sending `If-Match: "<rowVersion>"` from a list row behaves exactly as sending the ETag from `GET /users/{id}`.
+
+**Acceptance**: enabling a disabled user from the list with the row's `rowVersion` answers `200`; a row read before
+another change answers `412`.
+
+---
+
 ## Not needed (decided)
 
 - No bulk endpoints. About 10 statements a day doesn't justify them.
@@ -630,6 +661,8 @@ the reason.
 
 | Date | Change | Requirements | Source |
 |---|---|---|---|
+| 2026-10-29 | R-11 implemented in the fake API (`src/mocks/handlers/dashboard.ts`) and used by Home, with the audit-feed path kept for a `404` (Home spec §11). | R-11 | `docs/superpowers/specs/2026-10-28-home-dashboard-spec.md` §11 |
+| 2026-10-29 | **Integration against the real API** (`/api/v2`): tracker statuses updated from the API project's M11/M12 docs; R-7.3 amended (user events must carry the subject's `email` and `displayName`; the API sends only `userId`); new **R-15** (`rowVersion` on users list rows). Fake API brought in line with the real shapes: versions and attempts wrapped in `{ items }`, QuickBooks accounts as `{ name, type }`, change-password answers like sign-in. | R-7, R-15, all (status) | `docs/superpowers/specs/2026-10-29-api-integration-spec.md` |
 | 2026-10-28 | R-13 and R-14 implemented in the dashboard's mock API (`src/mocks/handlers/extractions.ts`, `saveUpload` in `handlers/requests.ts`), as written. R-14.3 as clarified in review: reference and control total typed at review go into version 1; only row changes create version 2. | R-13, R-14 | `docs/superpowers/plans/2026-10-28-manual-pdf-upload-plan.md` §4 |
 | 2026-10-28 | **Manual PDF upload additions** (issue #4): R-13 `POST /statement-extractions` reads an uploaded PDF with the n8n prompt and model via OpenRouter, leaves missing fields empty (no defaults), never computes `controlTotal`, returns possible duplicates, keeps a 24-hour extraction record and no PDF. R-14 saves a reviewed upload through `POST /saved-requests` with `upload.extractionId` (version 1 = read, version 2 = reviewed), adds `upload` metadata and `received` event `detail.source`. Context: n8n switches its HTTP node to `POST /saved-requests` (no new API need). "Not needed" extended (uploaded PDFs discarded, no multi-file upload). | R-13, R-14 | `docs/superpowers/specs/2026-10-28-manual-pdf-upload-spec.md` |
 | 2026-10-28 | Added the **Tracker** (status per requirement, plus a table of the APIs the dashboard needs built) and this **Changelog**. Header now lists all three dashboard designs. | all | — |

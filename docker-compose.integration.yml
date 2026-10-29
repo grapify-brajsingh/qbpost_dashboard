@@ -1,0 +1,92 @@
+# Full stack for integration testing: PostgreSQL, the QbAutopost API (simulated QuickBooks), an OpenRouter stand-in
+# and this dashboard behind nginx.
+#
+#   docker compose -f docker-compose.integration.yml up -d --build
+#   open http://localhost:8080   (admin@example.com / Integration-Test-Pass-1)
+#
+# BACKEND_DIR points at the API repository (default: the sibling folder ../qb_post-issue-2).
+# To use the real OpenRouter instead of the stub, set OPENROUTER_BASE_URL=https://openrouter.ai/api/v1 and
+# OPENROUTER_API_KEY. Every password and key below is a throwaway value for this local stack.
+name: qbautopost-integration
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: qbautopost
+      POSTGRES_USER: qbautopost
+      POSTGRES_PASSWORD: qbautopost-dev
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qbautopost -d qbautopost"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # The app never migrates itself (deploy/apply-migrations.ps1); this applies the same idempotent script.
+  migrate:
+    image: postgres:16
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      PGPASSWORD: qbautopost-dev
+    volumes:
+      - ${BACKEND_DIR:-../qb_post-issue-2}/deploy/migrations.sql:/migrations.sql:ro
+    command: ["psql", "-h", "db", "-U", "qbautopost", "-d", "qbautopost", "-v", "ON_ERROR_STOP=1", "-q", "-f", "/migrations.sql"]
+    restart: "no"
+
+  api:
+    build: ${BACKEND_DIR:-../qb_post-issue-2}
+    # Shares api-net's network namespace, so the OpenRouter stand-in is on the API's loopback (the API accepts a
+    # plain-http OpenRouter:BaseUrl only for a loopback host) and "api" resolves to this container for nginx.
+    network_mode: "service:api-net"
+    depends_on:
+      api-net: { condition: service_started }
+      migrate: { condition: service_completed_successfully }
+    environment:
+      QBAUTOPOST__Database__ConnectionString: Host=db;Database=qbautopost;Username=qbautopost;Password=qbautopost-dev
+      QBAUTOPOST__Api__ApiKey: integration-api-key
+      QBAUTOPOST__Auth__Jwt__SigningKey: integration-signing-key-0123456789-abcdefghijklmnopqrstuvwxyz
+      QBAUTOPOST__Auth__BootstrapAdmin__Email: admin@example.com
+      QBAUTOPOST__Auth__BootstrapAdmin__Password: Integration-Test-Pass-1
+      QBAUTOPOST__OpenRouter__Enabled: "true"
+      QBAUTOPOST__OpenRouter__BaseUrl: ${OPENROUTER_BASE_URL:-http://127.0.0.1:9090/api/v1}
+      QBAUTOPOST__OpenRouter__ApiKey: ${OPENROUTER_API_KEY:-stub-key}
+      QBAUTOPOST__Extraction__Enabled: "true"
+      # The e2e suite drives the whole app as one admin in a few minutes; the production limits (120 reads a minute,
+      # 20 extractions an hour per user) would answer 429 part-way through. Raised for this test stack only.
+      QBAUTOPOST__Api__RateLimits__DefaultPerMinute: "5000"
+      QBAUTOPOST__Extraction__MaxPerUserPerHour: "1000"
+    volumes:
+      # QuickBooks lists for the name pickers and validation; the simulated company starts empty.
+      - ./docker/seed/qb-lists.json:/data/qb-lists.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs -o /dev/null http://127.0.0.1:5080/api/v1/health || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  # Owns the network namespace the API joins, and runs the OpenRouter stand-in on its loopback.
+  api-net:
+    image: node:22-alpine
+    networks:
+      default:
+        aliases: [api]
+    ports:
+      - "127.0.0.1:5080:5080"
+    volumes:
+      - ./docker/openrouter-stub:/stub:ro
+    command: ["node", "/stub/server.mjs"]
+
+  web:
+    build: .
+    depends_on:
+      api: { condition: service_healthy }
+    environment:
+      API_UPSTREAM: http://api:5080
+    ports:
+      - "127.0.0.1:8080:80"
+
+volumes:
+  pgdata:

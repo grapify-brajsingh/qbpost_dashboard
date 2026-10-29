@@ -49,7 +49,28 @@ VITE_API_PROXY_TARGET=https://localhost:5443 npm run dev
 ```
 
 The dev server proxies `/api` to `VITE_API_PROXY_TARGET` (default `https://localhost:5443`). The app only uses
-relative `/api/v1` URLs. No `.env` is needed in production.
+relative `/api/v2` URLs (the API's dashboard surface). No `.env` is needed in production.
+
+### Full stack in Docker (real API, end-to-end tests)
+
+`docker-compose.integration.yml` runs PostgreSQL, the QbAutopost API (built from `../qb_post-issue-2`, with the
+simulated QuickBooks company), an OpenRouter stand-in for PDF uploads, and this dashboard built and served by nginx
+(`Dockerfile`, `docker/nginx.conf`), which proxies `/api/` to the API on the same origin.
+
+```
+docker compose -f docker-compose.integration.yml up -d --build
+# open http://localhost:8080 and sign in as admin@example.com / Integration-Test-Pass-1 (you'll be asked to change it;
+# the e2e suite changes it to Integration-Test-Pass-2)
+npx playwright test -c playwright.integration.config.ts      # 13 end-to-end tests against the real API
+docker compose -f docker-compose.integration.yml down -v      # -v also drops the database
+```
+
+- `BACKEND_DIR` points at the API repository if it is not the sibling folder `../qb_post-issue-2`.
+- QuickBooks names for the pickers come from `docker/seed/qb-lists.json`.
+- Uploads are read by `docker/openrouter-stub` (lines like `2026-09-02 DEP 512.00 MEMO` become rows). To use the
+  real model set `OPENROUTER_BASE_URL=https://openrouter.ai/api/v1` and `OPENROUTER_API_KEY` first.
+- Every password and key in the compose file is a throwaway value for this local stack. Rate limits are raised there
+  so the suite can run as one user; production keeps the API's defaults.
 
 ## Tests
 

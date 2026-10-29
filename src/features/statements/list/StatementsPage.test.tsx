@@ -11,8 +11,8 @@ import { SessionProvider } from '@/auth/SessionProvider'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { StatementsPage } from './StatementsPage'
 
-const LIST = '/api/v1/saved-requests'
-const STATS = '/api/v1/saved-requests/stats'
+const LIST = '/api/v2/saved-requests'
+const STATS = '/api/v2/saved-requests/stats'
 const LAST_SEEN = 'qbpost.statements.lastSeen'
 
 function summary(over: Partial<RequestSummary> & { id: number }): RequestSummary {

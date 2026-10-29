@@ -10,7 +10,7 @@ import {
   startOfMinute,
   subDays,
 } from 'date-fns'
-import type { RequestStatus, RequestSummary } from '@/api/schema'
+import type { DashboardSummary, RequestStatus, RequestSummary } from '@/api/schema'
 import { formatDate } from '@/components/filters/useUrlFilters'
 
 export const PERIOD_VALUES = ['7', '30', '90'] as const
@@ -49,14 +49,16 @@ export interface FlowBucket {
   posted: number
 }
 
+type BucketFrame = FlowBucket & { start: Date; end: Date }
+
 /** Daily buckets up to 31 days, else weeks starting Monday (clamped to the period). Empty buckets are kept. */
-export function bucketEvents(events: readonly TrendEvent[], range: PeriodRange): FlowBucket[] {
+function bucketFrame(range: PeriodRange): BucketFrame[] {
   const lastDay = startOfDay(range.to)
   const weekly = range.days > 31
   const starts = weekly
     ? eachWeekOfInterval({ start: range.from, end: lastDay }, { weekStartsOn: 1 }).map((d) => (d < range.from ? range.from : d))
     : eachDayOfInterval({ start: range.from, end: lastDay })
-  const buckets = starts.map((start): FlowBucket & { start: Date; end: Date } => {
+  return starts.map((start): BucketFrame => {
     const end = weekly ? min([addDays(start, 6 - ((start.getDay() + 6) % 7)), lastDay]) : start
     return {
       start,
@@ -69,6 +71,20 @@ export function bucketEvents(events: readonly TrendEvent[], range: PeriodRange):
       posted: 0,
     }
   })
+}
+
+const withoutFrame = (b: BucketFrame): FlowBucket => ({
+  from: b.from,
+  to: b.to,
+  label: b.label,
+  tooltipLabel: b.tooltipLabel,
+  received: b.received,
+  posted: b.posted,
+})
+
+/** Received and posted audit events counted into the period's buckets (the audit-feed path). */
+export function bucketEvents(events: readonly TrendEvent[], range: PeriodRange): FlowBucket[] {
+  const buckets = bucketFrame(range)
   for (const e of events) {
     const day = startOfDay(new Date(e.atUtc))
     if (Number.isNaN(day.getTime())) continue
@@ -77,7 +93,36 @@ export function bucketEvents(events: readonly TrendEvent[], range: PeriodRange):
     if (e.action === 'received') b.received++
     else if (e.action === 'posted') b.posted++
   }
-  return buckets.map((b) => ({ from: b.from, to: b.to, label: b.label, tooltipLabel: b.tooltipLabel, received: b.received, posted: b.posted }))
+  return buckets.map(withoutFrame)
+}
+
+/**
+ * The summary's series (R-11) placed in the same buckets. Its `start` is a local date in the browser's zone; a weekly
+ * entry starts on a Monday that can fall before the period, so it lands in the clamped first week.
+ */
+export function bucketSeries(series: DashboardSummary['series'], range: PeriodRange): FlowBucket[] {
+  const buckets = bucketFrame(range)
+  for (const e of series) {
+    const [y, m, d] = e.start.split('-').map(Number)
+    const day = new Date(y, m - 1, d)
+    const at = day < range.from ? startOfDay(range.from) : day
+    const b = buckets.find((x) => at >= x.start && at <= x.end)
+    if (!b) continue
+    b.received += e.received
+    b.posted += e.posted
+  }
+  return buckets.map(withoutFrame)
+}
+
+/** A wait in minutes for people: "45 min", "21 h", "3 d", "2 d 2 h" (whole units, rounded down). */
+export function formatMinutes(minutes: number): string {
+  if (minutes < 1) return 'under 1 min'
+  if (minutes < 60) return `${Math.floor(minutes)} min`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 48) return `${hours} h`
+  const days = Math.floor(hours / 24)
+  const rest = hours % 24
+  return rest === 0 ? `${days} d` : `${days} d ${rest} h`
 }
 
 /** One sentence for screen readers: the totals and the busiest bucket. */

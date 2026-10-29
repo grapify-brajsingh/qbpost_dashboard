@@ -36,7 +36,8 @@ export const userHandlers = [
         (!disabled || u.disabled === (disabled === 'true')) &&
         (!statuses.length || statuses.includes(userStatusOf(u))),
     )
-    const page = paginate(matches.map(toUser), url)
+    // List rows carry their version (R-15); single-user answers carry it in the ETag header, as the API does.
+    const page = paginate(matches.map((u) => ({ ...toUser(u), rowVersion: String(u.rowVersion) })), url)
     return 'error' in page ? page.error : HttpResponse.json(page)
   }),
 

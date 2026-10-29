@@ -13,7 +13,7 @@ import { server } from '@/mocks/server'
 import { renderApp } from '@/test/render'
 import { postConfig, usePost } from './usePost'
 
-const API = '/api/v1/saved-requests'
+const API = '/api/v2/saved-requests'
 const DEFAULT_TIMEOUT = postConfig.timeoutMs
 
 afterEach(() => {
@@ -269,13 +269,13 @@ describe('outcomes', () => {
   test('401 on post → exactly 1 POST, the session is refreshed, and the detail reloads', async () => {
     const reqs = countRequests()
     const { user } = await open(1)
-    const refreshesBefore = reqs.count('POST', '/api/v1/auth/refresh')
+    const refreshesBefore = reqs.count('POST', '/api/v2/auth/refresh')
     const getsBefore = reqs.count('GET', `${API}/1`)
     mockDb.session!.generation++ // the token on hand is now stale
     await confirmPost(user)
     await waitFor(() => expect(reqs.count('GET', `${API}/1`)).toBeGreaterThan(getsBefore))
     expect(reqs.count('POST', `${API}/1/post`)).toBe(1)
-    expect(reqs.count('POST', '/api/v1/auth/refresh')).toBe(refreshesBefore + 1)
+    expect(reqs.count('POST', '/api/v2/auth/refresh')).toBe(refreshesBefore + 1)
     expect(result()).toHaveTextContent('nothing was re-sent')
     expect(record(1).status).toBe('pending')
   })

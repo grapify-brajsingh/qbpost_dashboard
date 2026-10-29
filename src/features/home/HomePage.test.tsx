@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { startOfDay, subDays } from 'date-fns'
-import type { Stats } from '@/api/schema'
+import type { DashboardSummary, Stats } from '@/api/schema'
 import { mockControl } from '@/mocks/db'
 import { server } from '@/mocks/server'
 import { renderApp } from '@/test/render'
@@ -20,7 +20,7 @@ const page = <T,>(items: T[], total = items.length) => ({ items, page: 1, pageSi
 
 /** Audit totals per action; the current period's `to` is about now, the previous one ends a period ago. */
 function auditTotals(seen: URL[] = []) {
-  return http.get('/api/v1/audit-events', ({ request }) => {
+  return http.get('/api/v2/audit-events', ({ request }) => {
     const url = new URL(request.url)
     seen.push(url)
     if (url.searchParams.get('pageSize') !== '1') return HttpResponse.json(page([]))
@@ -33,9 +33,24 @@ function auditTotals(seen: URL[] = []) {
 
 const heading = () => screen.findByRole('heading', { level: 1, name: /^Good (morning|afternoon|evening)/ })
 
+/** An older API without R-11: Home falls back to the audit feed. */
+const summaryGone = () =>
+  http.get('/api/v2/dashboard/summary', () =>
+    HttpResponse.json({ type: 'not-found', title: 'Not found', status: 404 }, { status: 404, headers: { 'Content-Type': 'application/problem+json' } }),
+  )
+
+const SUMMARY: DashboardSummary = {
+  range: { from: '', to: '', tz: 'UTC', bucket: 'day' },
+  counts: { received: 9, posted: 5, postFailed: 1, discarded: 1 },
+  previous: { received: 4, posted: 5, postFailed: 0, discarded: 0 },
+  posted: { rows: 120, amount: 24839.27, previousRows: 80, previousAmount: 18000 },
+  timeToPost: { medianMinutes: 1260, p90Minutes: 4320, statements: 5 },
+  series: [],
+}
+
 describe('Home', () => {
   test('editors: To review is pending only, with errors, duplicates and Posting now linked to their lists', async () => {
-    server.use(http.get('/api/v1/saved-requests/stats', () => HttpResponse.json(STATS)))
+    server.use(http.get('/api/v2/saved-requests/stats', () => HttpResponse.json(STATS)))
     mockControl.signInAs('u-editor')
     renderApp('/')
     await heading()
@@ -47,7 +62,7 @@ describe('Home', () => {
   })
 
   test('admins: To review adds partial and unknown, and Needs a decision replaces Posting now', async () => {
-    server.use(http.get('/api/v1/saved-requests/stats', () => HttpResponse.json(STATS)))
+    server.use(http.get('/api/v2/saved-requests/stats', () => HttpResponse.json(STATS)))
     mockControl.signInAs('u-admin')
     renderApp('/')
     expect(await screen.findByTestId('to-review')).toHaveTextContent('10')
@@ -55,8 +70,41 @@ describe('Home', () => {
     expect(screen.queryByText('Posting now')).not.toBeInTheDocument()
   })
 
+  test('with the summary, the period figures, posted value and time to post come from one call', async () => {
+    const seen: URL[] = []
+    server.use(
+      http.get('/api/v2/dashboard/summary', ({ request }) => {
+        seen.push(new URL(request.url))
+        return HttpResponse.json(SUMMARY)
+      }),
+      auditTotals(seen),
+    )
+    mockControl.signInAs('u-admin')
+    renderApp('/')
+    const received = await screen.findByRole('link', { name: /^9 statements received in the last 30 days/ })
+    expect(received).toHaveTextContent('+5')
+    expect(screen.getByRole('link', { name: /^5 successful posts/ })).toHaveTextContent('No change')
+    expect(screen.getByTestId('posted-value')).toHaveTextContent('24,839.27')
+    expect(screen.getByTestId('posted-value')).toHaveTextContent('120 rows sent to QuickBooks')
+    expect(screen.getByTestId('time-to-post')).toHaveTextContent('21 h')
+    expect(screen.getByTestId('time-to-post')).toHaveTextContent('90% within 3 d')
+    const summary = seen.filter((u) => u.pathname.endsWith('/dashboard/summary'))
+    expect(summary.length).toBeGreaterThanOrEqual(1)
+    expect(summary[0].searchParams.get('compareTo')).toBe(summary[0].searchParams.get('from'))
+    expect(summary[0].searchParams.get('bucket')).toBe('day')
+    expect(summary[0].searchParams.get('tz')).toBeTruthy()
+    expect(seen.some((u) => u.pathname.endsWith('/audit-events') && u.searchParams.get('pageSize') === '1')).toBe(false)
+  })
+
+  test('with no statement posted in the period, time to post says so', async () => {
+    server.use(http.get('/api/v2/dashboard/summary', () => HttpResponse.json({ ...SUMMARY, timeToPost: null })))
+    mockControl.signInAs('u-admin')
+    renderApp('/')
+    expect(await screen.findByTestId('time-to-post')).toHaveTextContent('No statements posted in this period')
+  })
+
   test('the period figures are audit totals, compared with the period before, and link to the audit trail', async () => {
-    server.use(auditTotals())
+    server.use(summaryGone(), auditTotals())
     mockControl.signInAs('u-admin')
     renderApp('/')
     const received = await screen.findByRole('link', { name: /^6 statements received in the last 30 days/ })
@@ -72,7 +120,7 @@ describe('Home', () => {
 
   test('choosing 7 days puts the period in the URL and asks for the last 7 local days', async () => {
     const seen: URL[] = []
-    server.use(auditTotals(seen))
+    server.use(summaryGone(), auditTotals(seen))
     mockControl.signInAs('u-admin')
     const { user, router } = renderApp('/')
     await screen.findByRole('link', { name: /^6 statements received in the last 30 days/ })
@@ -85,8 +133,9 @@ describe('Home', () => {
 
   test('a failing audit feed only breaks its own cards', async () => {
     server.use(
-      http.get('/api/v1/saved-requests/stats', () => HttpResponse.json(STATS)),
-      http.get('/api/v1/audit-events', () =>
+      summaryGone(),
+      http.get('/api/v2/saved-requests/stats', () => HttpResponse.json(STATS)),
+      http.get('/api/v2/audit-events', () =>
         HttpResponse.json({ type: 'about:blank', title: 'Audit is down', status: 500 }, { status: 500, headers: { 'Content-Type': 'application/problem+json' } }),
       ),
     )
@@ -100,10 +149,10 @@ describe('Home', () => {
 
   test('an empty queue says all clear', async () => {
     server.use(
-      http.get('/api/v1/saved-requests/stats', () =>
+      http.get('/api/v2/saved-requests/stats', () =>
         HttpResponse.json({ ...STATS, byStatus: { ...STATS.byStatus, pending: 0, partial: 0, unknown: 0 } }),
       ),
-      http.get('/api/v1/saved-requests', () => HttpResponse.json(page([]))),
+      http.get('/api/v2/saved-requests', () => HttpResponse.json(page([]))),
     )
     mockControl.signInAs('u-admin')
     renderApp('/')

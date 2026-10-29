@@ -69,7 +69,7 @@ describe('Discard', () => {
 
 describe('Discard failure', () => {
   test('a 500 keeps the dialog open, shows the problem and sends no success toast', async () => {
-    server.use(http.post('/api/v1/saved-requests/2/discard', () => problemResponse(500, 'Server error', 'Try again later.')))
+    server.use(http.post('/api/v2/saved-requests/2/discard', () => problemResponse(500, 'Server error', 'Try again later.')))
     const { user } = await open(2)
     await choose(user, 'Discard')
     await user.type(screen.getByLabelText('Reason'), 'dup')
@@ -145,7 +145,7 @@ describe('Resolve', () => {
   })
 
   test('a failed resolve keeps the dialog open, shows the problem and sends no success toast', async () => {
-    server.use(http.post('/api/v1/saved-requests/8/resolve', () => problemResponse(409, 'Already resolved', 'Someone else resolved this request.')))
+    server.use(http.post('/api/v2/saved-requests/8/resolve', () => problemResponse(409, 'Already resolved', 'Someone else resolved this request.')))
     const { user } = await open(8)
     await choose(user, 'Resolve')
     const d = await screen.findByRole('dialog')

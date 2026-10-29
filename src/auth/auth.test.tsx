@@ -35,7 +35,7 @@ describe('sign in', () => {
 
   test('503 shows the problem detail', async () => {
     server.use(
-      http.post('/api/v1/auth/login', () =>
+      http.post('/api/v2/auth/login', () =>
         problemResponse(503, { title: 'Database unavailable', detail: 'The database is not reachable.' }),
       ),
     )
@@ -58,7 +58,7 @@ describe('sign in', () => {
   test('a 403 password-change-required from any call sends the user to change password', async () => {
     mockControl.signInAs('u-admin')
     server.use(
-      http.get('/api/v1/health/database', () =>
+      http.get('/api/v2/health/database', () =>
         problemResponse(403, { title: 'Password change required', code: 'password-change-required' }),
       ),
     )

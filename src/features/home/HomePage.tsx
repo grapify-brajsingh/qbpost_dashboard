@@ -3,7 +3,7 @@ import { useIsFetching, useQueryClient } from '@tanstack/react-query'
 import { RotateCwIcon } from 'lucide-react'
 import { format } from 'date-fns'
 import { useAuditEvents } from '@/api/queries/audit'
-import { useAuditCounts, useAuditTrend } from '@/api/queries/home'
+import { useAuditCounts, useAuditTrend, useSummaryCounts, useSummaryFigures, useSummaryTrend, type SummaryParams } from '@/api/queries/home'
 import { requestKeys, STATS_POLL_MS, useRequestsList, useStats } from '@/api/queries/requests'
 import { hasScope, useSession } from '@/auth/useSession'
 import { formatDate, useUrlFilters } from '@/components/filters'
@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils'
 import { paramsFor } from '@/features/statements/list/statusTabs'
 import { CardSkeleton } from './CardState'
 import { DEFAULT_PERIOD, firstName, greeting, PERIOD_VALUES, periodRange } from './homeMetrics'
+import { PostedFigures } from './PostedFigures'
 import { QueueBand } from './QueueBand'
 import { RecentActivity } from './RecentActivity'
 import { StatusBreakdown } from './StatusBreakdown'
@@ -31,6 +32,8 @@ const VIEW_SPEC = { period: { kind: 'enum', values: PERIOD_VALUES } } as const
 /** The server's largest page: the queue's oldest 100 are enough for its ages and its oldest five. */
 const QUEUE_PAGE_SIZE = 100
 const RECENT_COUNT = 8
+/** The browser's IANA zone, so the summary's day buckets are the accountant's days. */
+const TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
 
 export function HomePage() {
   const { me } = useSession()
@@ -49,8 +52,20 @@ export function HomePage() {
 
   const stats = useStats({ refetchInterval: STATS_POLL_MS })
   const queue = useRequestsList({ status: paramsFor('review', isAdmin).status, sort: 'received', pageSize: QUEUE_PAGE_SIZE })
-  const counts = useAuditCounts(current, previous)
-  const trend = useAuditTrend(current)
+  // R-11 first: one call for the period band, the chart and the posted figures. The summary's `to` is exclusive, so
+  // the previous period ends exactly where this one starts. Only a 404 (an older API) falls back to the audit feed.
+  const summaryParams = useMemo<SummaryParams>(
+    () => ({ current, previous: { from: previous.from, to: current.from }, bucket: days > 31 ? 'week' : 'day', tz: TIME_ZONE }),
+    [current, previous, days],
+  )
+  const summaryCounts = useSummaryCounts(summaryParams)
+  const summaryTrend = useSummaryTrend(summaryParams)
+  const figures = useSummaryFigures(summaryParams)
+  const olderApi = summaryCounts.isSuccess && summaryCounts.data === null
+  const auditCounts = useAuditCounts(current, previous, { enabled: olderApi })
+  const auditTrend = useAuditTrend(current, { enabled: olderApi })
+  const counts = olderApi ? auditCounts : summaryCounts
+  const trend = olderApi ? auditTrend : summaryTrend
   const recent = useAuditEvents({ pageSize: RECENT_COUNT })
 
   const fetching = useIsFetching({ queryKey: requestKeys.all }) + useIsFetching({ queryKey: ['audit'] }) > 0
@@ -105,6 +120,7 @@ export function HomePage() {
       <QueueBand stats={stats} queue={queue} isAdmin={isAdmin} now={now} />
 
       <ThroughputBand counts={counts} from={formatDate(range.from)} to={formatDate(range.to)} periodLabel={periodLabel} />
+      <PostedFigures figures={figures} periodLabel={periodLabel} />
 
       <div className="grid gap-5 lg:grid-cols-3">
         <Suspense

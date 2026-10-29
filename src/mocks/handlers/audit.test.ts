@@ -3,7 +3,7 @@ import type { AuditEvent, Page } from '@/api/schema'
 import { mockControl, mockDb } from '@/mocks/db'
 import { csvCell } from './audit'
 
-const API = '/api/v1'
+const API = '/api/v2'
 let token = ''
 const get = (path: string, as = token) => fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${as}` } })
 const feed = async (qs = '') => (await (await get(`/audit-events?${qs}`)).json()) as Page<AuditEvent>

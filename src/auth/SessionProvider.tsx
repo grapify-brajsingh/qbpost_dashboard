@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router'
-import { fetchMe, login, logout } from '@/api/queries/auth'
+import { fetchMe, login, logout, type LoginResponse } from '@/api/queries/auth'
 import { onPasswordChangeRequired } from '@/api/queryClient'
 import { onSessionEnded, refreshSession, setAccessToken } from '@/api/session'
 import type { Me } from '@/api/schema'
@@ -75,6 +75,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setStatus('signed-in')
   }, [])
 
+  const adoptSession = useCallback((res: LoginResponse) => {
+    setAccessToken(res.accessToken, { broadcast: true })
+    setMe(res.user)
+  }, [])
+
   const signOut = useCallback(async () => {
     try {
       await logout()
@@ -88,8 +93,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [navigate])
 
   const value = useMemo<SessionValue>(
-    () => ({ me, status, signIn, signOut, refetchMe }),
-    [me, status, signIn, signOut, refetchMe],
+    () => ({ me, status, signIn, signOut, refetchMe, adoptSession }),
+    [me, status, signIn, signOut, refetchMe, adoptSession],
   )
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
 }

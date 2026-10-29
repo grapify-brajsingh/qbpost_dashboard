@@ -10,7 +10,7 @@ import { renderApp } from '@/test/render'
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }))
 
-const API = '/api/v1/saved-requests'
+const API = '/api/v2/saved-requests'
 
 afterEach(() => {
   server.events.removeAllListeners()
@@ -511,7 +511,7 @@ describe('save bar', () => {
   test('Validate re-runs validation; the Results tab shows the new check and says when it is out of date', async () => {
     let who = 'Eli Editor'
     server.use(
-      http.get('/api/v1/audit-events', () =>
+      http.get('/api/v2/audit-events', () =>
         HttpResponse.json({
           items: [{ id: 'v', atUtc: '2026-10-27T08:00:00Z', actor: { id: 'u', name: who, kind: 'user' }, action: 'validated', request: null, row: null, field: null, old: null, new: null, versionNumber: null, detail: null }],
           page: 1, pageSize: 1, total: 1,

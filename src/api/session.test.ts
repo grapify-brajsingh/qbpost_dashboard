@@ -49,7 +49,7 @@ async function openTab(): Promise<SessionModule> {
 function countRefreshes() {
   let n = 0
   server.events.on('request:start', ({ request }) => {
-    if (request.method === 'POST' && new URL(request.url).pathname === '/api/v1/auth/refresh') n++
+    if (request.method === 'POST' && new URL(request.url).pathname === '/api/v2/auth/refresh') n++
   })
   return () => n
 }

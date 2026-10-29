@@ -48,7 +48,7 @@ export function UserPage() {
           </div>
         </div>
       )}
-      {q.data && <UserDetail key={`${q.data.user.id}:${q.data.user.rowVersion}`} data={q.data} onReload={() => void q.refetch()} onPassword={setPassword} />}
+      {q.data && <UserDetail key={`${q.data.user.id}:${q.data.etag}`} data={q.data} onReload={() => void q.refetch()} onPassword={setPassword} />}
       {password !== null && <OneTimePasswordDialog password={password} onClose={() => setPassword(null)} />}
     </div>
   )

@@ -6,7 +6,7 @@ import { mockControl } from '@/mocks/db'
 import { server } from '@/mocks/server'
 import { renderApp } from '@/test/render'
 
-const A = '/api/v1/saved-requests'
+const A = '/api/v2/saved-requests'
 
 function summary(id: number, over: Partial<RequestSummary> = {}): RequestSummary {
   return {
@@ -85,7 +85,7 @@ function useDetail(d: RequestDetail) {
 }
 const useAttempts = (id: number, list: Attempt[], full: Record<number, unknown> = {}) =>
   server.use(
-    http.get(`${A}/${id}/attempts`, () => HttpResponse.json(list)),
+    http.get(`${A}/${id}/attempts`, () => HttpResponse.json({ items: list })),
     http.get(`${A}/${id}/attempts/:aid`, ({ params }) => {
       const a = list.find((x) => x.id === Number(params.aid))!
       return HttpResponse.json({ ...a, result: full[a.id] })
@@ -103,7 +103,7 @@ describe('statement sheet', () => {
   test('opens from a Statements row on the requested tab and keeps the list visible', async () => {
     useDetail(detail(7))
     useAttempts(7, [])
-    server.use(http.get('/api/v1/audit-events', () => HttpResponse.json({ items: [], page: 1, pageSize: 100, total: 0 })))
+    server.use(http.get('/api/v2/audit-events', () => HttpResponse.json({ items: [], page: 1, pageSize: 100, total: 0 })))
     const { user, router } = open('/statements?reference=zz&page=1')
     await user.click(await screen.findByRole('button', { name: 'History 2' }))
     const sheet = await screen.findByRole('dialog')
@@ -141,7 +141,7 @@ describe('statement sheet', () => {
     useAttempts(7, [])
     let asked: URLSearchParams | null = null
     server.use(
-      http.get('/api/v1/audit-events', ({ request }) => {
+      http.get('/api/v2/audit-events', ({ request }) => {
         asked = new URL(request.url).searchParams
         return HttpResponse.json({
           items: [event('v1', '2026-10-27T08:00:00Z', { action: 'validated', actor: { id: 'u2', name: 'Eli Editor', kind: 'user' } })],
@@ -159,7 +159,7 @@ describe('statement sheet', () => {
     expect(asked!.get('pageSize')).toBe('1')
     unmount()
 
-    server.use(http.get('/api/v1/audit-events', () => HttpResponse.json({ items: [], page: 1, pageSize: 1, total: 0 })))
+    server.use(http.get('/api/v2/audit-events', () => HttpResponse.json({ items: [], page: 1, pageSize: 1, total: 0 })))
     open('/statements?sheet=7&sheetTab=results')
     const bare = await within(await screen.findByRole('dialog')).findByRole('region', { name: 'Latest validation' })
     await waitFor(() => expect(bare).toHaveTextContent(/Validated .* against version 1/))
@@ -222,7 +222,7 @@ describe('statement sheet', () => {
   test("History: this statement's events newest first, as plain text; Open in Audit trail goes to /audit?requestId=", async () => {
     useDetail(detail(7))
     server.use(
-      http.get('/api/v1/audit-events', ({ request }) => {
+      http.get('/api/v2/audit-events', ({ request }) => {
         expect(new URL(request.url).searchParams.get('requestId')).toBe('7')
         return HttpResponse.json({
           items: [

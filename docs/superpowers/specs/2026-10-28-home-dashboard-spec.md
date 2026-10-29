@@ -378,3 +378,39 @@ What changed from the draft above while building, and what is known to be missin
   - D1 drill-down dates are local days, while the API's `receivedFrom/To` are UTC dates (§8.6).
   - In `dev:mock`, fixture data is dated 2026-10-19 to 2026-10-27, so the "previous period" comparisons all read
     "None in the previous N days".
+
+## 11. Change 2026-10-29: Home reads `GET /dashboard/summary` (R-11)
+
+**Why**: the API now serves R-11 (`/api/v2/dashboard/summary`, M12). Section 8 said Home would switch to it once it
+exists. It replaces the 8 count calls and up to 10 feed pages with one call, which also keeps Home well under the API's
+per-user rate limit (120 reads a minute; the old path made about 22 calls per load), and it gives two figures the audit
+feed cannot: **Posted value** and **Time to post**.
+
+**Data source**: `GET /dashboard/summary?from&to&compareFrom&compareTo&bucket&tz`.
+- `from` = local midnight `days - 1` days ago, `to` = now (minute); compare range = the same length just before, with
+  `compareTo` = `from` (the API's `to` is exclusive, so the two periods never overlap).
+- `bucket` = `day` up to 31 days, else `week` (Monday weeks), as the chart already does. `tz` = the browser's IANA zone,
+  so the API's day buckets are the accountant's days.
+- The period cells use `counts` / `previous` (same meaning as the audit totals, R-10.3); the chart uses `series`.
+
+**Fallback**: a `404` from the summary means an older API: Home uses the audit-feed path of §8 unchanged. Any other
+error shows the cards' error state (no silent fallback). The summary query lives under `['audit', …]`, so every
+mutation that refreshes the audit feed refreshes it too.
+
+**New figures** (only when the summary answered), a second row under the period band:
+- **Posted value**: `posted.amount` as money, with `posted.rows` rows; compared with `previousAmount` like the other
+  cells (no colour judgement: more money posted is neither good nor bad).
+- **Time to post**: `timeToPost.medianMinutes` as a duration ("21 h", "3 d"), with "90% within …" from `p90Minutes`
+  and how many statements it covers; "No statements posted in this period" when `timeToPost` is null.
+- Both figures come straight from the API. Nothing is computed or rounded beyond display formatting.
+
+**States**: loading → skeletons as today; error → `CardError` with Try again; empty period → zeros, the chart's empty
+state; older API → today's page without the new row.
+
+**Acceptance**
+1. With the summary available, Home makes **one** summary call and **no** `audit-events?pageSize=1` count calls.
+2. The period cells show the summary's `counts`, compared with `previous`, with the same audit-trail links.
+3. Posted value and Time to post show the API's values; Time to post says when there is nothing to measure.
+4. With the summary answering 404, Home shows the audit-feed figures exactly as before and no Posted value row.
+5. The chart's bars equal the summary's `series` (day buckets in the browser's zone).
+6. The mock API serves `/dashboard/summary` from its own data, as R-11 describes.

@@ -5,7 +5,7 @@ import { mockControl, mockDb } from '@/mocks/db'
 import { server } from '@/mocks/server'
 import { renderApp } from '@/test/render'
 
-const FEED = '/api/v1/audit-events'
+const FEED = '/api/v2/audit-events'
 
 const local = (daysAgo: number, h: number, min = 0) => {
   const d = new Date()
@@ -165,7 +165,7 @@ describe('Audit trail page', () => {
     let auth: string | null = null
     let url: URL | null = null
     server.use(
-      http.get('/api/v1/audit-events.csv', ({ request: r }) => {
+      http.get('/api/v2/audit-events.csv', ({ request: r }) => {
         auth = r.headers.get('Authorization')
         url = new URL(r.url)
         return new HttpResponse('a,b\n1,2\n', { headers: { 'Content-Type': 'text/csv' } })
@@ -190,7 +190,7 @@ describe('Audit trail page', () => {
   test('Export CSV shows the problem detail when the export is too large', async () => {
     feed([event('a')])
     server.use(
-      http.get('/api/v1/audit-events.csv', () =>
+      http.get('/api/v2/audit-events.csv', () =>
         HttpResponse.json(
           { type: 'about:blank', title: 'Too many entries', status: 413, detail: 'Narrow the dates and try again.' },
           { status: 413, headers: { 'Content-Type': 'application/problem+json' } },
@@ -247,7 +247,7 @@ describe('Audit trail page', () => {
     mockDb.userAudit['u-editor'] = [{ id: 1, kind: 'unlocked', actor: { id: 'u-admin', name: 'Asha K' }, detail: null, atUtc: local(0, 8) }]
     let usersAsked = false
     server.use(
-      http.get('/api/v1/users', () => {
+      http.get('/api/v2/users', () => {
         usersAsked = true
         return HttpResponse.json({ items: [], page: 1, pageSize: 25, total: 0 })
       }),

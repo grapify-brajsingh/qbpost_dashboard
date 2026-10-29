@@ -11,7 +11,7 @@ import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartToo
 import { cn } from '@/lib/utils'
 import { prefersReducedMotion } from '@/lib/motion'
 import { CardError, CardSkeleton } from './CardState'
-import { auditHref, bucketEvents, trendSummary, type FlowBucket, type PeriodRange } from './homeMetrics'
+import { auditHref, bucketEvents, bucketSeries, trendSummary, type FlowBucket, type PeriodRange } from './homeMetrics'
 
 const config = {
   received: { label: 'Received', color: 'var(--chart-1)' },
@@ -20,11 +20,17 @@ const config = {
 
 type Series = keyof typeof config
 
-/** C1: received against posted, per day (or week), from the audit feed. A column opens those events in the audit trail. */
-export function FlowChart({ trend, range, periodLabel }: { trend: UseQueryResult<Trend>; range: PeriodRange; periodLabel: string }) {
+/**
+ * C1: received against posted, per day (or week), from the summary's series (R-11) or, on an older API, the audit
+ * feed. A column opens those events in the audit trail.
+ */
+export function FlowChart({ trend, range, periodLabel }: { trend: UseQueryResult<Trend | null>; range: PeriodRange; periodLabel: string }) {
   const navigate = useNavigate()
-  const events = trend.data?.events
-  const buckets = useMemo(() => (events ? bucketEvents(events, range) : []), [events, range])
+  const data = trend.data
+  const buckets = useMemo(
+    () => (!data ? [] : data.series ? bucketSeries(data.series, range) : bucketEvents(data.events, range)),
+    [data, range],
+  )
   const weekly = range.days > 31
   const empty = buckets.every((b) => b.received === 0 && b.posted === 0)
   const animate = !prefersReducedMotion()

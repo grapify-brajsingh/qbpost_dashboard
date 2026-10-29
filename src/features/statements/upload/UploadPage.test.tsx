@@ -106,7 +106,7 @@ describe('review and save', () => {
     await pickAccount(r, 2)
     await pickAccount(r, 9)
     server.use(
-      http.post('/api/v1/saved-requests', () =>
+      http.post('/api/v2/saved-requests', () =>
         HttpResponse.json(
           { type: 'https://qbautopost/problems/extraction-already-saved', title: 'Already saved', status: 409, code: 'extraction-already-saved', savedRequestId: 1, publicRef: 'SR-000001' },
           { status: 409, headers: { 'Content-Type': 'application/problem+json' } },

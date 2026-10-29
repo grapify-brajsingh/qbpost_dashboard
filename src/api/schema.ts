@@ -196,6 +196,11 @@ export interface Page<T> {
   total: number
 }
 
+/** An unpaged list (versions, attempts): the API wraps it so fields can be added later. */
+export interface Items<T> {
+  items: T[]
+}
+
 export interface Stats {
   byStatus: Record<RequestStatus, number>
   needsAttention: { pending: number; all: number }
@@ -276,7 +281,11 @@ export interface User {
   lockedOutUntilUtc: string | null
   mustChangePassword: boolean
   lastLoginUtc: string | null
-  rowVersion: number
+  /**
+   * On `GET /users` rows only (R-15): the user's ETag value without the quotes, so a row action can send `If-Match`.
+   * Single-user answers carry the `ETag` header instead.
+   */
+  rowVersion?: string
 }
 
 export interface UserAuditRow {
@@ -287,11 +296,28 @@ export interface UserAuditRow {
   atUtc: string
 }
 
+/** QuickBooks names as the dashboard uses them: account names only. */
 export interface QbLists {
   accounts: string[]
   vendors: string[]
   customers: string[]
   syncedUtc: string | null
+}
+
+/** `GET /quickbooks/lists` as the API sends it: each account carries its QuickBooks type (null when unknown). */
+export interface QbListsResponse extends Omit<QbLists, 'accounts'> {
+  accounts: { name: string; type: string | null }[]
+}
+
+/** `GET /dashboard/summary` (R-11): the Home period figures in one call. Previous-period fields are null without a compare range. */
+export interface DashboardSummary {
+  range: { from: string; to: string; tz: string; bucket: 'day' | 'week' }
+  counts: { received: number; posted: number; postFailed: number; discarded: number }
+  previous: DashboardSummary['counts'] | null
+  posted: { rows: number; amount: number; previousRows: number | null; previousAmount: number | null }
+  timeToPost: { medianMinutes: number; p90Minutes: number; statements: number } | null
+  /** One entry per day (or Monday week) in `tz`, empty ones included, oldest first. */
+  series: { start: string; received: number; posted: number; postFailed: number }[]
 }
 
 /** The only list of audit actions (R-7.4). Mirrors the OpenAPI enum. */

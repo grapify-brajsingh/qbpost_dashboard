@@ -45,5 +45,5 @@ export function auditCsvPath(params: AuditParams): string {
 
 /** Same as `auditCsvPath`, as the absolute URL a browser would open. */
 export function auditCsvHref(params: AuditParams): string {
-  return `/api/v1${auditCsvPath(params)}`
+  return `/api/v2${auditCsvPath(params)}`
 }

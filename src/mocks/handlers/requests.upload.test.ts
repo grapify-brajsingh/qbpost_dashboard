@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { mockControl } from '@/mocks/db'
 import type { AuditEvent, Extraction, Page, RequestDetail, RequestSummary, Txn, Version } from '@/api/schema'
 
-const API = '/api/v1'
+const API = '/api/v2'
 let token = ''
 
 const call = (path: string, init: RequestInit = {}, as = token) =>
@@ -22,7 +22,7 @@ const save = (x: Extraction, transactions: unknown = x.payload.transactions, ext
   }, as)
 
 /** Oldest first (the endpoint lists newest first). */
-const versions = async (id: number) => ((await (await call(`/saved-requests/${id}/versions`)).json()) as Version[]).sort((a, b) => a.number - b.number)
+const versions = async (id: number) => ((await (await call(`/saved-requests/${id}/versions`)).json()) as { items: Version[] }).items.sort((a, b) => a.number - b.number)
 const version = async (id: number, n: number) => (await (await call(`/saved-requests/${id}/versions/${n}`)).json()) as Version
 
 beforeEach(() => {

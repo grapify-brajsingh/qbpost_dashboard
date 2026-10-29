@@ -4,7 +4,7 @@
 
 const LOCK_NAME = 'qbpost-refresh'
 const CHANNEL_NAME = 'qbpost-session'
-const REFRESH_URL = '/api/v1/auth/refresh'
+const REFRESH_URL = '/api/v2/auth/refresh'
 
 type SessionMessage = { type: 'token'; token: string } | { type: 'ended' }
 

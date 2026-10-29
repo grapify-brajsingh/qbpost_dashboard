@@ -158,3 +158,40 @@ e2e/v2.spec.ts                        MOD  sign-in lands on `/`
   - Console: only the existing `next-themes` script notice and the session-restore 401.
 
 **Known limitations**: see spec §10.
+
+## 5. Change 2026-10-29: summary endpoint (spec §11)
+
+**Files**
+- `src/api/schema.ts`: `DashboardSummary` type.
+- `src/api/queries/home.ts`: `summaryOptions`, `useSummaryCounts`, `useSummaryTrend`, `useSummaryFigures` (one query,
+  three `select`s; 404 → `null`); `useAuditCounts` / `useAuditTrend` take `{ enabled }`.
+- `src/features/home/homeMetrics.ts`: `bucketSeries` (series → `FlowBucket[]`, shares the bucket frame with
+  `bucketEvents`), `formatMinutes`.
+- `src/features/home/FlowChart.tsx`: buckets from `trend.series` when present.
+- `src/features/home/PostedFigures.tsx` (new): Posted value and Time to post.
+- `src/features/home/HomePage.tsx`: summary first, audit feed only on 404.
+- `src/mocks/handlers/dashboard.ts` (new), `src/mocks/handlers/index.ts`: the R-11 mock.
+- Tests: `homeMetrics.test.ts` (`bucketSeries`, `formatMinutes`), `HomePage.test.tsx` (summary path; existing tests
+  pinned to the fallback with a 404 override), `src/mocks/handlers/dashboard.test.ts`.
+
+**Tasks**
+1. Types and query hooks (depends on nothing) → `tsc -b` clean.
+2. `bucketSeries`, `formatMinutes` with unit tests.
+3. FlowChart and PostedFigures; HomePage wiring.
+4. Mock handler and its test; Home tests for both paths.
+5. Integration: `e2e-integration/review.spec.ts` Home test checks the summary call and the new figures.
+
+**Verification**: `npm run lint`, `npm run build`, `npm test`, then the integration suite against Docker.
+
+**Milestones**
+- [x] Hooks and types
+- [x] Metrics helpers and tests
+- [x] Components and page
+- [x] Mock and tests
+- [x] Integration test green
+
+**Results (2026-10-29)**: `homeMetrics.test.ts` 20 passed (new `bucketSeries`, `formatMinutes`); `HomePage.test.tsx`
+9 passed (two new summary tests; the audit-feed tests now run with a summary 404); `dashboard.test.ts` 3 passed
+(mock counts equal the mock audit totals, series sums to them). Against the real API, the integration Home test sees
+one `/dashboard/summary` call, no `pageSize=1` audit counts, and the Posted value and Time to post figures. No
+sideways scroll at 375 px. Built as specified; no deviation.

@@ -3,8 +3,10 @@ import {
   ageBuckets,
   auditHref,
   bucketEvents,
+  bucketSeries,
   delta,
   firstName,
+  formatMinutes,
   greeting,
   periodRange,
   statusHref,
@@ -60,6 +62,43 @@ describe('bucketEvents', () => {
     const r = periodRange(7, NOW)
     const b = bucketEvents([ev(new Date(2026, 9, 21, 23, 59), 'received')], r)
     expect(b.reduce((n, x) => n + x.received, 0)).toBe(0)
+  })
+})
+
+describe('bucketSeries', () => {
+  test('daily series fill the matching days; days the API left out stay empty', () => {
+    const r = periodRange(7, NOW)
+    const b = bucketSeries(
+      [
+        { start: '2026-10-22', received: 1, posted: 0, postFailed: 0 },
+        { start: '2026-10-28', received: 3, posted: 2, postFailed: 1 },
+      ],
+      r,
+    )
+    expect(b).toHaveLength(7)
+    expect(b[0]).toMatchObject({ from: '2026-10-22', received: 1, posted: 0 })
+    expect(b[6]).toMatchObject({ from: '2026-10-28', received: 3, posted: 2 })
+    expect(b.slice(1, 6).every((x) => x.received === 0 && x.posted === 0)).toBe(true)
+  })
+
+  test('a weekly entry starting the Monday before the period lands in the clamped first week', () => {
+    const r = periodRange(90, NOW)
+    const b = bucketSeries([{ start: '2026-07-27', received: 4, posted: 1, postFailed: 0 }], r)
+    expect(b[0]).toMatchObject({ from: '2026-07-31', received: 4, posted: 1 })
+  })
+})
+
+describe('formatMinutes', () => {
+  test.each([
+    [0, 'under 1 min'],
+    [45, '45 min'],
+    [60, '1 h'],
+    [1260, '21 h'],
+    [2880, '2 d'],
+    [4320, '3 d'],
+    [3000, '2 d 2 h'],
+  ])('%i minutes → %s', (minutes, text) => {
+    expect(formatMinutes(minutes)).toBe(text)
   })
 })
 
