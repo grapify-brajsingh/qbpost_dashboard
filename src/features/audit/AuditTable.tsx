@@ -25,6 +25,7 @@ const TONE_CLASS: Record<Tone, string> = {
 const TONE: Partial<Record<AuditAction, Tone>> = {
   'row-edited': 'edit',
   'control-total-changed': 'edit',
+  'request-edited': 'edit',
   'row-added': 'ok',
   'row-post-on': 'ok',
   posted: 'ok',
@@ -97,6 +98,7 @@ function Change({ e }: { e: AuditEvent }) {
   switch (e.action) {
     case 'row-edited':
     case 'control-total-changed':
+    case 'request-edited':
       return (
         <span className="inline-flex flex-wrap items-center gap-1.5">
           {e.field && <span>{e.field}</span>}

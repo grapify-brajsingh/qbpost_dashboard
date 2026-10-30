@@ -1,4 +1,4 @@
-import { FileTextIcon, HistoryIcon, LayoutDashboardIcon, LogOutIcon, MoonIcon, SearchIcon, SunIcon, UserIcon, UsersIcon, type LucideIcon } from 'lucide-react'
+import { FileTextIcon, HistoryIcon, LayoutDashboardIcon, ListIcon, LogOutIcon, MoonIcon, SearchIcon, SunIcon, UserIcon, UsersIcon, type LucideIcon } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { NavLink, useLocation } from 'react-router'
 import { useStats } from '@/api/queries/requests'
@@ -99,6 +99,9 @@ export function AppSidebar({ onOpenSearch }: { onOpenSearch(): void }) {
             </SidebarMenuItem>
             <SidebarMenuItem>
               <NavItem to="/audit" icon={HistoryIcon} label="Audit trail" active={on('/audit')} />
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <NavItem to="/lists" icon={ListIcon} label="Lists" active={on('/lists')} />
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>

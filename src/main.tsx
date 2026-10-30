@@ -28,7 +28,8 @@ async function bootstrap() {
           <TooltipProvider>
             <RouterProvider router={router} />
           </TooltipProvider>
-          <Toaster />
+          {/* Top right, below the sticky header: never over the Save bar or the upload's save footer (I-9). */}
+          <Toaster position="top-right" offset={{ top: 72 }} />
         </QueryClientProvider>
       </ThemeProvider>
     </StrictMode>,

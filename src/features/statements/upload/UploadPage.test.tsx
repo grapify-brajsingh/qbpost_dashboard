@@ -166,3 +166,13 @@ describe('reading', () => {
     expect(await screen.findByText(/Drop a PDF here/)).toBeInTheDocument()
   })
 })
+
+// R-16: the review editor shows the same lists status and Sync now.
+describe('QuickBooks lists', () => {
+  it('shows the lists status and Sync now in the review, and a sync updates the status', async () => {
+    const r = await uploadAndReview()
+    expect(await screen.findByText(/^Lists synced \d+ min ago$/)).toBeInTheDocument()
+    await r.user.click(screen.getByRole('button', { name: 'Sync now' }))
+    expect(await screen.findByText('Lists synced just now')).toBeInTheDocument()
+  })
+})

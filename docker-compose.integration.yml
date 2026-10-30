@@ -59,7 +59,8 @@ services:
       QBAUTOPOST__Api__RateLimits__DefaultPerMinute: "5000"
       QBAUTOPOST__Extraction__MaxPerUserPerHour: "1000"
     volumes:
-      # QuickBooks lists for the name pickers and validation; the simulated company starts empty.
+      # QuickBooks lists: imported at first start, and the simulated company is seeded from them (API M15), so Sync now
+      # and the 30-minute schedule return these names.
       - ./docker/seed/qb-lists.json:/data/qb-lists.json:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -fs -o /dev/null http://127.0.0.1:5080/api/v1/health || exit 1"]

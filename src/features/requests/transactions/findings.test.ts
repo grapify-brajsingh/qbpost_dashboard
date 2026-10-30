@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { Finding, Txn } from '@/api/schema'
-import { findingsByRow, readErrorCells, tableShape } from './findings'
+import { dropResolvedFindings, findingsByRow, readErrorCells, tableShape } from './findings'
 
 const rows: Txn[] = [{ externalId: 'a' }, { externalId: 'b' }, { externalId: 'c' }]
 
@@ -33,6 +33,46 @@ describe('findingsByRow', () => {
       { index: -4, reason: 'y' },
     ])
     expect(m.get(-1)?.map((x) => x.reason)).toEqual(['x', 'y'])
+  })
+})
+
+describe('dropResolvedFindings', () => {
+  const lists = { accounts: ['Chase', 'Rent'], vendors: ['Acme'], customers: ['Tenant'], syncedUtc: null }
+
+  test('drops an unknown-payee finding once the vendor is in the lists', () => {
+    const r: Txn[] = [{ kind: 'Check', payee: 'Acme' }]
+    expect(dropResolvedFindings(r, [{ index: 0, reason: 'unknown-payee' }], lists)).toEqual([])
+  })
+
+  test('looks a deposit payee up among the customers', () => {
+    const r: Txn[] = [{ kind: 'Deposit', payee: 'Acme' }, { kind: 'Deposit', payee: 'Tenant' }]
+    const f: Finding[] = [{ index: 0, reason: 'unknown-payee' }, { index: 1, reason: 'unknown-payee' }]
+    expect(dropResolvedFindings(r, f, lists)).toEqual([f[0]])
+  })
+
+  test('matches names exactly, like the "not in QuickBooks" flag', () => {
+    const r: Txn[] = [{ kind: 'Check', payee: 'acme' }]
+    const f: Finding[] = [{ index: 0, reason: 'unknown-payee' }]
+    expect(dropResolvedFindings(r, f, lists)).toEqual(f)
+  })
+
+  test('drops unknown-account only when both account fields are in the lists', () => {
+    const r: Txn[] = [{ account: 'Chase', lineAccount: 'Rent' }, { account: 'Chase', lineAccount: 'Nope' }, { account: 'Chase' }]
+    const f: Finding[] = [0, 1, 2].map((index) => ({ index, reason: 'unknown-account' }))
+    expect(dropResolvedFindings(r, f, lists)).toEqual([f[1]])
+  })
+
+  test('finds the row by externalId, as findingsByRow does', () => {
+    const r: Txn[] = [{ externalId: 'a', kind: 'Check', payee: 'Nope' }, { externalId: 'b', kind: 'Check', payee: 'Acme' }]
+    expect(dropResolvedFindings(r, [{ index: 0, externalId: 'b', reason: 'unknown-payee' }], lists)).toEqual([])
+  })
+
+  test('keeps other reasons, findings with no row, and everything when the lists have not loaded', () => {
+    const r: Txn[] = [{ kind: 'Check', payee: 'Acme' }]
+    const other: Finding[] = [{ index: 0, reason: 'no-account-rule' }, { index: 9, reason: 'unknown-payee' }]
+    expect(dropResolvedFindings(r, other, lists)).toEqual(other)
+    const f: Finding[] = [{ index: 0, reason: 'unknown-payee' }]
+    expect(dropResolvedFindings(r, f, undefined)).toEqual(f)
   })
 })
 

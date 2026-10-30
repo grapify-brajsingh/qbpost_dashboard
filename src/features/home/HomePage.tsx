@@ -15,7 +15,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { paramsFor } from '@/features/statements/list/statusTabs'
 import { CardSkeleton } from './CardState'
-import { DEFAULT_PERIOD, firstName, greeting, PERIOD_VALUES, periodRange } from './homeMetrics'
+import { DEFAULT_PERIOD, firstName, greeting, PERIOD_VALUES, periodRange, queryEnd } from './homeMetrics'
 import { PostedFigures } from './PostedFigures'
 import { QueueBand } from './QueueBand'
 import { RecentActivity } from './RecentActivity'
@@ -47,7 +47,7 @@ export function HomePage() {
   // "Now" moves on Refresh only, so query keys and relative times stay put between renders.
   const [now, setNow] = useState(() => new Date())
   const range = useMemo(() => periodRange(days, now), [days, now])
-  const current = useMemo(() => ({ from: range.from.toISOString(), to: range.to.toISOString() }), [range])
+  const current = useMemo(() => ({ from: range.from.toISOString(), to: queryEnd(range).toISOString() }), [range])
   const previous = useMemo(() => ({ from: range.prevFrom.toISOString(), to: range.prevTo.toISOString() }), [range])
 
   const stats = useStats({ refetchInterval: STATS_POLL_MS })
