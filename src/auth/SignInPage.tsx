@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { CircleAlertIcon, Loader2Icon, LockIcon } from 'lucide-react'
 import { Navigate, useSearchParams } from 'react-router'
 import { ApiError, problemCode, retryAfterSeconds } from '@/api/problem'
+import { wasSessionLost } from '@/api/session'
 import { ProblemAlert } from '@/components/ProblemAlert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -61,6 +62,11 @@ export function SignInPage() {
   return (
     <AuthFrame title="Sign in" description="Review bank and card statements before they reach QuickBooks.">
       <form onSubmit={(e) => void onSubmit(e)} className="grid gap-5">
+        {wasSessionLost() && (
+          <p role="status" className="text-sm text-muted-foreground">
+            Your session expired. Sign in again. Unsaved changes on the page you were on were not kept.
+          </p>
+        )}
         <div className="grid gap-2">
           <Label htmlFor="email">Email</Label>
           <Input

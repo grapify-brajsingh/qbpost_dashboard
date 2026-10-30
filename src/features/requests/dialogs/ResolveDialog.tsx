@@ -58,12 +58,15 @@ function Evidence({ request }: { request: RequestDetail }) {
 
 type Outcome = 'posted' | 'not-posted'
 
+const MAX = 500
+
 function Body({ request, onClose }: { request: RequestDetail; onClose: () => void }) {
   const partial = request.status === 'partial'
   const [outcome, setOutcome] = useState<Outcome | null>(partial ? 'posted' : null)
   const [note, setNote] = useState('')
   const resolve = useResolve(String(request.id))
-  const valid = outcome !== null && note.trim().length > 0
+  const tooLong = note.length > MAX
+  const valid = outcome !== null && note.trim().length > 0 && !tooLong
   const choices: [Outcome, string][] = partial
     ? [['posted', 'Posted (accept as is)']]
     : [
@@ -92,7 +95,8 @@ function Body({ request, onClose }: { request: RequestDetail; onClose: () => voi
       </fieldset>
       <div className="space-y-2">
         <Label htmlFor="resolve-note">Note</Label>
-        <Textarea id="resolve-note" value={note} onChange={(e) => setNote(e.target.value)} />
+        <Textarea id="resolve-note" value={note} onChange={(e) => setNote(e.target.value)} aria-invalid={tooLong} />
+        {tooLong && <p className="text-sm text-destructive">At most 500 characters</p>}
       </div>
       {resolve.error && <ProblemAlert error={resolve.error} />}
       <DialogFooter>

@@ -7,10 +7,14 @@ import { Timestamp } from '@/components/Timestamp'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { heldFindings } from '../posting/outcome'
 import { isObj, postedRows } from './postedRows'
 
 function findings(result: unknown): Finding[] {
-  if (!isObj(result) || !Array.isArray(result.validation)) return []
+  if (!isObj(result)) return []
+  const held = heldFindings(result.held)
+  if (held?.length) return held
+  if (!Array.isArray(result.validation)) return []
   return result.validation.filter((f): f is Finding => isObj(f) && typeof f.reason === 'string')
 }
 
@@ -27,6 +31,7 @@ function AttemptDetail({ requestId, attempt }: { requestId: string; attempt: Att
   const rows = postedRows(a.result)
   const held = findings(a.result)
   const problem = problemText(a.result)
+  const resultError = isObj(a.result) && typeof a.result.error === 'string' ? a.result.error : null
   return (
     <div className="space-y-3 text-sm">
       {rows.length > 0 && (
@@ -74,7 +79,7 @@ function AttemptDetail({ requestId, attempt }: { requestId: string; attempt: Att
           {problem.detail && <p>{problem.detail}</p>}
         </div>
       )}
-      {!problem && a.error && <p>{a.error}</p>}
+      {!problem && (a.error ?? resultError) && <p>{a.error ?? resultError}</p>}
       {a.resolvedBy && (
         <p>
           Resolved by {a.resolvedBy.name}

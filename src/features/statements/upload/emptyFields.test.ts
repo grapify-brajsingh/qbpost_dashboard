@@ -61,6 +61,14 @@ describe('badValues (spec §4.7)', () => {
     expect([...bad.get(2)!].sort()).toEqual(['amount', 'kind'])
   })
 
+  it('flags a date not on the calendar, and an amount of zero or less unless the row is not posted', () => {
+    const d = draftOf([{ ...full, date: '2026-13-45' }, { ...full, date: '2026-02-30' }, { ...full, amount: 0 }, { ...full, amount: -5 }, { ...full, amount: 0, post: false }, { ...full, date: '2024-02-29' }])
+    const bad = badValues(d)
+    expect([...bad.keys()]).toEqual([0, 1, 2, 3])
+    expect([...bad.get(0)!]).toEqual(['date'])
+    expect([...bad.get(3)!]).toEqual(['amount'])
+  })
+
   it('blocks saving until they are fixed', () => {
     expect(saveBlocker(draftOf([{ ...full, date: '08/01/2026' }]), 'x', false)).toBe('Fix 1 value that could not be read')
     expect(saveBlocker(draftOf([{ ...full, date: 'x' }, { ...full, amount: 'y' }]), 'x', false)).toBe('Fix 2 values that could not be read')

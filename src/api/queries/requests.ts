@@ -140,6 +140,8 @@ function useStatusMutation<V extends object | undefined>(id: string, path: strin
   return useMutation({
     mutationFn: (vars: V) => api.post<RequestDetail>(`/saved-requests/${id}/${path}`, vars),
     onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: requestKeys.all }), qc.invalidateQueries({ queryKey: ['audit'] })]),
+    // A refusal usually means the statement moved on, so its buttons on screen are out of date.
+    onError: () => qc.invalidateQueries({ queryKey: requestKeys.detail(id), exact: true }),
   })
 }
 

@@ -28,25 +28,39 @@ function isProblemBody(v: unknown): v is ApiProblem {
   )
 }
 
-/** Turns a failed response into an ApiError. A non-problem body becomes `{ title, status }`. */
+/**
+ * Turns a failed response into an ApiError. A post's 503 is a post result, not a problem: its `error` becomes the
+ * detail. Any other body is a proxy talking, not the API, so a 5xx says the server could not be reached.
+ */
 export async function toApiError(res: Response): Promise<ApiError> {
-  let problem: ApiProblem = { title: res.statusText || 'Request failed', status: res.status }
+  const title = res.statusText || 'Request failed'
+  let body: unknown
   try {
-    const body: unknown = await res.json()
-    if (isProblemBody(body)) problem = body
+    body = await res.json()
   } catch {
-    // not JSON: keep the fallback
+    // not JSON: the fallbacks below
   }
-  return new ApiError(problem, res.headers)
+  if (isProblemBody(body)) return new ApiError(body, res.headers)
+  const error = typeof body === 'object' && body !== null ? (body as { error?: unknown }).error : undefined
+  if (typeof error === 'string' && error) return new ApiError({ ...(body as object), title, status: res.status, detail: error }, res.headers)
+  if (res.status < 500) return new ApiError({ title, status: res.status }, res.headers)
+  const unreached = `Couldn't reach the server (${res.status})`
+  return new ApiError(GATEWAY.has(res.status) ? { title: unreached, status: res.status, gateway: true } : { title: unreached, status: res.status }, res.headers)
 }
+
+const GATEWAY = new Set([502, 503, 504])
+
+/** A proxy answered instead of the API, so whether the API did the work is not known. */
+export const isGatewayError = (e: unknown) => e instanceof ApiError && e.problem.gateway === true
 
 const KEBAB = /^[a-z0-9]+(-[a-z0-9]+)*$/
 
 export function problemCode(p: ApiProblem): string | undefined {
   if (typeof p.code === 'string' && p.code) return p.code
   if (p.type) {
+    // ASP.NET fills in an RFC link when the API sets no type, and that is not a code.
     const last = p.type.split('/').filter(Boolean).pop()
-    if (last) return last
+    if (last && KEBAB.test(last)) return last
   }
   return KEBAB.test(p.title) ? p.title : undefined
 }

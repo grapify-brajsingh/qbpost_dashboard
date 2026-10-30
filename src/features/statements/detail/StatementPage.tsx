@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { FileQuestionIcon, Loader2Icon, SendIcon, ShieldCheckIcon } from 'lucide-react'
+import { toast } from 'sonner'
 import { Link, useParams } from 'react-router'
 import { ApiError } from '@/api/problem'
 import { useRequest, useValidate } from '@/api/queries/requests'
@@ -12,7 +13,7 @@ import { StatusBanner } from '@/features/requests/detail/StatusBanner'
 import { DiscardDialog } from '@/features/requests/dialogs/DiscardDialog'
 import { ResolveDialog } from '@/features/requests/dialogs/ResolveDialog'
 import { RestoreDialog } from '@/features/requests/dialogs/RestoreDialog'
-import { busyTitle, type DuplicateInfo } from '@/features/requests/posting/outcome'
+import { type DuplicateInfo } from '@/features/requests/posting/outcome'
 import { PostDialog } from '@/features/requests/posting/PostDialog'
 import { PostingProgress } from '@/features/requests/posting/PostingProgress'
 import { PostResultBanner } from '@/features/requests/posting/PostResultBanner'
@@ -123,21 +124,30 @@ export function StatementPage() {
   }
   const postBlocked = post.isPosting
     ? 'Posting…'
-    : post.busyFor !== null
-      ? busyTitle(post.busyFor)
+    : post.waitText !== null
+      ? post.waitText
       : dirty
         ? 'Save first'
         : allSkipped(request)
           ? "Every row is marked don't post"
           : undefined
   const heldFindings =
-    (outcome?.kind === 'held' || outcome?.kind === 'partial') && sent?.version === request.currentVersion
+    (outcome?.kind === 'held' || outcome?.kind === 'partial' || outcome?.kind === 'failed') && sent?.version === request.currentVersion
       ? outcome.findings
       : undefined
   const showResult = outcome && outcome.kind !== 'timeout' && outcome.kind !== 'duplicate'
 
+  const onValidate = () =>
+    validate.mutate(undefined, {
+      onSuccess: ({ request: r }) => {
+        const held = r.validation.validation?.length ?? 0
+        if (r.validation.state === 'ok') toast.success('Validation passed')
+        else if (r.validation.state === 'held') toast.warning(`${held} ${held === 1 ? 'row needs' : 'rows need'} attention`)
+      },
+    })
+
   const validateButton = can('validate') ? (
-    <Button variant="outline" size="sm" disabled={validate.isPending} onClick={() => validate.mutate()}>
+    <Button variant="outline" size="sm" disabled={validate.isPending} onClick={onValidate}>
       {validate.isPending ? <Loader2Icon className="animate-spin" aria-hidden /> : <ShieldCheckIcon aria-hidden />}
       {validate.isPending ? 'Validating…' : 'Validate'}
     </Button>
@@ -174,7 +184,7 @@ export function StatementPage() {
       <StatusBanner request={request} />
       <ValidationProblems request={request} findings={heldFindings} />
       {(post.isPosting || request.status === 'posting') && <PostingProgress rows={request.transactionCount} />}
-      {showResult && <PostResultBanner outcome={outcome} requestId={id} />}
+      {showResult && <PostResultBanner outcome={outcome} requestId={id} shownAbove={request.validation.errors ?? []} />}
       {validate.error && <ProblemAlert error={validate.error} />}
       <TransactionsTab key={request.id} request={request} etag={etag} findingsOverride={heldFindings} referenceSlot={referenceSlot} validate={validateButton} post={postButton} />
       {dialog && (
