@@ -9,6 +9,7 @@ import {
   formatMinutes,
   greeting,
   periodRange,
+  queryEnd,
   statusHref,
   successRate,
   trendSummary,
@@ -62,6 +63,12 @@ describe('bucketEvents', () => {
     const r = periodRange(7, NOW)
     const b = bucketEvents([ev(new Date(2026, 9, 21, 23, 59), 'received')], r)
     expect(b.reduce((n, x) => n + x.received, 0)).toBe(0)
+  })
+})
+
+describe('queryEnd', () => {
+  test('the end of the minute `to` was rounded down from, so events from the last seconds count', () => {
+    expect(queryEnd(periodRange(7, NOW))).toEqual(new Date(2026, 9, 28, 9, 42))
   })
 })
 
