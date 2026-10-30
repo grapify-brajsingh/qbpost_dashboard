@@ -237,11 +237,15 @@ describe('saving', () => {
     expect(screen.queryByText(/unsaved change/)).not.toBeInTheDocument()
   })
 
-  test('409 not-editable reloads and shows the new status', async () => {
+  test('409 not-editable keeps the edits until the user reloads, then shows the new status', async () => {
     const { user } = await open(1)
     await choosePayee(user, 1, 'ABC Plumbing LLC')
     record(1).status = 'posted'
     await user.click(saveButton())
+    expect(await screen.findByText(/Your edits are still here/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Copy my edits' })).toBeInTheDocument()
+    expect(cell(1, 'payee')).toHaveAttribute('data-dirty', 'true')
+    await user.click(screen.getByRole('button', { name: 'Reload (lose my edits)' }))
     await waitFor(() => expect(querySave()).not.toBeInTheDocument())
     expect(screen.getByTestId('statement-meta')).toHaveTextContent('Posted')
     expect(cell(1, 'payee')).toHaveTextContent('Metro Electric Co')

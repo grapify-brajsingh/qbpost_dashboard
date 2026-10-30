@@ -1,13 +1,18 @@
 import { ApiTimeoutError } from '@/api/client'
-import { ApiError, problemCode } from '@/api/problem'
+import { ApiError, problemCode, retryAfterSeconds } from '@/api/problem'
 
 export interface UploadErrorView {
   message: string
   /** Offer "Try again" with the same file. */
   retry: boolean
+  /** Try again stays disabled this long. */
+  waitSeconds?: number
 }
 
 const AGAIN = "We couldn't read the statement this time."
+const TOO_BIG = 'The PDF is larger than 10 MB.'
+
+const waitText = (n: number) => (n < 60 ? `${n} ${n === 1 ? 'second' : 'seconds'}` : `${Math.ceil(n / 60)} minutes`)
 
 const BY_CODE: Record<string, UploadErrorView> = {
   'not-a-pdf': { message: "That file isn't a PDF.", retry: false },
@@ -26,7 +31,15 @@ export function uploadError(error: unknown): UploadErrorView | null {
   const code = problemCode(error.problem)
   if (code && BY_CODE[code]) return BY_CODE[code]
   const detail = error.problem.detail ?? error.problem.title
-  if (code === 'file-too-large') return { message: detail, retry: false }
-  if (code === 'too-many-extractions') return { message: detail, retry: true }
+  // The API words its size limit in bytes; its page limit reads well as it is.
+  if (code === 'file-too-large') return { message: /pages?\b/i.test(detail) ? detail : TOO_BIG, retry: false }
+  if (error.problem.status === 413) return { message: TOO_BIG, retry: false }
+  if (code === 'too-many-extractions') {
+    const wait = retryAfterSeconds(error.headers)
+    return wait ? { message: `${detail} Try again in ${waitText(wait)}.`, retry: true, waitSeconds: wait } : { message: detail, retry: true }
+  }
   return null
 }
+
+/** For failures without a view: trying again can only help when the server or the network was at fault. */
+export const canRetry = (error: unknown) => !(error instanceof ApiError) || error.problem.status >= 500

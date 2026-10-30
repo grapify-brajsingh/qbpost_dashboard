@@ -52,17 +52,35 @@ const strings = (v: unknown) => (Array.isArray(v) ? v.filter((s): s is string =>
 export const UNKNOWN_TITLE = 'QuickBooks may have posted this. Check QuickBooks before resolving.'
 export const busyTitle = (n?: number) =>
   n === undefined ? 'QuickBooks is busy. Try again in a moment' : `QuickBooks is busy. Try again in ${n} ${n === 1 ? 'second' : 'seconds'}`
+export const waitTitle = (n: number) => `Try again in ${n} ${n === 1 ? 'second' : 'seconds'}`
 
-function successOutcome(requestStatus: unknown, base: Pick<PostOutcome, 'postId' | 'attemptId' | 'findings'>): PostOutcome {
-  switch (requestStatus) {
+/** A post result's `held` rows, which carry `note` where a finding has `detail`. */
+export function heldFindings(v: unknown): Finding[] | undefined {
+  if (!Array.isArray(v)) return undefined
+  return v.filter(isObj).flatMap((r): Finding[] => {
+    const index = num(r.index)
+    const reason = str(r.reason)
+    if (index === undefined || reason === undefined) return []
+    const externalId = str(r.externalId)
+    const detail = str(r.note)
+    return [{ index, reason, ...(externalId ? { externalId } : {}), ...(detail ? { detail } : {}) }]
+  })
+}
+
+function successOutcome(savedStatus: unknown, base: Pick<PostOutcome, 'postId' | 'attemptId' | 'findings' | 'errors'>): PostOutcome {
+  switch (savedStatus) {
     case 'posted':
       return { kind: 'posted', title: 'Posted', ...base }
     case 'partial':
       return { kind: 'partial', title: "Some rows posted, some didn't.", ...base }
     case 'unknown':
       return { kind: 'unknown', title: UNKNOWN_TITLE, ...base }
-    default:
+    case 'pending':
+    case 'failed':
       return { kind: 'failed', title: 'Nothing was posted.', detail: 'The request is back to pending.', ...base }
+    default:
+      // Never claim nothing was posted about a status this screen doesn't know.
+      return { kind: 'unknown', title: UNKNOWN_TITLE, ...base }
   }
 }
 
@@ -70,14 +88,18 @@ function fromProblem(e: ApiError): PostOutcome {
   const p = e.problem
   const code = problemCode(p)
   const attemptId = num(p.attemptId)
+  if (code === 'post-outcome-unknown' || p.savedRequestStatus === 'unknown') {
+    return { kind: 'unknown', title: UNKNOWN_TITLE, detail: str(p.detail), attemptId }
+  }
+  const retryAfter = retryAfterSeconds(e.headers) ?? num(p.retryAfterSeconds) ?? undefined
   switch (p.status) {
     case 422:
       return { kind: 'held', title: 'Nothing was sent.', detail: str(p.detail), findings: findings(p.validation) ?? [], attemptId }
     case 400:
       return { kind: 'refused', title: p.title || 'Request refused', detail: str(p.detail), errors: strings(p.errors) ?? [], attemptId }
     case 409: {
-      if (code === 'busy') {
-        const retryAfter = retryAfterSeconds(e.headers) ?? num(p.retryAfterSeconds) ?? undefined
+      // The API's busy answer has no type of its own; `retryAfterSeconds` is what marks it.
+      if (code === 'busy' || num(p.retryAfterSeconds) !== undefined) {
         return { kind: 'busy', title: busyTitle(retryAfter), retryAfter, attemptId }
       }
       if (code === 'already-posting' || code === 'already-posted') {
@@ -86,21 +108,22 @@ function fromProblem(e: ApiError): PostOutcome {
         return { kind: 'conflict', title: `${by ?? 'Someone else'} pressed Post: this request ${what}.`, attemptId }
       }
       if (code === 'duplicate-unconfirmed') {
+        const other = isObj(p.duplicate) ? p.duplicate : {}
         return {
           kind: 'duplicate',
           title: 'Possible duplicate',
           detail: str(p.detail),
-          duplicate: { of: num(p.of) ?? null, ofRef: str(p.ofRef) ?? null, ofStatus: str(p.ofStatus) ?? null },
+          duplicate: { of: num(other.of) ?? null, ofRef: null, ofStatus: str(other.status) ?? null },
         }
       }
-      // not-editable / invalid-state: the request moved on. Its new status is `requestStatus`.
-      const now = str(p.requestStatus)
+      // not-postable: the request moved on. Its new status is `savedRequestStatus`.
+      const now = str(p.savedRequestStatus)
       return { kind: 'conflict', title: now ? `This request is ${now} now.` : p.title, detail: str(p.detail), attemptId }
     }
     case 412:
       return { kind: 'stale', title: 'This changed since you opened it.', detail: 'The latest version was reloaded.' }
     case 503:
-      return { kind: 'unavailable', title: str(p.detail) ?? p.title, detail: 'Try again later.' }
+      return { kind: 'unavailable', title: str(p.detail) ?? p.title, detail: 'Try again later.', retryAfter }
     case 401:
       return {
         kind: 'error',
@@ -109,7 +132,8 @@ function fromProblem(e: ApiError): PostOutcome {
       }
     default: {
       const requestId = str(p.requestId)
-      return { kind: 'error', title: 'Something went wrong', detail: requestId ? `Request ID: ${requestId}` : undefined }
+      const detail = [str(p.detail), requestId && `Request ID: ${requestId}`].filter(Boolean).join(' ')
+      return { kind: 'error', title: p.title, detail: detail || undefined, retryAfter }
     }
   }
 }
@@ -122,12 +146,14 @@ export function interpretPost(res: PostResponse | ApiError | ApiTimeoutError | E
   if (res instanceof Error) return { kind: 'error', title: 'Something went wrong' }
   const body = isObj(res.body) ? res.body : {}
   if (res.status < 200 || res.status >= 300) return { kind: 'error', title: 'Something went wrong' }
-  // The request's new status is `requestStatus`; the body's own `status` is the engine result.
-  const requestStatus = body.requestStatus ?? body.status
-  return successOutcome(requestStatus, {
+  // The request's new status is `savedRequestStatus`; the body's own `status` is the engine result.
+  const held = heldFindings(body.held)
+  const error = str(body.error)
+  return successOutcome(body.savedRequestStatus ?? body.status, {
     postId: str(body.postId),
     attemptId: num(body.attemptId),
-    findings: findings(body.validation),
+    findings: held?.length ? held : findings(body.validation),
+    ...(error ? { errors: [error] } : {}),
   })
 }
 

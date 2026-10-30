@@ -1,8 +1,9 @@
+import { useEffect, useState } from 'react'
 import { CircleAlertIcon } from 'lucide-react'
 import { ProblemAlert } from '@/components/ProblemAlert'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { uploadError } from './uploadErrors'
+import { canRetry, uploadError } from './uploadErrors'
 
 /** Reading failed: the spec §4.3 message, with Try again only when trying the same file again can help. */
 export function ExtractionError({ error, fileName, onRetry, onChooseAnother }: {
@@ -12,6 +13,13 @@ export function ExtractionError({ error, fileName, onRetry, onChooseAnother }: {
   onChooseAnother: () => void
 }) {
   const view = uploadError(error)
+  const wait = view?.waitSeconds
+  const [waiting, setWaiting] = useState(wait !== undefined)
+  useEffect(() => {
+    if (wait === undefined) return
+    const t = setTimeout(() => setWaiting(false), wait * 1000)
+    return () => clearTimeout(t)
+  }, [wait])
   return (
     <div className="space-y-3">
       {view ? (
@@ -26,8 +34,8 @@ export function ExtractionError({ error, fileName, onRetry, onChooseAnother }: {
         <ProblemAlert error={error} />
       )}
       <div className="flex flex-wrap gap-2">
-        {(view?.retry ?? true) && (
-          <Button size="sm" onClick={onRetry}>
+        {(view?.retry ?? canRetry(error)) && (
+          <Button size="sm" disabled={waiting} onClick={onRetry}>
             Try again
           </Button>
         )}

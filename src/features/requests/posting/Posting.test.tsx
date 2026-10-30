@@ -195,6 +195,22 @@ test('the guard is synchronous: two post() calls in the same tick send 1 POST', 
   setAccessToken(null)
 })
 
+test('a gateway error on the post reloads and watches, and never claims the result', async () => {
+  server.use(http.post(`${API}/1/post`, () => new HttpResponse('<html>bad gateway</html>', { status: 502, headers: { 'Content-Type': 'text/html' } })))
+  setAccessToken(mockControl.signInAs('u-admin'))
+  const reqs = countRequests()
+  const qc = makeQueryClient({ retry: false })
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+  const { result: hook } = renderHook(() => usePost('1'), { wrapper })
+  await waitFor(() => expect(qc.getQueryData(requestKeys.detail('1'))).toBeDefined())
+  const etag = qc.getQueryData<RequestWithEtag>(requestKeys.detail('1'))!.etag
+  act(() => hook.current.post({ etag }))
+  await waitFor(() => expect(hook.current.outcome?.title).toMatch(/Lost contact|did not take the post/))
+  expect(hook.current.outcome?.title).not.toMatch(/Couldn't reach/)
+  expect(reqs.count('POST', `${API}/1/post`)).toBe(1)
+  setAccessToken(null)
+})
+
 describe('outcomes', () => {
   test('200 posted → "Posted" banner with the postId; attempts are invalidated', async () => {
     mockControl.nextPost = { status: 200, body: { status: 'posted' }, delayMs: 0 }
