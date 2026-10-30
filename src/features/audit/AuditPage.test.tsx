@@ -77,6 +77,14 @@ describe('Audit trail page', () => {
     expect(screen.getByText('2026-08-30 · Check · Acme · Chase · 12')).toBeInTheDocument()
   })
 
+  test('request-edited shows the field with the old and new values', async () => {
+    feed([event('a', { action: 'request-edited', row: null, field: 'reference', old: 'old-ref', new: 'new-ref' })])
+    open()
+    expect(await screen.findByText('old-ref')).toHaveClass('line-through')
+    expect(screen.getByText('new-ref')).toBeInTheDocument()
+    expect(screen.getByText('reference')).toBeInTheDocument()
+  })
+
   test('hostile old/new render as text, truncated with a tooltip', async () => {
     const big = 'x'.repeat(10_000)
     feed([

@@ -27,6 +27,7 @@ import { AddTransactionDialog } from '@/features/statements/detail/AddTransactio
 import { ReconciliationMeter } from '@/features/statements/detail/ReconciliationMeter'
 import type { DisplayRow } from '@/features/statements/detail/rowFilters'
 import { addRow, draftToPayload, postStats, setCell, setControlTotal, setPost, toggleDeleteRow, type Draft } from '@/features/requests/transactions/draft'
+import { QbListsStatus } from '@/features/requests/transactions/QbListsStatus'
 import { ActionBarFrame } from '@/features/requests/transactions/SaveBar'
 import { TxTable, type TxEditing } from '@/features/requests/transactions/TxTable'
 import { UnsavedGuard } from '@/features/requests/transactions/UnsavedGuard'
@@ -199,7 +200,8 @@ export function ReviewEditor({ extraction, onDiscard }: { extraction: Extraction
           findings={findings}
           readErrors={unreadable}
           toolbar={
-            <div className="flex justify-end">
+            <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+              <QbListsStatus />
               <Button size="sm" variant="outline" onClick={() => setAdding(true)} disabled={!edit}>
                 <PlusIcon aria-hidden />
                 Add row

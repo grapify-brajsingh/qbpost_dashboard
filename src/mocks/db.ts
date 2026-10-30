@@ -4,6 +4,7 @@ import type {
   Attempt,
   EmailMeta,
   QbLists,
+  QbListSyncRun,
   Payload,
   RequestEvent,
   RequestStatus,
@@ -12,7 +13,7 @@ import type {
   ValidationSnapshot,
   Version,
 } from '@/api/schema'
-import { QB_LISTS } from './fixtures/lists'
+import { ACCOUNT_TYPES, buildListSyncs, buildQbLists } from './fixtures/lists'
 import { buildRequests } from './fixtures/requests'
 import { buildUsers, type MockUser } from './fixtures/users'
 
@@ -72,6 +73,9 @@ export const DEFAULT_POST_DELAY_MS = 1500
 /** How long the fake API "reads" a PDF; instant under vitest so tests stay fast. */
 export const DEFAULT_EXTRACT_DELAY_MS = import.meta.env.MODE === 'test' ? 0 : 1500
 
+/** How long the fake API "talks to QuickBooks" for a list sync. */
+const DEFAULT_SYNC_DELAY_MS = import.meta.env.MODE === 'test' ? 0 : 800
+
 const timers = new Set<ReturnType<typeof setTimeout>>()
 
 export const mockDb = {
@@ -79,7 +83,11 @@ export const mockDb = {
   users: [] as MockUser[],
   extractions: [] as ExtractionRecord[],
   userAudit: {} as Record<string, UserAuditRow[]>,
-  lists: QB_LISTS as QbLists,
+  lists: buildQbLists() as QbLists,
+  /** QuickBooks type per account name (the API sends accounts as `{ name, type }`). */
+  accountTypes: { ...ACCOUNT_TYPES } as Record<string, string>,
+  /** Every list sync attempt, newest first (R-17). */
+  listSyncs: [] as QbListSyncRun[],
   session: null as Session | null,
   counters: { attempt: 100, event: 1000, audit: 1, password: 1 },
   reset() {
@@ -88,7 +96,9 @@ export const mockDb = {
     mockDb.users = buildUsers()
     mockDb.extractions = []
     mockDb.userAudit = {}
-    mockDb.lists = structuredClone(QB_LISTS)
+    mockDb.lists = buildQbLists()
+    mockDb.accountTypes = { ...ACCOUNT_TYPES }
+    mockDb.listSyncs = buildListSyncs(mockDb.lists)
     mockDb.session = null
     mockDb.counters = { attempt: 100, event: maxEvent + 1, audit: 1, password: 1 }
     mockControl.reset()
@@ -108,6 +118,14 @@ export const mockControl = {
   },
   /** When true the database-backed routes answer 503 database-unavailable. */
   databaseDown: false,
+  /** When true QuickBooks is closed: `POST /quickbooks/lists/sync` answers 409 quickbooks-not-open (R-16). */
+  qbNotOpen: false,
+  /** When true QuickBooks cannot be reached: `POST /quickbooks/lists/sync` answers 503 quickbooks-unavailable. */
+  qbDown: false,
+  /** Names "added in QuickBooks" since the last sync; the next successful sync picks them up. */
+  qbAdded: { accounts: [] as string[], vendors: [] as string[], customers: [] as string[] },
+  /** How long a list sync takes (QuickBooks is slow); instant under vitest. */
+  syncDelayMs: DEFAULT_SYNC_DELAY_MS,
   /** Creates a session without going through login; returns the access token to send. */
   signInAs(userId: string): string {
     mockDb.session = { userId, generation: 1 }
@@ -131,6 +149,10 @@ export const mockControl = {
     mockControl.nextExtraction = null
     mockControl.extractDelayMs = DEFAULT_EXTRACT_DELAY_MS
     mockControl.databaseDown = false
+    mockControl.qbNotOpen = false
+    mockControl.qbDown = false
+    mockControl.qbAdded = { accounts: [], vendors: [], customers: [] }
+    mockControl.syncDelayMs = DEFAULT_SYNC_DELAY_MS
     timers.forEach(clearTimeout)
     timers.clear()
   },

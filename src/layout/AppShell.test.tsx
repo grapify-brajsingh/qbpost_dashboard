@@ -41,6 +41,19 @@ describe('sidebar', () => {
     expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument()
   })
 
+  test('Lists is in the sidebar for every role and is active on /lists', async () => {
+    for (const id of ['u-viewer', 'u-editor', 'u-admin']) {
+      mockControl.signInAs(id)
+      const view = renderApp('/statements')
+      expect(await screen.findByRole('link', { name: 'Lists' })).toHaveAttribute('href', '/lists')
+      view.unmount()
+    }
+    mockControl.signInAs('u-viewer')
+    renderApp('/lists')
+    await screen.findByRole('heading', { level: 1, name: 'QuickBooks lists' })
+    await waitFor(() => expect(activeOf('Lists')).toHaveAttribute('data-active', 'true'))
+  })
+
   test('the Statements badge shows the to-review count; admins also count partial and unknown', async () => {
     server.use(http.get('/api/v2/saved-requests/stats', () => HttpResponse.json(STATS)))
     mockControl.signInAs('u-editor')
