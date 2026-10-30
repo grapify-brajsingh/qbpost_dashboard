@@ -12,6 +12,7 @@ import {
   rowsSumCents,
   setCell,
   setControlTotal,
+  setReference,
   toggleDeleteRow,
 } from './draft'
 
@@ -127,5 +128,21 @@ describe('dont-post and row ids', () => {
     d = addRow(d, { amount: 1 })
     d = toggleDeleteRow(d, '2')
     expect(postStats(d)).toEqual({ total: 3, posting: 2, skipped: 1, skippedCents: 20, allCents: 1130 })
+  })
+})
+
+describe('reference', () => {
+  const p = { reference: 'a b', controlTotal: 1, transactions: [] }
+
+  test('a changed reference is one edit and goes into the payload', () => {
+    const d = setReference(createDraft(p), 'a-b')
+    expect(dirtyCount(d)).toBe(1)
+    expect(changeBreakdown(d).edits).toBe(1)
+    expect(draftToPayload(d).reference).toBe('a-b')
+  })
+
+  test('changing it back is no edit, and the control total keeps it', () => {
+    expect(dirtyCount(setReference(setReference(createDraft(p), 'a-b'), 'a b'))).toBe(0)
+    expect(setControlTotal(setReference(createDraft(p), 'a-b'), 2).top.reference).toBe('a-b')
   })
 })

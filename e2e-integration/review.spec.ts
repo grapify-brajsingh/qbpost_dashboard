@@ -147,3 +147,30 @@ test('a viewer can read statements but has no edit, post or upload controls', as
   await ctx.close()
   void page
 })
+
+test('a refused reference shows on the page, is fixed in the header, and the statement posts', async ({ page, request }) => {
+  const errors = watchForErrors(page)
+  const s = await seedStatement(request, { reference: unique('card 4410') })
+  const fixed = s.reference.replace(' ', '-')
+
+  await signInToHome(page)
+  await page.goto(`/statements/${s.id}`)
+  const problems = page.getByRole('alert', { name: 'Validation problems' })
+  await expect(problems).toContainText("This statement can't be posted")
+  await expect(problems).toContainText('may contain only letters')
+
+  await page.getByRole('button', { name: 'Edit reference' }).click()
+  await page.getByRole('textbox', { name: 'Reference' }).fill(fixed)
+  await page.getByRole('textbox', { name: 'Reference' }).press('Enter')
+  const saveBar = page.getByRole('region', { name: 'Save bar' })
+  await saveBar.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(page.getByTestId('reference')).not.toHaveAttribute('data-dirty', 'true')
+  await expect(page.getByTestId('reference')).toContainText(fixed)
+  await expect(problems).toHaveCount(0)
+
+  await saveBar.getByRole('button', { name: 'Post to QuickBooks' }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('button', { name: /^Post \d+ rows?$/ }).click()
+  await expect(page.getByRole('status', { name: 'Post result' })).toContainText('Posted', { timeout: 30_000 })
+  expect(errors).toEqual([])
+})

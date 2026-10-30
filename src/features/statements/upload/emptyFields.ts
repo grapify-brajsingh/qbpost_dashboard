@@ -1,6 +1,7 @@
 import { TXN_KINDS, type Finding, type Txn } from '@/api/schema'
 import type { TxField } from '@/features/requests/transactions/columns'
 import type { Draft } from '@/features/requests/transactions/draft'
+import { isValidReference, REFERENCE_RULE } from '@/lib/reference'
 
 /** The API's `missing-field` rule: a row without these cannot be posted, so the upload cannot be saved without them. */
 export const REQUIRED_FIELDS = ['kind', 'date', 'amount', 'account'] as const satisfies readonly TxField[]
@@ -72,6 +73,7 @@ export function saveBlocker(d: Draft, reference: string, saving: boolean): strin
   const unreadable = [...badValues(d).values()].reduce((sum, s) => sum + s.size, 0)
   if (unreadable > 0) return `Fix ${unreadable} ${unreadable === 1 ? 'value' : 'values'} that could not be read`
   if (reference.trim() === '') return 'Enter a reference'
+  if (!isValidReference(reference.trim())) return REFERENCE_RULE
   if (keptRows(d).length === 0) return 'Add at least one row'
   return null
 }

@@ -12,7 +12,7 @@ export interface Draft {
   deleted: Set<number>
   /** New rows, keyed `n0`, `n1`, … */
   added: Txn[]
-  top: { controlTotal: unknown }
+  top: { controlTotal: unknown; reference: unknown }
   /** `"<rowKey>:<field>"` for every cell whose value differs from the loaded one. */
   dirtyCells: Set<string>
 }
@@ -25,7 +25,7 @@ export function createDraft(payload: Payload): Draft {
     rows: baseRows(payload),
     deleted: new Set(),
     added: [],
-    top: { controlTotal: payload.controlTotal },
+    top: { controlTotal: payload.controlTotal, reference: payload.reference },
     dirtyCells: new Set(),
   }
 }
@@ -117,23 +117,29 @@ export function toggleDeleteRow(d: Draft, rowKey: string): Draft {
 }
 
 export function setControlTotal(d: Draft, v: number | null): Draft {
-  return { ...d, top: { controlTotal: v } }
+  return { ...d, top: { ...d.top, controlTotal: v } }
+}
+
+export function setReference(d: Draft, v: string): Draft {
+  return { ...d, top: { ...d.top, reference: v } }
 }
 
 const controlTotalChanged = (d: Draft) => !Object.is(d.top.controlTotal, d.base.controlTotal)
+const referenceChanged = (d: Draft) => !Object.is(d.top.reference, d.base.reference)
 
 export function draftToPayload(d: Draft): Payload {
   const out: Payload = { ...d.base }
   if ('controlTotal' in d.base || controlTotalChanged(d)) out.controlTotal = d.top.controlTotal
+  if (referenceChanged(d)) out.reference = d.top.reference
   if (Array.isArray(d.base.transactions) || d.added.length > 0) {
     out.transactions = [...d.rows.filter((_, i) => !d.deleted.has(i)), ...d.added]
   }
   return out
 }
 
-/** Edited cells on rows that are kept, plus deleted rows, added rows and a changed control total. */
+/** Edited cells on rows that are kept, plus deleted rows, added rows, a changed control total and reference. */
 export function dirtyCount(d: Draft): number {
-  let n = d.deleted.size + d.added.length + (controlTotalChanged(d) ? 1 : 0)
+  let n = d.deleted.size + d.added.length + (controlTotalChanged(d) ? 1 : 0) + (referenceChanged(d) ? 1 : 0)
   for (const c of d.dirtyCells) {
     const rk = c.split(':')[0]
     if (!isAddedKey(rk) && !d.deleted.has(Number(rk))) n++
@@ -149,9 +155,9 @@ export interface ChangeBreakdown {
   postOn: number
 }
 
-/** The parts of `dirtyCount`: cell edits (and a changed control total), added and deleted rows, post switches. */
+/** The parts of `dirtyCount`: cell edits (and a changed control total or reference), added and deleted rows, post switches. */
 export function changeBreakdown(d: Draft): ChangeBreakdown {
-  const out: ChangeBreakdown = { edits: controlTotalChanged(d) ? 1 : 0, added: d.added.length, deleted: d.deleted.size, postOff: 0, postOn: 0 }
+  const out: ChangeBreakdown = { edits: (controlTotalChanged(d) ? 1 : 0) + (referenceChanged(d) ? 1 : 0), added: d.added.length, deleted: d.deleted.size, postOff: 0, postOn: 0 }
   for (const c of d.dirtyCells) {
     const [rk, field] = c.split(':')
     if (isAddedKey(rk) || d.deleted.has(Number(rk))) continue

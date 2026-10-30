@@ -85,6 +85,100 @@ function detail(over: Partial<RequestDetail> = {}): RequestDetail {
   }
 }
 
+describe('statement-level problems', () => {
+  const MESSAGE = "reference 'a b' may contain only letters, digits, '.', '_' and '-' (1-64 characters)"
+  const refused = (over: Partial<RequestDetail> = {}) =>
+    detail({
+      status: 'pending',
+      reference: 'a b',
+      allowedActions: ['edit', 'validate', 'post'],
+      validation: { state: 'refused', versionNumber: 1, validation: [], errors: [MESSAGE] },
+      payload: { reference: 'a b', controlTotal: 10, transactions: [{ externalId: 'row-1', amount: 10 }] },
+      ...over,
+    })
+  const serve = (d: RequestDetail) => server.use(http.get(`${API}/6`, () => HttpResponse.json(d, { headers: { ETag: '"2"' } })))
+  const panel = () => screen.queryByRole('alert', { name: 'Validation problems' })
+
+  test('a refusal is on the page without a click', async () => {
+    serve(refused())
+    await open(6)
+    expect(panel()).toHaveTextContent("This statement can't be posted")
+    expect(panel()).toHaveTextContent(MESSAGE)
+  })
+
+  test('Validate brings the refusal up in place', async () => {
+    serve(refused({ validation: { state: 'ok', validation: [], errors: [] } }))
+    server.use(http.post(`${API}/6/validate`, () => HttpResponse.json(refused(), { headers: { ETag: '"2"' } })))
+    const { user } = await open(6)
+    expect(panel()).not.toBeInTheDocument()
+    await user.click(within(saveBar()).getByRole('button', { name: 'Validate' }))
+    expect(await screen.findByRole('alert', { name: 'Validation problems' })).toHaveTextContent(MESSAGE)
+  })
+
+  test('a finding that matches no row is listed; one on a row is not', async () => {
+    serve(
+      refused({
+        validation: {
+          state: 'held',
+          validation: [
+            { index: 9, reason: 'no-such-row', detail: 'Row 10 is gone' },
+            { index: 0, externalId: 'row-1', reason: 'unknown-account' },
+          ],
+          errors: [],
+        },
+      }),
+    )
+    await open(6)
+    expect(panel()).toHaveTextContent("Some problems aren't on a row")
+    expect(panel()).toHaveTextContent('no-such-row — Row 10 is gone')
+    expect(panel()).not.toHaveTextContent('unknown-account')
+  })
+
+  test('says so when the snapshot is older than the statement', async () => {
+    serve(refused({ currentVersion: 2 }))
+    await open(6)
+    expect(panel()).toHaveTextContent('Validation is out of date')
+  })
+
+  test('the post dialog lists the same message and Post stays enabled', async () => {
+    serve(refused())
+    const { user } = await open(6)
+    await user.click(postButton())
+    expect(within(await screen.findByRole('dialog')).getByRole('list', { name: 'Validation problems' })).toHaveTextContent(MESSAGE)
+  })
+
+  test('a statement with nothing to list shows no panel', async () => {
+    await open(1)
+    expect(panel()).not.toBeInTheDocument()
+  })
+})
+
+describe('reference', () => {
+  test('a bad value stays in the editor; a good one is saved with the statement', async () => {
+    const seen = capturePut()
+    const { user } = await open(1)
+    await user.click(screen.getByRole('button', { name: 'Edit reference' }))
+    const input = screen.getByRole('textbox', { name: 'Reference' })
+    await user.clear(input)
+    await user.type(input, 'a b{Enter}')
+    expect(screen.getByRole('alert')).toHaveTextContent('Use only letters')
+    await user.clear(input)
+    await user.type(input, 'chase-fixed{Enter}')
+    expect(screen.getByTestId('reference')).toHaveAttribute('data-dirty', 'true')
+    expect(screen.getByText('was chase-4521-2026-08')).toBeInTheDocument()
+    await user.click(within(saveBar()).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(seen).toHaveLength(1))
+    expect(seen[0].body.payload.reference).toBe('chase-fixed')
+  })
+
+  test('someone who cannot edit gets no pencil', async () => {
+    server.use(http.get(`${API}/6`, () => HttpResponse.json(detail({ status: 'pending' }), { headers: { ETag: '"2"' } })))
+    await open(6)
+    expect(screen.queryByRole('button', { name: 'Edit reference' })).not.toBeInTheDocument()
+    expect(within(screen.getByTestId('statement-meta')).getByText('ref-6')).toBeInTheDocument()
+  })
+})
+
 describe('header', () => {
   test('header: subject as title, received, from, reference, push id, status; History/Results open the sheet', async () => {
     const { user, router } = await open(1)

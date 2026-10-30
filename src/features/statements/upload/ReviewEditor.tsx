@@ -33,6 +33,7 @@ import { UnsavedGuard } from '@/features/requests/transactions/UnsavedGuard'
 import { useDraft } from '@/features/requests/transactions/useDraft'
 import { DuplicateWarning } from './DuplicateWarning'
 import { badValues, emptyFields, emptyFindings, requiredCount, saveBlocker } from './emptyFields'
+import { isValidReference, REFERENCE_RULE } from '@/lib/reference'
 import { referenceFromFileName } from './format'
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
@@ -139,7 +140,19 @@ export function ReviewEditor({ extraction, onDiscard }: { extraction: Extraction
 
       <div className="grid max-w-md gap-1.5">
         <Label htmlFor="upload-reference">Reference</Label>
-        <Input id="upload-reference" value={reference} disabled={save.isPending} onChange={(e) => setReference(e.target.value)} aria-invalid={reference.trim() === ''} />
+        <Input
+          id="upload-reference"
+          value={reference}
+          disabled={save.isPending}
+          onChange={(e) => setReference(e.target.value)}
+          aria-invalid={!isValidReference(reference.trim())}
+          aria-describedby={isValidReference(reference.trim()) ? undefined : 'upload-reference-rule'}
+        />
+        {reference.trim() !== '' && !isValidReference(reference.trim()) && (
+          <p id="upload-reference-rule" className="text-xs text-destructive">
+            {REFERENCE_RULE}
+          </p>
+        )}
       </div>
 
       <DuplicateWarning items={extraction.possibleDuplicates ?? []} />

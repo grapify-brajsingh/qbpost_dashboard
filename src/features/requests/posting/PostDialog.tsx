@@ -76,6 +76,15 @@ function Body({ request, seenPayload, duplicate, changed, onConfirm, onCancel }:
       <div className="space-y-1 text-sm">
         <p>Validation: {STATE_LABEL[v.state]}</p>
         {v.state !== 'ok' && <p className="text-warning">Validation found problems. The API checks again before posting.</p>}
+        {v.errors && v.errors.length > 0 && (
+          <ul aria-label="Validation problems" className="list-disc pl-5 text-muted-foreground">
+            {v.errors.map((e, i) => (
+              <li key={i} className="break-words">
+                {e}
+              </li>
+            ))}
+          </ul>
+        )}
         {outdated && <p className="font-medium text-warning">Validation is out of date</p>}
       </div>
       {changed && (
