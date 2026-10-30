@@ -1,6 +1,7 @@
 // Pure helpers that stand in for the API's reading, validation, diffing and duplicate rules.
 import { TXN_KINDS } from '@/api/schema'
 import type { Change, Finding, Payload, PostedRow, QbLists, Txn, ValidationSnapshot } from '@/api/schema'
+import { isValidReference } from '@/lib/reference'
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 /** Rows dated before this are held as `date-too-old`. */
@@ -75,6 +76,13 @@ export function controlTotalErrors(payload: Payload): string[] {
       ]
 }
 
+/** Request-level refusal for a reference the API's batch id can't hold; a missing one is fine. */
+export function referenceErrors(payload: Payload): string[] {
+  const r = payload.reference
+  if (typeof r !== 'string' || r.trim() === '' || isValidReference(r)) return []
+  return [`reference '${r}' may contain only letters, digits, '.', '_' and '-' (1-64 characters)`]
+}
+
 /** The offline validation snapshot (spec §6.4). */
 export function computeValidation(
   payload: Payload,
@@ -118,7 +126,7 @@ export function computeValidation(
       })
     }
   })
-  const errors = controlTotalErrors(payload)
+  const errors = [...referenceErrors(payload), ...controlTotalErrors(payload)]
   const heldRows = new Set(findings.map((f) => f.index)).size
   const skipped = rows.filter((r) => isObj(r) && isSkipped(r)).length
   return {

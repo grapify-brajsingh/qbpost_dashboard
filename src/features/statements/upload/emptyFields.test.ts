@@ -1,3 +1,4 @@
+import { REFERENCE_RULE } from '@/lib/reference'
 import { describe, expect, it } from 'vitest'
 import { addRow, createDraft, setCell, toggleDeleteRow } from '@/features/requests/transactions/draft'
 import { badValues, emptyFields, emptyFindings, requiredCount, saveBlocker } from './emptyFields'
@@ -44,6 +45,7 @@ describe('saveBlocker', () => {
     expect(saveBlocker(draftOf([{ ...full, account: '' }, { ...full, date: '' }]), '', false)).toBe('Fill in 2 empty required fields')
     expect(saveBlocker(draftOf([{ ...full, account: '' }]), 'x', false)).toBe('Fill in 1 empty required field')
     expect(saveBlocker(ok, '   ', false)).toBe('Enter a reference')
+    expect(saveBlocker(ok, '4339 9314 4718 9820', false)).toBe(REFERENCE_RULE)
     expect(saveBlocker(draftOf([]), 'x', false)).toBe('Add at least one row')
     expect(saveBlocker(toggleDeleteRow(ok, '0'), 'x', false)).toBe('Add at least one row')
   })
