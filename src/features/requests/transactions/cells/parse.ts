@@ -1,5 +1,6 @@
 // How the amount and date editors read what was typed. Shared by the cells and the Add transaction dialog.
 import { parseAmountInput } from '@/lib/money'
+import { isValidReference, REFERENCE_RULE } from '@/lib/reference'
 
 export type ParseResult = { value: unknown } | { error: string }
 
@@ -21,4 +22,10 @@ export function parseDate(text: string): ParseResult {
     if (d.getUTCMonth() === Number(m[2]) - 1 && d.getUTCDate() === Number(m[3])) return { value: t }
   }
   return { error: 'Use yyyy-MM-dd' }
+}
+
+/** A statement reference, without surrounding spaces. */
+export function parseReference(text: string): ParseResult {
+  const t = text.trim()
+  return isValidReference(t) ? { value: t } : { error: REFERENCE_RULE }
 }

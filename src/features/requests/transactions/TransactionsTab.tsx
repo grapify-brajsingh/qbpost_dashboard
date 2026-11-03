@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router'
 import { toast } from 'sonner'
 import { useQbLists } from '@/api/queries/lists'
@@ -6,6 +7,7 @@ import type { Finding, RequestDetail, Txn } from '@/api/schema'
 import { useUrlFilters } from '@/components/filters'
 import { AddTransactionDialog } from '@/features/statements/detail/AddTransactionDialog'
 import { ReconciliationMeter } from '@/features/statements/detail/ReconciliationMeter'
+import { ReferenceField } from '@/features/statements/detail/ReferenceField'
 import {
   deletedInVersion,
   editedInVersions,
@@ -25,6 +27,7 @@ import {
   setCell,
   setControlTotal,
   setPost,
+  setReference,
   toggleDeleteRow,
   type ChangeBreakdown,
   type Draft,
@@ -49,6 +52,8 @@ interface Props extends PageActions {
   request: RequestDetail
   /** ETag of `request`; every save sends it as If-Match. */
   etag: string
+  /** The header element that shows the reference; the table editor renders the editable field into it. */
+  referenceSlot?: HTMLElement | null
 }
 
 interface TabProps extends Props {
@@ -72,7 +77,7 @@ function breakdownText(b: ChangeBreakdown): string {
 }
 
 /** The statement's rows: meter, toolbar, table and save bar (or the raw JSON editor for an unreadable payload). */
-export function TransactionsTab({ request, etag, findingsOverride, validate, post }: TabProps) {
+export function TransactionsTab({ request, etag, findingsOverride, referenceSlot, validate, post }: TabProps) {
   const shape = tableShape(request.payload)
   const baseRows = useMemo(() => (shape === 'table' ? (request.payload.transactions as Txn[]) : []), [shape, request.payload])
   const shown = findingsOverride ?? request.validation.validation
@@ -81,7 +86,7 @@ export function TransactionsTab({ request, etag, findingsOverride, validate, pos
   return shape === 'raw' ? (
     <RawJsonEditor request={request} etag={etag} validate={validate} post={post} />
   ) : (
-    <TableEditor request={request} etag={etag} findings={findings} validate={validate} post={post} />
+    <TableEditor request={request} etag={etag} findings={findings} referenceSlot={referenceSlot} validate={validate} post={post} />
   )
 }
 
@@ -101,7 +106,7 @@ function dirtyKeysOf(d: Draft): Set<string> {
   return out
 }
 
-function TableEditor({ request, etag, findings, validate, post }: Props & { findings: ReturnType<typeof findingsByRow> }) {
+function TableEditor({ request, etag, findings, referenceSlot, validate, post }: Props & { findings: ReturnType<typeof findingsByRow> }) {
   const id = String(request.id)
   // Buttons and editing come from allowedActions only.
   const editable = request.allowedActions.includes('edit')
@@ -167,6 +172,12 @@ function TableEditor({ request, etag, findings, validate, post }: Props & { find
   return (
     <div className="space-y-4">
       <UnsavedGuard dirty={dirty} />
+      {editable &&
+        referenceSlot &&
+        createPortal(
+          <ReferenceField value={draft.top.reference} saved={draft.base.reference} onChange={(r) => update((d) => setReference(d, r))} />,
+          referenceSlot,
+        )}
       <ReconciliationMeter
         allCents={stats.allCents}
         controlTotal={draft.top.controlTotal}

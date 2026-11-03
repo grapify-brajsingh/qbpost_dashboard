@@ -8,6 +8,7 @@ import { Timestamp } from '@/components/Timestamp'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import type { SheetTab } from '@/features/statements/sheet/useStatementSheet'
+import { cn } from '@/lib/utils'
 
 export type MenuAction = 'discard' | 'restore' | 'resolve'
 
@@ -17,11 +18,11 @@ const MENU: { action: MenuAction; label: string; icon: LucideIcon; destructive?:
   { action: 'resolve', label: 'Resolve', icon: ScaleIcon },
 ]
 
-function Meta({ label, children }: { label: string; children: ReactNode }) {
+function Meta({ label, overflow, children }: { label: string; /** The value may show a popover, so it can't clip. */ overflow?: boolean; children: ReactNode }) {
   return (
     <div className="flex min-w-0 items-center gap-1.5">
       <dt>{label}</dt>
-      <dd className="min-w-0 truncate text-foreground">{children}</dd>
+      <dd className={cn('min-w-0 text-foreground', !overflow && 'truncate')}>{children}</dd>
     </div>
   )
 }
@@ -32,12 +33,15 @@ export function StatementHeader({
   title,
   onOpenSheet,
   onMenu,
+  referenceSlot,
 }: {
   request: RequestDetail
   /** The email subject, else the uploaded file name, else the SR ref. */
   title: string
   onOpenSheet: (tab: SheetTab) => void
   onMenu: (action: MenuAction) => void
+  /** Present when the reference is editable: receives the element the owner of the draft renders the editor into. */
+  referenceSlot?: (el: HTMLElement | null) => void
 }) {
   const menu = MENU.filter((m) => request.allowedActions.includes(m.action))
   const dup = request.duplicate
@@ -62,7 +66,9 @@ export function StatementHeader({
                 <Meta label="From">{request.email?.from ?? '—'}</Meta>
               </>
             )}
-            <Meta label="Reference">{request.reference ?? '—'}</Meta>
+            <Meta label="Reference" overflow={referenceSlot !== undefined}>
+              {referenceSlot ? <span ref={referenceSlot} /> : (request.reference ?? '—')}
+            </Meta>
             <Meta label="Push">
               <PushId value={request.pushId} fallback={request.publicRef} />
             </Meta>

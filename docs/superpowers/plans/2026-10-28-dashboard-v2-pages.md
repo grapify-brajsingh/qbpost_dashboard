@@ -528,3 +528,58 @@ re-verified one by one). What is recorded is which commit delivered each task an
 **Verification today** (2026-10-28): lint and build pass; 432 Vitest tests, with one full run all green and other
 full runs showing 1–2 load-related timeouts in `StatementPage.test.tsx` that pass when the file runs alone.
 `e2e/v2.spec.ts` was updated for the Home landing page but not run on 2026-10-28.
+
+## Fix 2026-10-30: statement-level validation problems and the reference
+
+Spec: section 16 of `specs/2026-10-28-dashboard-v2-pages-design.md`. No API change, so
+`docs/api-requirements-for-dashboard.md` is untouched unless step 1 finds otherwise.
+
+**Files.** Create `src/lib/reference.ts` (+ test), `src/features/statements/detail/ValidationProblems.tsx` (+ test),
+`src/features/statements/detail/ReferenceField.tsx`. Modify `StatementPage.tsx`, `StatementHeader.tsx`,
+`TransactionsTab.tsx`, `findings.ts`, `draft.ts` (+ test), `SaveBar.tsx`, `PostDialog.tsx`, `upload/emptyFields.ts`
+(+ test), `upload/ReviewEditor.tsx`, `mocks/payloadRules.ts`, `StatementPage.test.tsx`, `e2e-integration/review.spec.ts`.
+
+**Tasks.**
+
+- [x] 1. Confirm against the Docker API that a PUT changing `payload.reference` also updates the record's `reference`
+      and clears the refusal after Validate. Depends on nothing. If it does not, stop and update the spec and the API
+      requirements doc.
+- [x] 2. `reference.ts`: rule and message; unit tests (spaces, 64 and 65 characters, allowed symbols, empty).
+- [x] 3. Mock: refuse a bad reference with the API's message. Needs 2.
+- [x] 4. `ValidationProblems` panel on the page, reading `errors` and the `-1` findings. Needs 3. Acceptance 1 to 3.
+- [x] 5. Draft `top.reference`: `setReference`, `draftToPayload`, `dirtyCount`, `changeBreakdown`. Unknown fields keep
+      surviving. Needs 2.
+- [x] 6. Move the draft-owning boundary so the header can edit the reference: pass a reference slot into `TableEditor`
+      output rather than moving the draft up, matching how `validate` and `post` are passed. Needs 5.
+- [x] 7. `ReferenceField` and the Save block. Needs 5, 6. Acceptance 4 to 7.
+- [x] 8. `PostDialog` lists the messages. Needs 4.
+- [x] 9. `saveBlocker` and `ReviewEditor`. Needs 2. Acceptance 5.
+- [x] 10. Integration e2e: refused statement, fix reference, validate, post against the simulated QuickBooks.
+
+**Tests.** Unit for 2, 5, 9; page tests with `renderApp` for 4, 7, 8, including a viewer role; one `e2e-integration` flow.
+
+**Verification.** `npm run lint`, `npm run build`, `npm test`, then rebuild the `web` container and check
+`/statements/30` in the browser. Record the output here, including any `StatementPage.test.tsx` timeouts.
+
+**Milestones.**
+
+- [x] Reason visible on the page
+- [x] Reference editable; a statement with a bad reference fixed and posted in e2e (statement 30 itself left as it is)
+- [x] Upload review blocks bad references
+- [x] Lint, build, test and e2e recorded here (one upload e2e test still fails, see results)
+
+**Results (2026-10-30).** `npm run lint` clean. `npm run build` passes. `npm test`: 57 files, 610 tests, all passing on the
+final run; an earlier run had one timeout in `AppShell.test.tsx` that passes alone. Integration e2e against the rebuilt
+`web` container: 15 passed, 1 failed.
+
+- **Failure, not from this change**: `upload.spec.ts:27` expects an audit row for picking `Bank Service Charges` on the
+  fee, but version 1 stored by the API already holds that `lineAccount`, so the pick changes nothing and no event is
+  written. The test's expectation is out of date. Left as it is, outside this plan.
+- **Step 1** read in the API (`EfSavedRequestStore.cs:311`) and proved by the new e2e flow: a PUT changes the record's
+  reference and clears the refusal.
+- **Step 6** uses a portal: `StatementPage` holds the header's slot element and `TableEditor` renders `ReferenceField`
+  into it, so the draft stays where it was.
+- **Differs from the spec as first written**: no separate Save block (spec section 16 updated).
+- **Browser check**: `/statements/30` shows the panel on load with no console errors. Its reference was not changed and
+  it was not posted: the value is the accountant's choice.
+- **Side effect**: the e2e runs seeded test statements into the local Docker database (Statements count 25 to 44).

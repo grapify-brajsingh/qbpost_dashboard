@@ -19,11 +19,13 @@ import { PostResultBanner } from '@/features/requests/posting/PostResultBanner'
 import { usePost } from '@/features/requests/posting/usePost'
 import { isPosting } from '@/features/requests/transactions/draft'
 import { useDraftDirty } from '@/features/requests/transactions/draftDirtyStore'
+import { tableShape } from '@/features/requests/transactions/findings'
 import { TransactionsTab } from '@/features/requests/transactions/TransactionsTab'
 import { StatementSheet } from '@/features/statements/sheet/StatementSheet'
 import { useStatementSheet } from '@/features/statements/sheet/useStatementSheet'
 import { useBreadcrumb } from '@/layout/useBreadcrumb'
 import { StatementHeader, type MenuAction } from './StatementHeader'
+import { ValidationProblems } from './ValidationProblems'
 import { statementSubject } from '@/lib/statementTitle'
 
 /** The version a post dialog opened on. */
@@ -77,6 +79,8 @@ export function StatementPage() {
   // on screen. A 409 duplicate-unconfirmed reopens the dialog on the same version.
   const [sent, setSent] = useState<Seen | null>(null)
   const [other, setOther] = useState<MenuAction | null>(null)
+  // The header's reference lives in the draft, which the table editor owns: the editor renders it into this element.
+  const [referenceSlot, setReferenceSlot] = useState<HTMLElement | null>(null)
   const outcome = post.outcome
   useEffect(() => {
     if (outcome?.kind === 'duplicate' && sent) setDialog({ dup: outcome.duplicate ?? { of: null }, seen: sent })
@@ -160,12 +164,19 @@ export function StatementPage() {
   return (
     <div className="page gap-4 pb-0 md:pb-0">
       {q.error && <ProblemAlert error={q.error} />}
-      <StatementHeader request={request} title={titleOf(request)} onOpenSheet={(tab) => sheet.open(request.id, tab)} onMenu={setOther} />
+      <StatementHeader
+        request={request}
+        title={titleOf(request)}
+        onOpenSheet={(tab) => sheet.open(request.id, tab)}
+        onMenu={setOther}
+        referenceSlot={can('edit') && tableShape(request.payload) === 'table' ? setReferenceSlot : undefined}
+      />
       <StatusBanner request={request} />
+      <ValidationProblems request={request} findings={heldFindings} />
       {(post.isPosting || request.status === 'posting') && <PostingProgress rows={request.transactionCount} />}
       {showResult && <PostResultBanner outcome={outcome} requestId={id} />}
       {validate.error && <ProblemAlert error={validate.error} />}
-      <TransactionsTab key={request.id} request={request} etag={etag} findingsOverride={heldFindings} validate={validateButton} post={postButton} />
+      <TransactionsTab key={request.id} request={request} etag={etag} findingsOverride={heldFindings} referenceSlot={referenceSlot} validate={validateButton} post={postButton} />
       {dialog && (
         <PostDialog
           open

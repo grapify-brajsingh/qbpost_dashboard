@@ -259,3 +259,63 @@ page beyond 50; sorting UI details; empty-state copy (in the interface's voice: 
 3. CSV export on the Audit trail, the "Edited" filter, and the other-unposted-push warning were added by me.
 4. `/requests` URLs from v1 redirect to `/statements`.
 5. "New since you last looked" is per browser, not per user.
+
+## 16. Statement-level validation problems and the reference (added 2026-10-30)
+
+**Problem.** `/statements/30` shows "Needs attention" and no reason, and every post is refused (attempt 5, HTTP 400).
+The API answers `validation.state: "refused"`, an empty `validation.validation`, and the reason in `validation.errors`:
+`reference '4339 9314 4718 9820' may contain only letters, digits, '.', '_' and '-' (1-64 characters)`.
+
+**Causes.**
+
+1. The statement page shows row findings only. `validation.errors` is read by `ResultsTab` alone, so the reason sits
+   behind the Results button. After a Validate press nothing visible changes. Findings that match no row (the `-1`
+   bucket of `findingsByRow`) are not shown on the page either.
+2. The reference cannot be fixed. The draft edits rows and `controlTotal` only, and `RawJsonEditor` opens only for
+   unreadable payloads.
+3. Upload review lets a bad reference through: `saveBlocker` only rejects an empty one. The API's check
+   (`^[A-Za-z0-9._-]{1,64}$`, `DirectRequestReader`) runs at validate and post time, not at save.
+
+**Scope.** Dashboard only; existing endpoints only. Reference is saved through `PUT /saved-requests/{id}` as part of
+the payload, with If-Match, like any other edit.
+
+**Behaviour.**
+
+- **Problems panel**, between the status banner and the meter, using `Alert` (icon + word, destructive tone). Shown when
+  `validation.errors` is non-empty or findings match no row, for any state. Title by state: refused "This statement
+  can't be posted", unreadable "This statement could not be read", unavailable "Validation is unavailable", held
+  "Some problems aren't on a row". It lists each message as React text and updates from the detail cache, so a Validate
+  press changes it at once. It sits outside the row filters. Not shown when there is nothing to list.
+- **Validation out of date**: if `validation.versionNumber < currentVersion` the panel adds "Validation is out of date".
+- **Unsaved edits**: the panel still describes the saved version, as row findings do.
+- **Editable reference**: the header's Reference value gets the same pencil pattern as the control total, shown only
+  when `allowedActions` includes `edit`. The change joins the draft and is saved by the save bar; it counts as one edit
+  and survives Esc on other cells. A value that breaks the rule stays in the editor with the rule shown and never enters
+  the draft, so Save needs no block of its own and row edits can still be saved on a statement whose reference is bad.
+  An empty reference is refused the same way. Only the table view has the pencil; an unreadable payload is fixed in the
+  raw JSON editor.
+- **Post stays enabled** on a refused statement. `allowedActions` drives the button and the API checks again. The post
+  dialog lists the same messages under "Validation: Refused".
+- **Upload review**: `saveBlocker` also rejects a reference that breaks the rule, naming the rule; the field shows
+  `aria-invalid`. The pre-filled value is left as read, since changing it silently is a guess.
+- **Mock API**: `payloadRules` applies the same reference rule and returns `refused` with the same message, as the real
+  validator does. Rule constant lives in one place in the dashboard, with a comment naming `DirectRequestReader`.
+
+**Roles.** Unchanged: edit needs `edit` in `allowedActions`. Viewers see the panel with no pencil.
+
+**Known limit.** The API stops at a refusal before it plans rows, so row findings on this statement can appear only
+after the reference is fixed. The page must not imply that the rest is clean.
+
+**Acceptance.**
+
+1. A refused statement with `errors` shows the message on the page with no click, on load and right after Validate.
+2. Findings with an unmatched index appear in the panel.
+3. A statement with state `ok` and no errors shows no panel.
+4. Editing the reference to `4339-9314-4718-9820`, saving and validating clears the refusal; Post then reaches the API.
+5. An invalid reference can't get past the editor on the statement page or past Save on upload review, and the reason
+   is on screen.
+6. A user without `edit` sees no pencil.
+7. A failed save (412) keeps the reference in the draft, as for row edits.
+
+**Open decision.** `4339 9314 4718 9820` looks like a full card number (row last-4 is 9820) stored as a reference and
+shown in lists and audit. Default in this section: the accountant chooses the value; the app does not mask it.
