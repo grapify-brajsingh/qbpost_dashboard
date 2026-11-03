@@ -13,7 +13,6 @@ export function toUser(u: MockUser): User {
     lockedOutUntilUtc: u.lockedOutUntilUtc,
     mustChangePassword: u.mustChangePassword,
     lastLoginUtc: u.lastLoginUtc,
-    rowVersion: u.rowVersion,
   }
 }
 

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { mockControl, mockDb } from '@/mocks/db'
 import type { Extraction, RequestDetail, Txn } from '@/api/schema'
 
-const API = '/api/v1'
+const API = '/api/v2'
 let token = ''
 
 export const pdfFile = (name = 'chase-sep-2026.pdf', body = '%PDF-1.4\n% mock statement\n') =>

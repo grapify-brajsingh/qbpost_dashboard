@@ -14,5 +14,6 @@ export const fetchMe = () => api.get<Me>('/auth/me').then((r) => r.data)
 
 export const logout = () => api.post<void>('/auth/logout').then(() => undefined)
 
+/** The API rotates the session on a password change: the answer carries the new access token, as sign-in does. */
 export const changePassword = (currentPassword: string, newPassword: string) =>
-  api.post<void>('/auth/change-password', { currentPassword, newPassword }).then(() => undefined)
+  api.post<LoginResponse>('/auth/change-password', { currentPassword, newPassword }).then((r) => r.data)

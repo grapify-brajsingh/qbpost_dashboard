@@ -43,7 +43,7 @@ export function ThroughputBand({
   to,
   periodLabel,
 }: {
-  counts: UseQueryResult<PeriodCounts>
+  counts: UseQueryResult<PeriodCounts | null>
   /** Local `yyyy-MM-dd` days, for the audit trail links. */
   from: string
   to: string

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { mockControl, mockDb } from '@/mocks/db'
 import type { Page, User } from '@/api/schema'
 
-const API = '/api/v1'
+const API = '/api/v2'
 let token = ''
 const call = (path: string) => fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${token}` } })
 const list = async (qs: string) => (await (await call(`/users?${qs}`)).json()) as Page<User>

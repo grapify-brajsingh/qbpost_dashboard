@@ -13,7 +13,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-const API = '/api/v1/saved-requests'
+const API = '/api/v2/saved-requests'
 
 const record = (id: number) => mockDb.requests.find((r) => r.id === id)!
 const payloadOf = (id: number) => record(id).versions[record(id).versions.length - 1].payload

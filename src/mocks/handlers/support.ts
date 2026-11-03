@@ -6,7 +6,7 @@ export const supportHandlers = [
   http.get(`${API}/quickbooks/lists`, ({ request }) => {
     const auth = authenticate(request, 'lists:read', { ignoreDatabaseDown: true })
     if ('error' in auth) return auth.error
-    return HttpResponse.json(mockDb.lists)
+    return HttpResponse.json({ ...mockDb.lists, accounts: mockDb.lists.accounts.map((name) => ({ name, type: null })) })
   }),
 
   http.get(`${API}/health/database`, ({ request }) => {

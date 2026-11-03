@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { api } from '@/api/client'
-import { requestKeys } from '@/api/queries/requests'
-import type { Version, VersionSummary } from '@/api/schema'
+import { fetchVersions, requestKeys } from '@/api/queries/requests'
+import type { Version } from '@/api/schema'
 
 /**
  * Every saved version after version 1, with its change list, once all have loaded (undefined until then).
@@ -11,7 +11,7 @@ import type { Version, VersionSummary } from '@/api/schema'
 export function useVersionChanges(id: string, currentVersion: number, enabled: boolean): Version[] | undefined {
   const list = useQuery({
     queryKey: requestKeys.versions(id),
-    queryFn: ({ signal }) => api.get<VersionSummary[]>(`/saved-requests/${id}/versions`, { signal }).then((r) => r.data),
+    queryFn: ({ signal }) => fetchVersions(id, signal),
     enabled,
   })
   const latest = list.data ? Math.max(0, ...list.data.map((v) => v.number)) : null

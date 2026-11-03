@@ -42,7 +42,7 @@ describe('sidebar', () => {
   })
 
   test('the Statements badge shows the to-review count; admins also count partial and unknown', async () => {
-    server.use(http.get('/api/v1/saved-requests/stats', () => HttpResponse.json(STATS)))
+    server.use(http.get('/api/v2/saved-requests/stats', () => HttpResponse.json(STATS)))
     mockControl.signInAs('u-editor')
     const first = renderApp('/statements')
     expect(await screen.findByLabelText('7 to review')).toHaveTextContent('7')
@@ -149,7 +149,7 @@ describe('top bar', () => {
   test('health light is unavailable on 503', async () => {
     mockControl.signInAs('u-admin')
     server.use(
-      http.get('/api/v1/health/database', () =>
+      http.get('/api/v2/health/database', () =>
         HttpResponse.json(
           { title: 'Database unavailable', status: 503, code: 'database-unavailable' },
           { status: 503, headers: { 'Content-Type': 'application/problem+json' } },

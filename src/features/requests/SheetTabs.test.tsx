@@ -34,7 +34,7 @@ describe('Versions tab', () => {
 
   test('View original shows pretty JSON, and Raw shows the exact text with its whitespace', async () => {
     const exact = '{"reference":  "r-1",\n\t"controlTotal":1}'
-    server.use(http.get('/api/v1/saved-requests/:id/original', () => new HttpResponse(exact, { headers: { 'Content-Type': 'application/json' } })))
+    server.use(http.get('/api/v2/saved-requests/:id/original', () => new HttpResponse(exact, { headers: { 'Content-Type': 'application/json' } })))
     const { user } = await open(1, 'versions')
     await user.click(await screen.findByRole('button', { name: 'View original' }))
     const body = await screen.findByLabelText('Original body')

@@ -1,0 +1,18 @@
+{
+  "syncedUtc": "2026-10-28T06:00:00Z",
+  "accounts": [
+    { "name": "Chase - 4410", "type": "Bank" },
+    { "name": "Chase Checking 4521", "type": "Bank" },
+    { "name": "Chase Sapphire 7788", "type": "CreditCard" },
+    { "name": "Merchant Card Deposits", "type": "Income" },
+    { "name": "Rental Income", "type": "Income" },
+    { "name": "Bank Service Charges", "type": "Expense" },
+    { "name": "Repairs and Maintenance", "type": "Expense" },
+    { "name": "Office Supplies", "type": "Expense" },
+    { "name": "Utilities", "type": "Expense" },
+    { "name": "Automobile Expense", "type": "Expense" },
+    { "name": "Ask My Accountant", "type": "Expense" }
+  ],
+  "vendors": ["ABC Plumbing", "ABC Plumbing LLC", "Amazon", "Chase", "Florida Power & Light", "Home Depot", "Shell"],
+  "customers": ["Bankcard", "Palm Court Rentals LLC"]
+}

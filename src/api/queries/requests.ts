@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type {
   Attempt,
+  Items,
   Page,
   Payload,
   RequestDetail,
@@ -164,10 +165,14 @@ export function useSaveRequest(id: string) {
   })
 }
 
+/** Newest first. Shared by every query under `requestKeys.versions`, so the cached shape is always the same. */
+export const fetchVersions = (id: string, signal?: AbortSignal) =>
+  api.get<Items<VersionSummary>>(`/saved-requests/${id}/versions`, { signal }).then((r) => r.data.items)
+
 export const useVersions = (id: string) =>
   useQuery({
     queryKey: requestKeys.versions(id),
-    queryFn: ({ signal }) => api.get<VersionSummary[]>(`/saved-requests/${id}/versions`, { signal }).then((r) => r.data),
+    queryFn: ({ signal }) => fetchVersions(id, signal),
   })
 
 export const useVersion = (id: string, n: number | null) =>
@@ -188,7 +193,7 @@ export const useOriginal = (id: string, enabled = true) =>
 export const useAttempts = (id: string) =>
   useQuery({
     queryKey: requestKeys.attempts(id),
-    queryFn: ({ signal }) => api.get<Attempt[]>(`/saved-requests/${id}/attempts`, { signal }).then((r) => r.data),
+    queryFn: ({ signal }) => api.get<Items<Attempt>>(`/saved-requests/${id}/attempts`, { signal }).then((r) => r.data.items),
   })
 
 export const useAttempt = (id: string, attemptId: number, enabled = true) =>

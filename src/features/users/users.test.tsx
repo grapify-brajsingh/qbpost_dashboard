@@ -185,7 +185,7 @@ describe('User page', () => {
     await screen.findByText('Locked out')
     await user.click(screen.getByRole('button', { name: 'Unlock' }))
     expect(await screen.findByText('Active')).toBeInTheDocument()
-    expect(calls).toContain('/api/v1/users/u-locked/unlock')
+    expect(calls).toContain('/api/v2/users/u-locked/unlock')
     expect(screen.queryByRole('button', { name: 'Unlock' })).not.toBeInTheDocument()
   })
 })

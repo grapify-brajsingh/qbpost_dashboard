@@ -1,10 +1,10 @@
-// Fetch wrapper for every API call: relative /api/v1 URLs, bearer token, problem → ApiError,
+// Fetch wrapper for every API call: relative /api/v2 URLs, bearer token, problem → ApiError,
 // and 401 → refresh once → retry once. Calls marked `noAuthRetry` (the post) are never re-sent.
 
 import { toApiError } from './problem'
 import { getAccessToken, refreshSession } from './session'
 
-const BASE = '/api/v1'
+const BASE = '/api/v2'
 
 /** A 401 from these means the credentials or session were rejected: never refresh, never re-send. */
 const NO_REFRESH_PATHS = new Set(['/auth/login', '/auth/refresh', '/auth/logout', '/auth/change-password'])

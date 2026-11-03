@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mockControl, mockDb } from '@/mocks/db'
 import type { Page, QbLists, User } from '@/api/schema'
 
-const API = '/api/v1'
+const API = '/api/v2'
 let token = ''
 const call = (path: string, init: RequestInit = {}, as = token) =>
   fetch(`${API}${path}`, {
@@ -37,7 +37,7 @@ describe('users', () => {
     expect(res.status).toBe(409)
     expect(((await res.json()) as { code: string }).code).toBe('last-admin')
     const ok = await call('/users/u-editor', { method: 'PATCH', headers: { 'If-Match': '"1"' }, body: '{"role":"viewer"}' })
-    expect(((await ok.json()) as User).rowVersion).toBe(2)
+    expect(ok.headers.get('ETag')).toBe('"2"')
     const audit = (await (await call('/users/u-editor/audit')).json()) as { kind: string }[]
     expect(audit[0].kind).toBe('role-changed')
   })

@@ -84,6 +84,10 @@ export const authHandlers = [
     auth.user.password = body.newPassword
     auth.user.mustChangePassword = false
     addUserAudit(auth.user.id, 'password-changed', { id: auth.user.id, name: auth.user.displayName }, null)
-    return new HttpResponse(null, { status: 204 })
+    // Like the API: the old access token stops working and the answer carries a new one (same shape as sign-in).
+    const session = mockDb.session!
+    const token = `mock-token-${session.userId}-${session.generation}`
+    session.generation++
+    return tokenResponse(auth.user.id, token)
   }),
 ]

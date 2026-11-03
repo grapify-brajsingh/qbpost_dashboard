@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react'
+import type { LoginResponse } from '@/api/queries/auth'
 import type { Me } from '@/api/schema'
 
 export interface SessionValue {
@@ -7,6 +8,8 @@ export interface SessionValue {
   signIn(email: string, password: string): Promise<void>
   signOut(): Promise<void>
   refetchMe(): Promise<void>
+  /** Takes over the token and user from a sign-in-shaped answer (password change). */
+  adoptSession(res: LoginResponse): void
 }
 
 export const SessionContext = createContext<SessionValue | null>(null)

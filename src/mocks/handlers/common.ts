@@ -3,7 +3,7 @@ import type { Actor, Me, Role } from '@/api/schema'
 import { mockControl, mockDb } from '../db'
 import type { MockUser } from '../fixtures/users'
 
-export const API = '/api/v1'
+export const API = '/api/v2'
 
 export type Scope =
   | 'requests:submit'

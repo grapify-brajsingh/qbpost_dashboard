@@ -300,7 +300,7 @@ export const requestHandlers = [
     const f = lookup(request, params.id, 'requests:read')
     if ('error' in f) return f.error
     const list: VersionSummary[] = f.r.versions.map((v) => ({ number: v.number, created: v.created, note: v.note, changeCount: v.changeCount }))
-    return HttpResponse.json(list.reverse())
+    return HttpResponse.json({ items: list.reverse() })
   }),
 
   http.get(`${API}/saved-requests/:id/versions/:n`, ({ request, params }) => {
@@ -345,7 +345,7 @@ export const requestHandlers = [
   http.get(`${API}/saved-requests/:id/attempts`, ({ request, params }) => {
     const f = lookup(request, params.id, 'requests:read')
     if ('error' in f) return f.error
-    return HttpResponse.json([...f.r.attempts].reverse().map(({ result: _result, ...a }) => (void _result, a)))
+    return HttpResponse.json({ items: [...f.r.attempts].reverse().map(({ result: _result, ...a }) => (void _result, a)) })
   }),
 
   http.get(`${API}/saved-requests/:id/attempts/:attemptId`, ({ request, params }) => {

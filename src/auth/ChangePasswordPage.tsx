@@ -14,7 +14,7 @@ const MIN_PASSWORD_LENGTH = 12
 
 /** The change-password fields and submit button; `onChanged` runs after the server accepted the new password. */
 export function ChangePasswordForm({ onChanged }: { onChanged(): void }) {
-  const { refetchMe } = useSession()
+  const { adoptSession } = useSession()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -22,8 +22,9 @@ export function ChangePasswordForm({ onChanged }: { onChanged(): void }) {
 
   const mutation = useMutation({
     mutationFn: () => changePassword(current, next),
-    onSuccess: async () => {
-      await refetchMe()
+    onSuccess: (res) => {
+      // The old access token no longer works; the answer carries the new one and the updated user.
+      adoptSession(res)
       setCurrent('')
       setNext('')
       setConfirm('')
