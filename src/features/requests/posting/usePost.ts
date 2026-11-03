@@ -3,9 +3,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { api, ApiTimeoutError } from '@/api/client'
-import { ApiError } from '@/api/problem'
+import { ApiError, isGatewayError } from '@/api/problem'
 import { requestKeys, useRequest } from '@/api/queries/requests'
-import { interpretPost, outcomeFromRequest, type PostOutcome } from './outcome'
+import { interpretPost, outcomeFromRequest, waitTitle, type PostOutcome } from './outcome'
 import { endFlight, getFlight, startFlight, usePostInFlight } from './postFlightStore'
 
 /** Client timeout for the post (10 minutes). Tests lower it and restore it afterwards. */
@@ -33,8 +33,8 @@ export function usePost(id: string) {
   const q = useRequest(id, { forcePoll: phase === 'watching' })
   const data = q.data
   const [outcome, setOutcome] = useState<PostOutcome | null>(null)
-  /** Seconds Post stays disabled after a busy answer; the object identity restarts the timer. */
-  const [busy, setBusy] = useState<{ seconds: number } | null>(null)
+  /** Seconds Post stays disabled after an answer with a wait; the object identity restarts the timer. */
+  const [busy, setBusy] = useState<{ seconds: number; text: string } | null>(null)
   // Synchronous guard, module-level so a remount cannot reset it: set before the request starts, cleared only when
   // the outcome is final.
   const inFlight = usePostInFlight(id)
@@ -56,7 +56,7 @@ export function usePost(id: string) {
       settledAt.current = qc.getQueryState(requestKeys.detail(id))?.dataUpdateCount ?? 0
       setPhase('idle')
       setOutcome(o)
-      if (o.kind === 'busy' && o.retryAfter) setBusy({ seconds: o.retryAfter })
+      if (o.retryAfter) setBusy({ seconds: o.retryAfter, text: o.kind === 'busy' ? o.title : waitTitle(o.retryAfter) })
       endFlight(id)
       invalidateAll()
       if (o.kind !== 'duplicate') {
@@ -95,11 +95,12 @@ export function usePost(id: string) {
         .then(
           (res) => finish(interpretPost({ status: res.status, body: res.data, headers: res.headers })),
           (e: unknown) => {
-            if (e instanceof ApiError) {
+            // A gateway can fail after the API reached QuickBooks, so that answer proves nothing.
+            if (e instanceof ApiError && !isGatewayError(e)) {
               finish(interpretPost(e))
               return
             }
-            // Timeout or network error: the post may be running. Do not re-send; reload and watch the status.
+            // Timeout, network or gateway error: the post may be running. Do not re-send; reload and watch the status.
             const flight = getFlight(id)
             if (flight) flight.sending = false
             setOutcome(
@@ -145,7 +146,7 @@ export function usePost(id: string) {
     post,
     isPosting: phase !== 'idle' || inFlight,
     outcome,
-    /** Seconds Post is disabled after a busy answer, or null. */
-    busyFor: busy?.seconds ?? null,
+    /** Why Post is disabled after an answer with a wait, or null. */
+    waitText: busy?.text ?? null,
   }
 }

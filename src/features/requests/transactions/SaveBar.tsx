@@ -52,6 +52,9 @@ export function SaveBar({ id, etag, dirty, summary, breakdown, canSave = true, g
   const [conflict, setConflict] = useState<ApiProblem | null>(null)
   const [error, setError] = useState<unknown>(null)
   const [noEtag, setNoEtag] = useState(false)
+  /** The statement can no longer be edited: the edits stay on screen so they can be copied out. */
+  const [locked, setLocked] = useState<ApiProblem | null>(null)
+  const [copied, setCopied] = useState<'idle' | 'done' | 'failed'>('idle')
 
   const reload = () => void qc.invalidateQueries({ queryKey: requestKeys.detail(id), exact: true })
 
@@ -75,8 +78,8 @@ export function SaveBar({ id, etag, dirty, summary, breakdown, canSave = true, g
           const p = e instanceof ApiError ? e.problem : null
           if (p?.status === 412) setConflict(p)
           else if (p?.status === 409 && problemCode(p) === 'not-editable') {
-            onReset()
-            reload()
+            // Not reloaded yet: a statement that can't be edited has no save bar, and the edits would go with it.
+            setLocked(p)
           } else setError(e)
         },
       },
@@ -90,6 +93,38 @@ export function SaveBar({ id, etag, dirty, summary, breakdown, canSave = true, g
           <span>This request can’t be saved right now — reload and try again.</span>
           <Button size="sm" variant="outline" onClick={reload}>
             Reload
+          </Button>
+        </div>
+      )}
+      {locked && (
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/30 bg-destructive-soft p-3 text-sm text-destructive">
+          <span>
+            {locked.detail ?? locked.title} Your edits are still here but can't be saved.
+            {copied !== 'idle' && (copied === 'done' ? ' They are on the clipboard.' : ' Could not copy to the clipboard.')}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              navigator.clipboard.writeText(getCopyText?.() ?? JSON.stringify(getPayload(), null, 2)).then(
+                () => setCopied('done'),
+                () => setCopied('failed'),
+              )
+            }}
+          >
+            Copy my edits
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setLocked(null)
+              setCopied('idle')
+              onReset()
+              reload()
+            }}
+          >
+            Reload (lose my edits)
           </Button>
         </div>
       )}

@@ -8,6 +8,14 @@ export function formatBytes(n: number): string {
 /** The file name without `.pdf`, as a starting reference the user can change. */
 export const referenceFromFileName = (name: string) => name.replace(/\.pdf$/i, '').trim()
 
+/** A starting reference the API accepts: spaces become `-`, other characters go, at most 64 characters. */
+export const cleanReference = (text: string) =>
+  text
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^A-Za-z0-9._-]/g, '')
+    .slice(0, 64)
+
 /** The API's limit (R-13.2); checked here too so a wrong file is never sent. */
 export const MAX_PDF_BYTES = 10 * 1024 * 1024
 

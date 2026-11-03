@@ -2,6 +2,7 @@ import { CircleAlertIcon } from 'lucide-react'
 import type { Finding, RequestDetail, Txn, ValidationSnapshot } from '@/api/schema'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { findingsByRow, tableShape } from '@/features/requests/transactions/findings'
+import { friendlyError } from './validationText'
 
 const TITLE: Record<ValidationSnapshot['state'], string> = {
   ok: 'Validation found problems',
@@ -29,7 +30,7 @@ export function ValidationProblems({ request, findings }: { request: RequestDeta
         <ul className="list-disc space-y-1 pl-5 text-foreground/85">
           {errors.map((e, i) => (
             <li key={`e${i}`} className="break-words">
-              {e}
+              {friendlyError(e)}
             </li>
           ))}
           {unmatched.map((f, i) => (

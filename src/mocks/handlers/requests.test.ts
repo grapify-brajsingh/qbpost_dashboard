@@ -172,8 +172,8 @@ describe('PUT /saved-requests/{id}', () => {
       body: JSON.stringify({ payload: {} }),
     })
     expect(res.status).toBe(409)
-    const body = (await res.json()) as { code: string; status: number; requestStatus: string }
-    expect(body).toMatchObject({ code: 'not-editable', status: 409, requestStatus: 'posted' })
+    const body = (await res.json()) as { code: string; status: number; savedRequestStatus: string }
+    expect(body).toMatchObject({ code: 'not-editable', status: 409, savedRequestStatus: 'posted' })
   })
 
   it('creates a version with a change list and bumps the ETag', async () => {
@@ -301,9 +301,9 @@ describe('POST /saved-requests/{id}/post', () => {
     expect(res.status).toBe(409)
     expect(res.headers.get('Retry-After')).toBeTruthy()
     expect(res.headers.get('content-type')).toContain('application/problem+json')
-    const body = (await res.json()) as { code: string; requestStatus: string; attemptId: number }
+    const body = (await res.json()) as { code: string; savedRequestStatus: string; attemptId: number }
     expect(body.code).toBe('busy')
-    expect(body.requestStatus).toBe('pending')
+    expect(body.savedRequestStatus).toBe('pending')
     const detail = (await (await call('/saved-requests/1')).json()) as RequestDetail
     expect(detail.status).toBe('pending')
     expect(detail.lastAttempt?.outcome).toBe('busy')
@@ -312,9 +312,9 @@ describe('POST /saved-requests/{id}/post', () => {
   it('answers 409 duplicate-unconfirmed for a flagged request and accepts confirmDuplicate', async () => {
     const res = await post(5)
     expect(res.status).toBe(409)
-    const body = (await res.json()) as { code: string; of: number; ofStatus: string }
+    const body = (await res.json()) as { code: string; duplicate: { of: number; status: string } }
     expect(body.code).toBe('duplicate-unconfirmed')
-    expect(body.of).toBe(1)
+    expect(body.duplicate.of).toBe(1)
     mockControl.nextPost = { status: 200, body: { status: 'posted' }, delayMs: 0 }
     expect((await post(5, { confirmDuplicate: true })).status).toBe(200)
   })

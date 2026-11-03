@@ -34,7 +34,7 @@ import { useDraft } from '@/features/requests/transactions/useDraft'
 import { DuplicateWarning } from './DuplicateWarning'
 import { badValues, emptyFields, emptyFindings, requiredCount, saveBlocker } from './emptyFields'
 import { isValidReference, REFERENCE_RULE } from '@/lib/reference'
-import { referenceFromFileName } from './format'
+import { cleanReference, referenceFromFileName } from './format'
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
@@ -54,7 +54,7 @@ export function ReviewEditor({ extraction, onDiscard }: { extraction: Extraction
   const save = useSaveUpload()
   const [reference, setReference] = useState(() => {
     const read = extraction.payload.reference
-    return typeof read === 'string' && read.trim() ? read : referenceFromFileName(extraction.file.name)
+    return cleanReference(typeof read === 'string' ? read : '') || cleanReference(referenceFromFileName(extraction.file.name))
   })
   const [adding, setAdding] = useState(false)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
@@ -148,9 +148,9 @@ export function ReviewEditor({ extraction, onDiscard }: { extraction: Extraction
           aria-invalid={!isValidReference(reference.trim())}
           aria-describedby={isValidReference(reference.trim()) ? undefined : 'upload-reference-rule'}
         />
-        {reference.trim() !== '' && !isValidReference(reference.trim()) && (
+        {!isValidReference(reference.trim()) && (
           <p id="upload-reference-rule" className="text-xs text-destructive">
-            {REFERENCE_RULE}
+            {reference.trim() === '' ? 'Enter a reference' : REFERENCE_RULE}
           </p>
         )}
       </div>
@@ -175,6 +175,14 @@ export function ReviewEditor({ extraction, onDiscard }: { extraction: Extraction
         postStats={stats}
         onControlTotal={save.isPending ? undefined : (ct) => update((d) => setControlTotal(d, ct))}
       />
+
+      {typeof draft.top.controlTotal !== 'number' && (
+        <Alert variant="warning">
+          <CircleAlertIcon aria-hidden />
+          <AlertTitle>Enter the statement's printed total</AlertTitle>
+          <AlertDescription>You can save without it, but the statement can't be posted until it's filled in.</AlertDescription>
+        </Alert>
+      )}
 
       {rows.length === 0 ? (
         <div className="rounded-lg border bg-card px-6 py-10 text-center text-sm text-muted-foreground">
@@ -209,6 +217,7 @@ export function ReviewEditor({ extraction, onDiscard }: { extraction: Extraction
           <p className="text-[13px] text-muted-foreground">
             {plural(stats.total, 'row', 'rows')}
             {missing > 0 && <span className="text-destructive"> · {plural(missing, 'empty required field', 'empty required fields')}</span>}
+            {missing === 0 && blocked && !save.isPending && <span className="text-destructive"> · {blocked}</span>}
           </p>
           <div className="flex flex-wrap items-center gap-2.5">
             <Button size="sm" variant="outline" disabled={save.isPending} onClick={() => setConfirmDiscard(true)}>

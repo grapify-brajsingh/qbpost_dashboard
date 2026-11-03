@@ -11,6 +11,8 @@ type SessionMessage = { type: 'token'; token: string } | { type: 'ended' }
 let accessToken: string | null = null
 /** Bumped whenever a new token is stored, so a queued refresh can see that another tab already refreshed. */
 let tokenGeneration = 0
+/** A signed-in session ended without the user asking. Cleared by the next sign-in. */
+let sessionLost = false
 let inFlight: Promise<string | null> | null = null
 const endedListeners = new Set<() => void>()
 
@@ -23,6 +25,7 @@ if (channel) {
     if (msg?.type === 'token' && typeof msg.token === 'string') {
       storeToken(msg.token)
     } else if (msg?.type === 'ended') {
+      sessionLost = accessToken !== null
       accessToken = null
       notifyEnded()
     }
@@ -31,7 +34,10 @@ if (channel) {
 
 function storeToken(t: string | null) {
   accessToken = t
-  if (t !== null) tokenGeneration++
+  if (t !== null) {
+    tokenGeneration++
+    sessionLost = false
+  }
 }
 
 function broadcast(msg: SessionMessage) {
@@ -41,6 +47,8 @@ function broadcast(msg: SessionMessage) {
 function notifyEnded() {
   for (const cb of [...endedListeners]) cb()
 }
+
+export const wasSessionLost = () => sessionLost
 
 export function getAccessToken(): string | null {
   return accessToken
@@ -88,6 +96,7 @@ async function refreshOnce(startGeneration: number): Promise<string | null> {
 
   if (!res.ok) {
     if (sessionRejected(res.status)) {
+      sessionLost = accessToken !== null
       accessToken = null
       broadcast({ type: 'ended' })
       notifyEnded()

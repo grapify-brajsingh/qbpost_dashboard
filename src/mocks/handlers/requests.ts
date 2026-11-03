@@ -37,7 +37,7 @@ function stale(r: RequestRecord) {
 }
 
 const invalidState = (r: RequestRecord, what: string) =>
-  problem(409, 'invalid-state', 'Not allowed in this status', `A ${r.status} request cannot be ${what}.`, { requestStatus: r.status })
+  problem(409, 'invalid-state', 'Not allowed in this status', `A ${r.status} request cannot be ${what}.`, { savedRequestStatus: r.status })
 
 // ---- posting ----
 
@@ -53,7 +53,7 @@ async function postRequest(request: Request, r: RequestRecord, user: MockUser) {
       ...id,
       attemptId: winner?.id,
       startedBy: winner?.startedBy,
-      requestStatus: r.status,
+      savedRequestStatus: r.status,
     })
   }
   if (r.status !== 'pending') return invalidState(r, 'posted')
@@ -67,10 +67,7 @@ async function postRequest(request: Request, r: RequestRecord, user: MockUser) {
     const other = mockDb.requests.find((x) => x.id === r.duplicate.of)
     return problem(409, 'duplicate-unconfirmed', 'Possible duplicate', 'This request may duplicate another. Confirm to post it anyway.', {
       ...id,
-      of: r.duplicate.of,
-      ofRef: publicRef(r.duplicate.of),
-      ofStatus: other?.status ?? null,
-      reasons: r.duplicate.reasons,
+      duplicate: { of: r.duplicate.of, status: other?.status ?? null, reasons: r.duplicate.reasons },
     })
   }
   if (r.duplicate.of !== null) r.duplicate.acknowledgedBy = actorOf(user)
@@ -118,7 +115,7 @@ async function postRequest(request: Request, r: RequestRecord, user: MockUser) {
   touch(r, user)
   addEvent(r, 'post-finished', actorOf(user), { attemptId: attempt.id, outcome: attemptOutcome })
 
-  const ext = { ...id, attemptId: attempt.id, requestStatus: r.status }
+  const ext = { ...id, attemptId: attempt.id, savedRequestStatus: r.status }
   if (outcome.status < 400) {
     attempt.result = { ...result, ...ext }
     return HttpResponse.json({ ...result, ...ext })
@@ -316,7 +313,7 @@ export const requestHandlers = [
     const ifMatch = parseIfMatch(request)
     if (ifMatch === undefined) return precondition()
     if (f.r.status !== 'pending') {
-      return problem(409, 'not-editable', 'Not editable', `A ${f.r.status} request cannot be edited.`, { requestStatus: f.r.status })
+      return problem(409, 'not-editable', 'Not editable', `A ${f.r.status} request cannot be edited.`, { savedRequestStatus: f.r.status })
     }
     if (ifMatch !== f.r.rowVersion) return stale(f.r)
     const body = await readJson(request)

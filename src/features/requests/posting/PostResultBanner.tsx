@@ -1,6 +1,7 @@
 import { CheckCircle2Icon, CircleAlertIcon, InfoIcon, TriangleAlertIcon } from 'lucide-react'
 import { Link } from 'react-router'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { friendlyError } from '@/features/statements/detail/validationText'
 import type { PostOutcome } from './outcome'
 
 const TONE = {
@@ -27,8 +28,9 @@ const TONE_OF: Record<PostOutcome['kind'], keyof typeof TONE> = {
 }
 
 /** The outcome of the last post, shown in place above the tabs. All text is rendered as React text. */
-export function PostResultBanner({ outcome, requestId }: { outcome: PostOutcome; requestId: string }) {
+export function PostResultBanner({ outcome, requestId, shownAbove = [] }: { outcome: PostOutcome; requestId: string; shownAbove?: string[] }) {
   const o = outcome
+  const errors = (o.errors ?? []).filter((e) => !shownAbove.includes(e))
   const rows = o.findings?.length ?? 0
   const tone = TONE[TONE_OF[o.kind]]
   const Icon = tone.icon
@@ -37,20 +39,20 @@ export function PostResultBanner({ outcome, requestId }: { outcome: PostOutcome;
       <Icon aria-hidden />
       <AlertDescription className="gap-1.5 text-current">
         <p className="font-medium">{o.title}</p>
-        {o.detail && <p>{o.detail}</p>}
+        {o.detail && !shownAbove.includes(o.detail) && !o.errors?.includes(o.detail) && <p>{o.detail}</p>}
         {o.postId && (
           <p>
             Post ID: <span className="font-mono text-[0.92em]">{o.postId}</span>
           </p>
         )}
-        {o.errors && o.errors.length > 0 && (
+        {errors.length > 0 && (
           <ul className="list-disc pl-5 text-foreground/85">
-            {o.errors.map((e, i) => (
-              <li key={i}>{e}</li>
+            {errors.map((e, i) => (
+              <li key={i}>{friendlyError(e)}</li>
             ))}
           </ul>
         )}
-        {(o.kind === 'held' || o.kind === 'partial') && rows > 0 && (
+        {(o.kind === 'held' || o.kind === 'partial' || o.kind === 'failed') && rows > 0 && (
           <div>
             <p>
               {rows} {rows === 1 ? 'row is' : 'rows are'} held. They are marked in the table below.
