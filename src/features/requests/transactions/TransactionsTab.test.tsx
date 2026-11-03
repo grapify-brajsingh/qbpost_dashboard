@@ -142,3 +142,50 @@ describe('row heights', () => {
     await waitFor(() => expect(padTop() % 40).toBe(32))
   })
 })
+
+// R-16: the lists status and Sync now sit in the line under the rows.
+describe('QuickBooks lists sync', () => {
+  test('Sync now un-flags a payee that was added in QuickBooks, without reloading, and keeps unsaved edits', async () => {
+    mockControl.qbAdded.vendors.push('Acme Roofing Inc')
+    const { user } = open(2)
+    await screen.findByRole('columnheader', { name: 'Payee' })
+    expect(await screen.findByText(/^Lists synced \d+ min ago$/)).toBeInTheDocument()
+
+    // An unsaved edit that the sync must not touch.
+    await user.click(document.querySelector('tr[data-row="0"] td[data-field="memo"]') as HTMLElement)
+    await user.type(await screen.findByRole('textbox', { name: 'Memo' }), ' kept{Enter}')
+    expect(await screen.findByText('1 unsaved change')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Has a problem' }))
+    const payee = await waitFor(() => {
+      const td = document.querySelector('tr[data-row="16"] td[data-field="payee"]')
+      if (!td) throw new Error('row 17 not shown')
+      return td as HTMLElement
+    })
+    expect(within(payee).getByText('not in QuickBooks')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Has a problem' })) // show every row again
+    await user.click(screen.getByRole('button', { name: 'Sync now' }))
+    expect(await screen.findByText('Lists synced just now')).toBeInTheDocument()
+    await waitFor(() => expect(within(payee).queryByText('not in QuickBooks')).not.toBeInTheDocument())
+    expect(within(payee).getByText('Acme Roofing Inc')).toBeInTheDocument()
+    expect(screen.getByText('1 unsaved change')).toBeInTheDocument()
+  })
+
+  test('a row whose only problem was the synced name leaves "Has a problem"', async () => {
+    mockControl.qbAdded.vendors.push('Acme Roofing Inc')
+    const { user } = open(2)
+    await screen.findByRole('columnheader', { name: 'Payee' })
+    await user.click(screen.getByRole('button', { name: 'Has a problem' }))
+    await waitFor(() => expect(document.querySelector('tr[data-row="16"]')).not.toBeNull())
+    await user.click(screen.getByRole('button', { name: 'Sync now' }))
+    await waitFor(() => expect(document.querySelector('tr[data-row="16"]')).toBeNull())
+  })
+
+  test('a viewer sees no lists status and no Sync now', async () => {
+    open(2, 'u-viewer')
+    await screen.findByRole('columnheader', { name: 'Payee' })
+    expect(screen.queryByRole('button', { name: 'Sync now' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/^Lists synced/)).not.toBeInTheDocument()
+  })
+})

@@ -115,7 +115,8 @@ describe('session restore and guards', () => {
   test('valid refresh cookie signs in without showing the form', async () => {
     mockControl.signInAs('u-admin')
     renderApp('/requests')
-    expect(await screen.findByRole('heading', { name: 'Statements' })).toBeInTheDocument()
+    // First full-app render in this file: it loads the page modules once, which can take over the default 1 s.
+    expect(await screen.findByRole('heading', { name: 'Statements' }, { timeout: 4000 })).toBeInTheDocument()
     expect(screen.queryByLabelText('Email')).not.toBeInTheDocument()
   })
 

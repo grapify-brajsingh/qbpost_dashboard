@@ -67,8 +67,15 @@ docker compose -f docker-compose.integration.yml down -v      # -v also drops th
 
 - `BACKEND_DIR` points at the API repository if it is not the sibling folder `../qb_post-issue-2`.
 - QuickBooks names for the pickers come from `docker/seed/qb-lists.json`.
+  The API seeds its simulated QuickBooks company from the same file, so **Sync now** (on a statement, the upload
+  review or the **Lists** page) and the automatic 30-minute sync return these names. The Lists page shows them and
+  every sync attempt.
 - Uploads are read by `docker/openrouter-stub` (lines like `2026-09-02 DEP 512.00 MEMO` become rows). To use the
   real model set `OPENROUTER_BASE_URL=https://openrouter.ai/api/v1` and `OPENROUTER_API_KEY` first.
+- **Realistic data**: on an empty database, `npx playwright test -c playwright.demo.config.ts` fills the stack
+  through the UI with a first week of a small property company (admin, Asha Kapoor the accountant as editor, Ravi
+  Menon as viewer; Chase and Wells Fargo statements for August from n8n and September by PDF upload; posts, a
+  discarded duplicate push, one statement with an unknown vendor). Passwords are in `demo/realistic-data.spec.ts`.
 - Every password and key in the compose file is a throwaway value for this local stack. Rate limits are raised there
   so the suite can run as one user; production keeps the API's defaults.
 

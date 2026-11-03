@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { useQbLists } from '@/api/queries/lists'
 import type { Finding, RequestDetail, Txn } from '@/api/schema'
 import { useUrlFilters } from '@/components/filters'
+import { QbListsStatus } from './QbListsStatus'
 import { AddTransactionDialog } from '@/features/statements/detail/AddTransactionDialog'
 import { ReconciliationMeter } from '@/features/statements/detail/ReconciliationMeter'
 import { ReferenceField } from '@/features/statements/detail/ReferenceField'
@@ -32,7 +33,7 @@ import {
   type ChangeBreakdown,
   type Draft,
 } from './draft'
-import { findingsByRow, readErrorCells, tableShape } from './findings'
+import { dropResolvedFindings, findingsByRow, readErrorCells, tableShape } from './findings'
 import { RawJsonEditor } from './RawJsonEditor'
 import { ActionBarFrame, SaveBar } from './SaveBar'
 import { TxTable, type TxEditing } from './TxTable'
@@ -80,8 +81,9 @@ function breakdownText(b: ChangeBreakdown): string {
 export function TransactionsTab({ request, etag, findingsOverride, referenceSlot, validate, post }: TabProps) {
   const shape = tableShape(request.payload)
   const baseRows = useMemo(() => (shape === 'table' ? (request.payload.transactions as Txn[]) : []), [shape, request.payload])
+  const lists = useQbLists({ enabled: shape === 'table' && request.allowedActions.includes('edit') })
   const shown = findingsOverride ?? request.validation.validation
-  const findings = useMemo(() => findingsByRow(baseRows, shown ?? []), [baseRows, shown])
+  const findings = useMemo(() => findingsByRow(baseRows, dropResolvedFindings(baseRows, shown ?? [], lists.data)), [baseRows, shown, lists.data])
 
   return shape === 'raw' ? (
     <RawJsonEditor request={request} etag={etag} validate={validate} post={post} />
@@ -203,7 +205,12 @@ function TableEditor({ request, etag, findings, referenceSlot, validate, post }:
       />
       <div className="flex flex-wrap items-center justify-between gap-2 px-0.5 text-[13px] text-muted-foreground">
         <span>{filtered ? `Showing ${visible.length} of ${all.length} rows (filtered)` : plural(all.length, 'row', 'rows')}</span>
-        {editable && <span className="text-xs">Click any cell to edit it. Enter or Tab keeps the change, Esc cancels.</span>}
+        {editable && (
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <QbListsStatus />
+            <span className="text-xs">Click any cell to edit it. Enter or Tab keeps the change, Esc cancels.</span>
+          </span>
+        )}
       </div>
       {editable && (
         <AddTransactionDialog open={adding} onOpenChange={setAdding} lists={lists.data} onAdd={(row) => update((d) => addRow(d, row))} />

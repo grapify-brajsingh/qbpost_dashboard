@@ -319,3 +319,10 @@ after the reference is fixed. The page must not imply that the rest is clean.
 
 **Open decision.** `4339 9314 4718 9820` looks like a full card number (row last-4 is 9820) stored as a reference and
 shown in lists and audit. Default in this section: the accountant chooses the value; the app does not mask it.
+
+## Review fixes (2026-10-30, built)
+
+**Audit trail, `request-edited`.** The Change column falls through to the sentence ("Changed reference") and hides the
+values. The API sends `field`, `old` and `new` for this action (`AuditEventMapper.cs`, `AuditEventsView` migration; test
+`Should_MapRequestEdited_When_PathIsReference`). Show it like `row-edited` (field, then old → new) with the `edit`
+badge tone. `auditSentence` is unchanged. Test: an event with `field: 'reference'` shows both values.

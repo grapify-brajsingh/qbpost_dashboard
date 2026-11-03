@@ -35,6 +35,8 @@
 | 6 | Dashboard side of R-15 | 5 | Enable from list works |
 | 7 | Home on R-11 (Home plan §5) | 3 | One summary call |
 | 8 | E2E suite, full checks, docs | 3–7 | All green, results below |
+| 9 | Realistic-data walkthrough (`demo/`), fix I-9 (toast over the Save bar): `src/main.tsx` Toaster top right | 8 | Walkthrough green on an empty stack; e2e still green |
+| 10 | Fix I-10 (`homeMetrics.queryEnd`, `HomePage.tsx`) and I-11 (`schema.ts` `AUDIT_ACTIONS`, `auditSentence.ts`), tests first | 9 | `homeMetrics.test.ts`, `auditSentence.test.ts` red then green; walkthrough asserts Home's figures |
 
 ## 3. Verification
 
@@ -73,3 +75,17 @@ npx playwright test -c playwright.integration.config.ts
 - **Not done**: the real model and real QuickBooks were not exercised (no OpenRouter key; QuickBooks needs the
   Windows server). R-12 (posted-time filters) exists in the API but the dashboard does not link Home's Posted figure to
   it yet; that is a separate change.
+
+### Results, realistic-data walkthrough and fixes I-9…I-11 (2026-10-29, later)
+
+- `demo/realistic-data.spec.ts` on an **empty** stack: **7 passed** (43 s). It found I-9 (a toast covering Validate:
+  the first run waited 10 minutes on that click), I-10 (Home counted 0 for the current minute) and I-11 (raw
+  `flagged-duplicate` in the audit trail). After the fixes it also asserts Home's figures (5 received, 2 posted,
+  1 discarded, 16 rows posted) and the duplicate sentence.
+- New unit tests seen failing first: `queryEnd` (homeMetrics), the four extra audit actions (auditSentence).
+- E2E suite: **13 passed** after the fixes. `npm test`: two consecutive full runs **501/501**. One earlier full run
+  failed `auth.test.tsx › valid refresh cookie …` at its 1 s `findBy` wait under load (passes alone 3/3; the file's
+  only change is the `/api/v2` URL), the same load-timing class as the documented StatementPage timeouts.
+- vitest now also excludes `demo/`. A full-page screenshot showed the sidebar part-way down a scrolled page; a
+  viewport screenshot confirmed it is a capture artifact (the sidebar stays at the top), not a bug.
+- The stack now holds only the walkthrough's data (see README › Full stack in Docker).

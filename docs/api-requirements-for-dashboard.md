@@ -47,6 +47,8 @@ Status values: **Open** (not started or not yet answered) · **Accepted** (agree
 | R-13 | `POST /statement-extractions`: read an uploaded PDF with the n8n prompt and model (OpenRouter), return rows and possible duplicates, store nothing but a short-lived extraction record | **New endpoint** | 2026-10-28 (upload) | **Upload PDF** page | Implemented | Done (M12; scans answer `422 no-text`) |
 | R-14 | Save a reviewed upload: `POST /saved-requests` accepts `upload.extractionId`; version 1 = what was read, version 2 = the reviewed rows; `upload` metadata on statements; `received` event detail | New field + behaviour | 2026-10-28 (upload) | Upload PDF page, Statements list, statement page, audit trail | Implemented | Done (M12) |
 | R-15 | Users list rows carry `rowVersion` (the user's ETag value), so a row action can send `If-Match` | New field | 2026-10-29 (integration) | Users page: **Enable** from the list | Implemented | In progress (M13 T-1301) |
+| R-16 | QuickBooks lists: last-sync status on `GET /quickbooks/lists`, and `POST /quickbooks/lists/sync` for editors and admins (the API also syncs every 30 min) | New endpoint + new fields | 2026-10-29 (list sync) | Statement page rows editor, upload review (status, **Sync now**) | Implemented | In progress (API M14 built on branch `feature/m14-qb-list-sync`, not merged; server check T-1409 pending) |
+| R-17 | QuickBooks list sync history: `GET /quickbooks/lists/syncs`, every attempt (automatic, manual, import) newest first, paged, filterable | **New endpoint** | 2026-10-30 (lists page) | **Lists** page, Sync history tab | Implemented | In progress (API M15 built on branch `feature/m15-qb-lists-page`, not merged; tested end to end in the Docker stack) |
 
 ### APIs the dashboard needs built
 
@@ -70,6 +72,8 @@ QuickBooks lists) is already in that spec.
 | `POST /statement-extractions` (multipart PDF → extracted payload, possible duplicates; calls OpenRouter) | R-13 | Upload PDF page | **Must** for manual upload |
 | `POST /saved-requests` accepts `upload: { extractionId }`; `upload` on list and detail rows; list `q` matches the file name | R-14 | Upload PDF page, Statements list, statement page | **Must** for manual upload |
 | `GET /users` rows add `rowVersion` | R-15 | Users page (Enable from the list) | Must |
+| `POST /quickbooks/lists/sync`; `GET /quickbooks/lists` adds `lastSync`, `nextSyncUtc` | R-16 | Statement page, upload review | Should: without it new QuickBooks names stay flagged until an operator syncs |
+| `GET /quickbooks/lists/syncs` (filters `trigger`, `outcome`; paged) | R-17 | Lists page (Sync history) | Should: the Lists page shows names without it, history says "needs a newer API" |
 
 ---
 
@@ -641,6 +645,84 @@ another change answers `412`.
 
 ---
 
+## R-16. QuickBooks lists: sync status and "Sync now" (new)
+
+**Need**: after someone adds an account, vendor or customer in QuickBooks, the review grid keeps flagging it "not in
+QuickBooks" until an operator with an API key runs the v1 sync (issue #6, comment 5). The dashboard can neither start
+a sync nor say how old the lists are.
+
+1. `GET /quickbooks/lists` adds `lastSync` (the newest sync attempt: `trigger` `schedule|dashboard|api|import`,
+   `outcome` `ok|failed|skipped`, `reason`, `startedUtc`, `finishedUtc`, `requestedBy {id, displayName}` for dashboard
+   syncs, `message` safe to show) or `null`, and `nextSyncUtc` (next automatic sync, `null` when off). `syncedUtc`
+   stays the time of the lists in use.
+2. `POST /quickbooks/lists/sync` (no body), scope `requests:edit` (editors and admins). Answers `200` with the body of
+   item 1 for the fresh lists plus `counts {accounts, vendors, customers}`; `409 quickbooks-not-open` when QuickBooks is
+   not running (the API never starts it); `503`/`502` for QuickBooks failures; `504 sync-timeout` after 120 s. A
+   request while a sync runs joins it.
+   *As built (API M14, 2026-10-29):* every code is the bare string in the problem's **`type`** field:
+   `409 quickbooks-not-open`, `503 quickbooks-unavailable`, `503 quickbooks-busy`, `502 qb-status`, `504 sync-timeout`
+   (the sync keeps running; re-read the lists), `503 api-stopping` (rare: a shutdown usually just drops the
+   connection). `detail` is fixed text, safe to show. A plain `500` is possible when `rules.json` can't be read or the
+   result can't be stored (`lastSync.outcome = failed`). Sync now draws on the **posting** rate limit (`429` shared with
+   posts). A press that joins another run answers with that run: `lastSync` may be `trigger: schedule` (no
+   `requestedBy`) or another editor's press, and a joined skipped schedule answers `409`. An API key with `qb:read` may
+   call it (`trigger: api`, no `requestedBy`). `lastSync.message` is a fixed sentence without a time: format the age
+   from `syncedUtc`. `trigger` also has `import`. Without a database `lastSync` covers attempts since the API started;
+   `nextSyncUtc` is null when the schedule is off (and briefly before the worker starts).
+3. The API syncs on its own every 30 minutes (when QuickBooks is open and nothing is queued); a failed sync never
+   replaces the last good lists.
+
+**Acceptance**: an editor presses Sync now after adding a vendor in QuickBooks; the answer contains the vendor and the
+grid stops flagging it; a viewer gets `403`; with QuickBooks closed the answer is `409` and `lastSync.outcome` is
+`skipped`.
+
+---
+
+## R-17. QuickBooks list sync history (new)
+
+**Need**: the owner wants a **Lists** page in the sidebar that shows the synced names and "the history of sync runs and
+manual syncs" (2026-10-30, issue #6). The API already records every attempt in `qb_list_syncs` (M14 §3, 200 rows kept)
+but only exposes the newest one (`lastSync`, R-16).
+
+1. `GET /quickbooks/lists/syncs`, scope `lists:read` (every role), read rate limit.
+2. Query: `trigger` (comma-separated `schedule`, `dashboard`, `api`, `import`), `outcome` (comma-separated `ok`,
+   `failed`, `skipped`), `page` (from 1), `pageSize` (1–100, default 25). Any other parameter or value → `400` problem,
+   as `GET /audit-events`.
+3. Answer `200`, the usual page shape, newest first (by `id`):
+
+```json
+{
+  "items": [
+    {
+      "id": 42,
+      "trigger": "dashboard",
+      "outcome": "ok",
+      "reason": null,
+      "startedUtc": "2026-10-30T09:14:02Z",
+      "finishedUtc": "2026-10-30T09:14:09Z",
+      "requestedBy": { "id": "…", "displayName": "Asha Kapoor" },
+      "message": "The lists were synced from QuickBooks.",
+      "counts": { "accounts": 71, "vendors": 282, "customers": 6 },
+      "current": true
+    }
+  ],
+  "page": 1,
+  "pageSize": 25,
+  "total": 57
+}
+```
+
+   Fields as `lastSync` (R-16): `requestedBy` only for `dashboard` (as `lastSync`: `displayName` falls back to the user id when the user is unknown), `message` the
+   same fixed, safe sentence. `counts` only for `ok`, else `null`. `current` is true on exactly one row when any `ok`
+   row exists: the newest `ok`, whose lists are in use. The attempt's raw `error` and `missingInRules` are **not** sent.
+4. Without a database: the attempts since the API started (in memory), same shape.
+
+**Acceptance**: after a scheduled sync, a Sync now by an editor and a skipped attempt, the route lists all three newest
+first; `trigger=dashboard` returns only the editor's with their name; `outcome=skipped` only the skip, `counts: null`,
+`current: false`; a viewer gets `200`; `pageSize=101` gets `400`.
+
+---
+
 ## Not needed (decided)
 
 - No bulk endpoints. About 10 statements a day doesn't justify them.
@@ -661,6 +743,10 @@ the reason.
 
 | Date | Change | Requirements | Source |
 |---|---|---|---|
+| 2026-10-30 | R-17 implemented in the fake API (`src/mocks/handlers/support.ts`, seeded history in `mocks/fixtures/lists.ts`) and used by the new **Lists** page; API M15 built and tested end to end. | R-17 | `docs/superpowers/plans/2026-10-30-qb-lists-page-plan.md` §6 |
+| 2026-10-30 | New **R-17**: `GET /quickbooks/lists/syncs`, the QuickBooks list sync history (automatic, manual and import attempts, paged, filterable) for the new **Lists** page (API M15). | R-17 | `docs/superpowers/specs/2026-10-30-qb-lists-page-spec.md` |
+| 2026-10-29 | R-16 implemented in the fake API (`src/mocks/handlers/support.ts`, bare-string problem `type`) and used by the statement page and the upload review (`QbListsStatus`). | R-16 | `docs/superpowers/specs/2026-10-29-qb-list-sync-spec.md` |
+| 2026-10-29 | New **R-16**: QuickBooks lists sync status on `GET /quickbooks/lists` (`lastSync`, `nextSyncUtc`) and `POST /quickbooks/lists/sync` for editors and admins; the API syncs every 30 minutes itself (API M14). | R-16 | `docs/superpowers/specs/2026-10-29-qb-list-sync-spec.md` |
 | 2026-10-29 | R-11 implemented in the fake API (`src/mocks/handlers/dashboard.ts`) and used by Home, with the audit-feed path kept for a `404` (Home spec §11). | R-11 | `docs/superpowers/specs/2026-10-28-home-dashboard-spec.md` §11 |
 | 2026-10-29 | **Integration against the real API** (`/api/v2`): tracker statuses updated from the API project's M11/M12 docs; R-7.3 amended (user events must carry the subject's `email` and `displayName`; the API sends only `userId`); new **R-15** (`rowVersion` on users list rows). Fake API brought in line with the real shapes: versions and attempts wrapped in `{ items }`, QuickBooks accounts as `{ name, type }`, change-password answers like sign-in. | R-7, R-15, all (status) | `docs/superpowers/specs/2026-10-29-api-integration-spec.md` |
 | 2026-10-28 | R-13 and R-14 implemented in the dashboard's mock API (`src/mocks/handlers/extractions.ts`, `saveUpload` in `handlers/requests.ts`), as written. R-14.3 as clarified in review: reference and control total typed at review go into version 1; only row changes create version 2. | R-13, R-14 | `docs/superpowers/plans/2026-10-28-manual-pdf-upload-plan.md` §4 |

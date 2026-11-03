@@ -29,6 +29,14 @@ describe('auditSentence', () => {
     expect(auditSentence(ev('row-edited', { field: 'memo' }))).toBe('Changed memo')
   })
 
+  it('reads the actions the API adds beyond R-7.4 (API v2 spec §14, Q-97)', () => {
+    expect(auditSentence(ev('flagged-duplicate', { detail: { of: 1, reasons: ['same-payload'] } }))).toBe('Flagged as a possible duplicate of SR-000001')
+    expect(auditSentence(ev('flagged-duplicate'))).toBe('Flagged as a possible duplicate')
+    expect(auditSentence(ev('request-edited', { field: 'reference' }))).toBe('Changed reference')
+    expect(auditSentence(ev('user-session-revoked'))).toBe('Signed out of every session (a used sign-in token came back)')
+    expect(auditSentence(ev('user-other', { detail: { kind: 'stamp-rotated' } }))).toBe('Account event: stamp-rotated')
+  })
+
   it('every AUDIT_ACTIONS value has a sentence and a label (no fallback to the raw enum)', () => {
     for (const a of AUDIT_ACTIONS) {
       const s = auditSentence(ev(a))

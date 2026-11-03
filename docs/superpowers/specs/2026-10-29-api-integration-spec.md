@@ -38,6 +38,9 @@ there, R-2), real QuickBooks (Windows-only; the stack uses the API's simulated c
 | I-6 | User events in the audit feed carried only `userId` ("Created user 8070e704-…"). | **R-7.3** amended: `email` and `displayName` added when the feed is read (API M13 T-1302). |
 | I-7 | Each cancelled read (normal React Query behaviour) was logged by the API as a 500 at Error. | API answers 499 at Information (API M13 T-1304). |
 | I-8 | Home made about 22 calls per load, close to the API's 120 reads/minute per user. | Home reads `GET /dashboard/summary` (R-11) and falls back to the audit feed only on 404 (dashboard; Home spec §11). |
+| I-9 | After saving an upload, the "Statement saved" toast (bottom right) sits on top of the Save bar's **Validate** button. Hovering a toast pauses its timer, so a pointer resting over Validate keeps it covered until the toast is closed. Found by the realistic-data walkthrough (§7). | Toasts move to the top right, below the sticky header (`<Toaster position="top-right" offset={{ top: 72 }} />`), clear of every bottom action bar (dashboard). |
+| I-10 | Home showed "Received 0, Posted 0" and an empty chart right after statements arrived and were posted. Home rounds "now" down to the minute (stable query keys) and the summary's `to` is exclusive, so everything in the current minute was left out. | Home asks the API up to the **end** of the current minute (`queryEnd`); labels and buckets keep the rounded-down time (dashboard). |
+| I-11 | The Audit trail showed the raw value `flagged-duplicate`: the API emits four actions beyond R-7.4 (`flagged-duplicate`, `request-edited`, `user-session-revoked`, `user-other`) and two actor kinds (`system`, `anonymous`), its v2 spec §14 / Q-97. | Added to `AUDIT_ACTIONS` with labels and sentences ("Flagged as a possible duplicate of SR-000001"); actor kind type widened (dashboard). |
 
 Unchanged and confirmed against the real API: ETag / `If-Match` on edit, 412 with who changed it, validation states,
 post with the duplicate acknowledgement, TxnIDs per row, discard / restore with reason, `pushId` replay, the Statements
@@ -77,3 +80,14 @@ Unchanged: buttons follow `allowedActions`; admin UI follows `users:manage`. Ver
    excepted, and reported).
 4. The fake API matches every shape above, and `docs/api-requirements-for-dashboard.md` records R-15, the R-7.3
    amendment and the API status of every requirement.
+
+## 7. Realistic first week, through the UI (2026-10-29)
+
+`demo/realistic-data.spec.ts` (`playwright.demo.config.ts`) fills an **empty** stack the way the business would:
+the admin's first sign-in and two team members created on the Users page; n8n pushing two August statements (and one
+duplicate push), the only step that uses the API directly because that is n8n's job; Asha (editor) reviewing and
+posting Chase August, switching off an inter-account transfer, discarding the duplicate push, uploading the September
+Chase and Wells Fargo PDFs, filling the payees and line accounts the model left empty, and posting September Chase;
+Ravi (viewer) reading without edit controls; the admin checking Home, Statements, Audit trail and Users. The Wells
+Fargo August statement is left pending with an unknown vendor, so "Has errors" has a real entry.
+Run it only on an empty database (`docker compose -f docker-compose.integration.yml down -v && … up -d`).

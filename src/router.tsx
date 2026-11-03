@@ -9,6 +9,7 @@ import { hasScope, useSession } from '@/auth/useSession'
 import { AccountPage } from '@/features/account/AccountPage'
 import { AuditPage } from '@/features/audit/AuditPage'
 import { HomePage } from '@/features/home/HomePage'
+import { ListsPage } from '@/features/lists/ListsPage'
 import { StatementPage } from '@/features/statements/detail/StatementPage'
 import { StatementsPage } from '@/features/statements/list/StatementsPage'
 import { UploadPage } from '@/features/statements/upload/UploadPage'
@@ -96,6 +97,7 @@ export const routes: RouteObject[] = [
             ],
           },
           { path: '/audit', element: <AuditPage />, handle: { crumb: 'Audit trail' } },
+          { path: '/lists', element: <ListsPage />, handle: { crumb: 'QuickBooks lists' } },
           {
             path: '/users',
             handle: { crumb: 'Users' },

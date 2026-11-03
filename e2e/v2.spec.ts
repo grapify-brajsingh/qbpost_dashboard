@@ -77,7 +77,23 @@ test('in-app navigation keeps the user signed in', async ({ page }) => {
   await signIn(page)
   await page.getByRole('link', { name: 'Audit trail' }).click()
   await expect(page).toHaveURL(/\/audit/)
+  await page.getByRole('link', { name: 'Lists', exact: true }).click()
+  await expect(page).toHaveURL(/\/lists/)
+  await expect(page.getByRole('heading', { level: 1, name: 'QuickBooks lists' })).toBeVisible()
   await page.getByRole('link', { name: 'Statements', exact: true }).first().click()
   await expect(page).toHaveURL(/\/statements/)
   await expect(page.getByRole('button', { name: 'Sign in' })).toHaveCount(0)
+})
+
+test('the Lists page does not scroll sideways at 375 px, on the names or the history', async ({ page }) => {
+  // A reload would reset the in-page mock API (and the session), so navigate inside the app, then narrow the window.
+  await signIn(page)
+  await page.getByRole('link', { name: 'Lists', exact: true }).click()
+  await expect(page.getByRole('table', { name: 'Accounts' })).toBeVisible()
+  await page.setViewportSize({ width: 375, height: 800 })
+  const overflow = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+  expect(await overflow()).toBeLessThanOrEqual(0)
+  await page.getByRole('tab', { name: 'Sync history' }).click()
+  await expect(page.getByRole('table', { name: 'Sync history' })).toBeVisible()
+  expect(await overflow()).toBeLessThanOrEqual(0)
 })

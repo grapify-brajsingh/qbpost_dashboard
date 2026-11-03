@@ -29,6 +29,10 @@ export const ACTION_LABEL: Record<AuditAction, string> = {
   'user-signed-in': 'Signed in',
   'user-sign-in-failed': 'Sign-in failed',
   'user-locked-out': 'Locked out',
+  'flagged-duplicate': 'Possible duplicate',
+  'request-edited': 'Edited',
+  'user-session-revoked': 'Signed out',
+  'user-other': 'Account event',
 }
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)
@@ -98,6 +102,16 @@ const SENTENCE: Record<AuditAction, (e: AuditEvent) => string> = {
   'user-signed-in': () => 'Signed in',
   'user-sign-in-failed': () => 'Failed to sign in',
   'user-locked-out': () => 'Was locked out after failed sign-ins',
+  'flagged-duplicate': (e) => {
+    const of = num(e.detail?.of)
+    return of === null ? 'Flagged as a possible duplicate' : `Flagged as a possible duplicate of SR-${String(of).padStart(6, '0')}`
+  },
+  'request-edited': (e) => `Changed ${e.field ?? 'the statement'}`,
+  'user-session-revoked': () => 'Signed out of every session (a used sign-in token came back)',
+  'user-other': (e) => {
+    const kind = str(e.detail?.kind)
+    return kind ? `Account event: ${kind}` : 'Account event'
+  },
 }
 
 /** One plain-text sentence for an audit event. Untrusted `detail` values are only ever inserted as text. */

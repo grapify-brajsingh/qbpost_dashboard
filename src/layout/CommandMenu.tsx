@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { FileTextIcon, FileUpIcon, HistoryIcon, LayoutDashboardIcon, UserIcon, UsersIcon, type LucideIcon } from 'lucide-react'
+import { FileTextIcon, FileUpIcon, HistoryIcon, LayoutDashboardIcon, ListIcon, UserIcon, UsersIcon, type LucideIcon } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { useRequestsList } from '@/api/queries/requests'
 import { hasScope, useSession } from '@/auth/useSession'
@@ -29,6 +29,7 @@ const PAGES: PageEntry[] = [
   { label: 'Statements', to: '/statements', icon: FileTextIcon },
   { label: 'Upload PDF', to: '/statements/upload', icon: FileUpIcon, scope: 'requests:submit' },
   { label: 'Audit trail', to: '/audit', icon: HistoryIcon },
+  { label: 'QuickBooks lists', to: '/lists', icon: ListIcon },
   { label: 'Users', to: '/users', icon: UsersIcon, scope: 'users:manage' },
   { label: 'My account', to: '/account', icon: UserIcon },
 ]

@@ -1,6 +1,7 @@
 // Pure figures behind the Home page: periods, chart buckets, queue ages, deltas and links. No React, no fetching.
 import {
   addDays,
+  addMinutes,
   differenceInCalendarDays,
   eachDayOfInterval,
   eachWeekOfInterval,
@@ -50,6 +51,12 @@ export interface FlowBucket {
 }
 
 type BucketFrame = FlowBucket & { start: Date; end: Date }
+
+/**
+ * The instant the period ends for the API: the end of the minute `to` was rounded down from. `to` stays rounded down
+ * for labels and buckets; without this, events from the last seconds (everything just done) would not count.
+ */
+export const queryEnd = (range: PeriodRange): Date => addMinutes(range.to, 1)
 
 /** Daily buckets up to 31 days, else weeks starting Monday (clamped to the period). Empty buckets are kept. */
 function bucketFrame(range: PeriodRange): BucketFrame[] {

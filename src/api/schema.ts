@@ -302,11 +302,55 @@ export interface QbLists {
   vendors: string[]
   customers: string[]
   syncedUtc: string | null
+  /** Newest sync attempt (R-16); null when none is known. */
+  lastSync?: QbListSync | null
+  /** Next automatic sync (R-16); null when the schedule is off. */
+  nextSyncUtc?: string | null
+  /** List sizes, derived from the arrays by `toQbLists`. */
+  counts?: QbListCounts
+}
+
+/** The newest QuickBooks list sync attempt (R-16). `message` is a fixed sentence without a time. */
+export interface QbListSync {
+  trigger: 'schedule' | 'dashboard' | 'api' | 'import'
+  outcome: 'ok' | 'failed' | 'skipped'
+  reason: string | null
+  startedUtc: string
+  finishedUtc: string
+  requestedBy: { id: string; displayName: string } | null
+  message: string
+}
+
+export interface QbListCounts {
+  accounts: number
+  vendors: number
+  customers: number
 }
 
 /** `GET /quickbooks/lists` as the API sends it: each account carries its QuickBooks type (null when unknown). */
-export interface QbListsResponse extends Omit<QbLists, 'accounts'> {
+export interface QbListsResponse extends Omit<QbLists, 'accounts' | 'counts'> {
   accounts: { name: string; type: string | null }[]
+}
+
+/** One QuickBooks list sync attempt in the history (R-17); fields as `lastSync`. */
+export interface QbListSyncRun extends QbListSync {
+  id: number
+  /** Names stored by this attempt; null unless `outcome` is ok. */
+  counts: QbListCounts | null
+  /** True on the attempt whose lists are in use (the newest ok). */
+  current: boolean
+}
+
+/** `GET /quickbooks/lists/syncs` filters (R-17); an empty set means "any". */
+export interface QbListSyncFilters {
+  trigger: QbListSync['trigger'][]
+  outcome: QbListSync['outcome'][]
+  page: number
+}
+
+/** `POST /quickbooks/lists/sync` 200 (R-16): the lists body for the fresh lists plus their sizes. */
+export interface QbListsSyncResponse extends QbListsResponse {
+  counts: QbListCounts
 }
 
 /** `GET /dashboard/summary` (R-11): the Home period figures in one call. Previous-period fields are null without a compare range. */
@@ -346,6 +390,11 @@ export const AUDIT_ACTIONS = [
   'user-signed-in',
   'user-sign-in-failed',
   'user-locked-out',
+  // Added by the API beyond R-7.4 (its v2 spec §14, Q-97).
+  'flagged-duplicate',
+  'request-edited',
+  'user-session-revoked',
+  'user-other',
 ] as const
 export type AuditAction = (typeof AUDIT_ACTIONS)[number]
 
@@ -353,7 +402,8 @@ export type AuditAction = (typeof AUDIT_ACTIONS)[number]
 export interface AuditEvent {
   id: string
   atUtc: string
-  actor: { id: string; name: string; kind: 'user' | 'api-client' }
+  /** `system` and `anonymous` are API additions (v2 spec §14, Q-97). */
+  actor: { id: string; name: string; kind: 'user' | 'api-client' | 'system' | 'anonymous' }
   action: AuditAction
   request: {
     id: number

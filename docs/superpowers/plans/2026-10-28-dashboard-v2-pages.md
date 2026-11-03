@@ -583,3 +583,7 @@ final run; an earlier run had one timeout in `AppShell.test.tsx` that passes alo
 - **Browser check**: `/statements/30` shows the panel on load with no console errors. Its reference was not changed and
   it was not posted: the value is the accountant's choice.
 - **Side effect**: the e2e runs seeded test statements into the local Docker database (Statements count 25 to 44).
+
+## Review fixes (2026-10-30, built)
+
+`request-edited` diff in `AuditTable.tsx`: task 6 of "Review fixes round 2" in `2026-10-29-qb-list-sync-plan.md`.
