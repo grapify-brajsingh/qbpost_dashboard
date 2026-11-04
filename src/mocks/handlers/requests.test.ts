@@ -108,7 +108,7 @@ describe('GET /saved-requests/{id}', () => {
     const res = await call('/saved-requests/1')
     const body = (await res.json()) as RequestDetail
     expect(res.headers.get('ETag')).toBe(`"${body.rowVersion}"`)
-    expect(body.allowedActions).toEqual(['edit', 'validate', 'post', 'discard'])
+    expect(body.allowedActions).toEqual(['edit', 'validate', 'post', 'discard', 'set-company'])
   })
 
   it('resolves SR- references and 404s unknown ids', async () => {

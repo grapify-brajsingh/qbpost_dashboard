@@ -1,4 +1,5 @@
 import type { AuditAction, AuditEvent } from '@/api/schema'
+import { scanSummaryText } from '@/lib/companyScan'
 
 /** Short action names for badges and the Action filter. */
 /** Label for an action; an action this build does not know shows as the raw value. */
@@ -33,6 +34,10 @@ export const ACTION_LABEL: Record<AuditAction, string> = {
   'request-edited': 'Edited',
   'user-session-revoked': 'Signed out',
   'user-other': 'Account event',
+  'companies-scanned': 'Companies scanned',
+  'company-checked': 'Access checked',
+  'company-updated': 'Company updated',
+  'company-assigned': 'Company assigned',
 }
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)
@@ -52,6 +57,10 @@ const rowName = (e: AuditEvent) => rowRef(e) ?? 'a row'
 function subject(e: AuditEvent): string {
   return str(e.detail?.email) ?? str(e.detail?.displayName) ?? str(e.detail?.userId) ?? 'a user'
 }
+
+/** A company's name from a `CompanyRef`-shaped detail value, as text only. */
+const companyName = (v: unknown): string | null =>
+  v && typeof v === 'object' ? str((v as Record<string, unknown>).displayName) : null
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
@@ -111,6 +120,28 @@ const SENTENCE: Record<AuditAction, (e: AuditEvent) => string> = {
   'user-other': (e) => {
     const kind = str(e.detail?.kind)
     return kind ? `Account event: ${kind}` : 'Account event'
+  },
+  'companies-scanned': (e) => {
+    const d = e.detail
+    if (!d || num(d.added) === null || num(d.updated) === null || num(d.missing) === null || num(d.ambiguous) === null) {
+      return 'Scanned the company folder'
+    }
+    return `Scanned the company folder: ${scanSummaryText({ added: d.added as number, updated: d.updated as number, missing: d.missing as number, ambiguous: d.ambiguous as number })}`
+  },
+  'company-checked': (e) => {
+    const name = companyName(e.detail?.company)
+    const access = str(e.detail?.access)
+    return `Checked QuickBooks access to ${name ?? 'a company'}${access ? `: ${access.replace(/-/g, ' ')}` : ''}`
+  },
+  'company-updated': (e) => {
+    const name = companyName(e.detail?.company)
+    return name ? `Updated company ${name}` : 'Updated a company'
+  },
+  'company-assigned': (e) => {
+    const to = companyName(e.detail?.to)
+    if (!to) return 'Assigned the statement to a company'
+    const from = companyName(e.detail?.from)
+    return `Assigned ${e.request?.publicRef ?? 'the statement'} to ${to}${from ? ` (was ${from})` : ''}`
   },
 }
 

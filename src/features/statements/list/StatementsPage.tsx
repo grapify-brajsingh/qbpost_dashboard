@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { parsePage } from '@/lib/pageParam'
 import { STATS_POLL_MS, useRequestsList, useStats, type ListParams } from '@/api/queries/requests'
+import { useCompanies } from '@/api/queries/companies'
 import { useSession, hasScope } from '@/auth/useSession'
 import { useUrlFilters } from '@/components/filters'
 import { FileUpIcon, InboxIcon, SearchXIcon } from 'lucide-react'
@@ -27,6 +28,7 @@ const FILTER_SPEC = {
   minTotal: { kind: 'number' },
   maxTotal: { kind: 'number' },
   duplicate: { kind: 'bool' },
+  company: { kind: 'text' },
 } as const
 
 /** Which tab and order, kept apart from the chips so "Clear filters" leaves them alone. */
@@ -34,6 +36,11 @@ const VIEW_SPEC = {
   tab: { kind: 'enum', values: STATUS_TAB_IDS },
   sort: { kind: 'enum', values: SORT_VALUES },
 } as const
+
+/** The `company` filter as the API takes it: digits for a positive whole number, or `none`; undefined otherwise. */
+function companyFilter(raw: string | undefined): string | undefined {
+  return raw !== undefined && (raw === 'none' || /^[1-9]\d*$/.test(raw)) ? raw : undefined
+}
 
 export function StatementsPage({ onOpenSheet }: { onOpenSheet?: (id: number, tab: SheetTab) => void }) {
   const { me } = useSession()
@@ -46,7 +53,11 @@ export function StatementsPage({ onOpenSheet }: { onOpenSheet?: (id: number, tab
 
   const tab: StatusTab = view.values.tab ?? 'review'
   const sort: SortValue = view.values.sort ?? DEFAULT_SORT
-  const f = filters.values
+  // `?company=` is a company id (a positive whole number) or `none`, as on Home and Lists; anything else is ignored,
+  // never sent (the API would answer 400).
+  const company = companyFilter(filters.values.company)
+  const f = { ...filters.values, company }
+  const activeCount = filters.activeCount - (filters.values.company !== undefined && company === undefined ? 1 : 0)
   const pageNo = parsePage(search.get('page'))
 
   const params: ListParams = {
@@ -60,10 +71,13 @@ export function StatementsPage({ onOpenSheet }: { onOpenSheet?: (id: number, tab
     minTotal: f.minTotal,
     maxTotal: f.maxTotal,
     duplicate: f.duplicate,
+    company: f.company,
     page: pageNo,
   }
   const list = useRequestsList(params)
-  const stats = useStats({ refetchInterval: STATS_POLL_MS })
+  const stats = useStats({ refetchInterval: STATS_POLL_MS, company: f.company })
+  // null on an older API: the Company chip and column value are then left out.
+  const companies = useCompanies().data?.items
 
   // Rows received since the user last left this page get the new dot; leaving marks "now".
   const [seenAt] = useState(() => lastSeen.read())
@@ -97,7 +111,7 @@ export function StatementsPage({ onOpenSheet }: { onOpenSheet?: (id: number, tab
 
   const pages = Math.max(1, Math.ceil(total / pageSize))
 
-  const allClear = tab === 'review' && filters.activeCount === 0
+  const allClear = tab === 'review' && activeCount === 0
 
   return (
     <div className="page">
@@ -122,7 +136,8 @@ export function StatementsPage({ onOpenSheet }: { onOpenSheet?: (id: number, tab
           filters={f}
           onSet={(patch) => filters.set(patch)}
           onClear={filters.clear}
-          activeCount={filters.activeCount}
+          activeCount={activeCount}
+          companies={companies}
         />
       </div>
       {list.isError ? (
@@ -130,7 +145,7 @@ export function StatementsPage({ onOpenSheet }: { onOpenSheet?: (id: number, tab
       ) : (
         <DataPanel>
           {!list.data ? (
-            <TableSkeleton columns={6} />
+            <TableSkeleton columns={7} />
           ) : list.data.items.length === 0 ? (
             allClear ? (
               <EmptyState icon={InboxIcon} title="All clear. Nothing waiting." description="New statements appear here as soon as n8n saves them." />
@@ -138,7 +153,7 @@ export function StatementsPage({ onOpenSheet }: { onOpenSheet?: (id: number, tab
               <EmptyState
                 icon={SearchXIcon}
                 title="No statements match."
-                description={filters.activeCount > 0 ? 'Try another tab, or clear the filters above.' : 'Try another tab.'}
+                description={activeCount > 0 ? 'Try another tab, or clear the filters above.' : 'Try another tab.'}
               />
             )
           ) : (

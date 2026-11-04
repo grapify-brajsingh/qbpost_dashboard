@@ -1,8 +1,9 @@
 import { http, HttpResponse } from 'msw'
-import type { Attempt, EmailMeta, Payload, VersionSummary } from '@/api/schema'
+import type { Attempt, CompanySource, EmailMeta, Payload, VersionSummary } from '@/api/schema'
 import { DEFAULT_POST_DELAY_MS, mockControl, mockDb, type RequestRecord } from '../db'
 import type { MockUser } from '../fixtures/users'
 import { allReadErrors, computeValidation, diffPayload, rowsOf, UUID_RE } from '../payloadRules'
+import { companyRef, findCompany, isReady } from './companies'
 import { API, actorOf, authenticate, nowUtc, notFound, parseIfMatch, problem, readJson } from './common'
 import {
   addEvent,
@@ -15,6 +16,7 @@ import {
   findRecord,
   isObj,
   listRequests,
+  listsFor,
   outcomeFor,
   publicRef,
   recheckDuplicate,
@@ -39,12 +41,28 @@ function stale(r: RequestRecord) {
 const invalidState = (r: RequestRecord, what: string) =>
   problem(409, 'invalid-state', 'Not allowed in this status', `A ${r.status} request cannot be ${what}.`, { savedRequestStatus: r.status })
 
+/** validate and post need a company that is ready (R-19.4): 409 company-required, then 409 company-not-ready. */
+function companyGate(r: RequestRecord): Response | null {
+  if (r.companyId === null) {
+    return problem(409, 'company-required', 'Company required', 'Choose the company before validating or posting.', { savedRequestId: r.id })
+  }
+  const c = findCompany(r.companyId)
+  if (!c) return problem(409, 'company-required', 'Company required', 'Choose the company before validating or posting.', { savedRequestId: r.id })
+  if (!isReady(c)) {
+    return problem(409, 'company-not-ready', 'Company not ready', 'QuickBooks has not approved this company file yet.', { state: c.state, access: c.access })
+  }
+  return null
+}
+
 // ---- posting ----
 
 async function postRequest(request: Request, r: RequestRecord, user: MockUser) {
   const body = await readJson(request)
   const confirm = isObj(body) && body.confirmDuplicate === true
   const id = { savedRequestId: r.id }
+
+  const gate = companyGate(r)
+  if (gate) return gate
 
   // 1. claim checks (status first: the loser of a race has a stale ETag but must see 409, not 412)
   if (r.status === 'posting' || r.status === 'posted') {
@@ -71,6 +89,32 @@ async function postRequest(request: Request, r: RequestRecord, user: MockUser) {
     })
   }
   if (r.duplicate.of !== null) r.duplicate.acknowledgedBy = actorOf(user)
+
+  // The file QuickBooks has open is not this company's: record one unavailable attempt, never retry (R-19.4).
+  const open = mockControl.companyOpenElsewhere
+  const company = findCompany(r.companyId!)!
+  if (open !== null && open !== company.fileName) {
+    const refused: Attempt = {
+      id: ++mockDb.counters.attempt,
+      versionNumber: current(r).number,
+      outcome: 'unavailable',
+      httpStatus: 409,
+      postId: null,
+      counts: null,
+      error: `QuickBooks has ${open} open.`,
+      startedUtc: nowUtc(),
+      finishedUtc: nowUtc(),
+      startedBy: actorOf(user),
+    }
+    r.attempts.push(refused)
+    touch(r, user)
+    return problem(409, 'company-file-open-elsewhere', 'Another company file is open', `QuickBooks has ${open} open.`, {
+      ...id,
+      openFile: open,
+      neededFile: company.fileName,
+      attemptId: refused.id,
+    })
+  }
 
   // 2. claim: status posting + in-progress attempt, committed before anything is awaited
   const forced = mockControl.nextPost
@@ -177,7 +221,16 @@ function saveRequest(raw: string, user: MockUser) {
 
   const payload = withRowIds(body as Payload)
   const mail = isObj(body.email) ? (body.email as unknown as EmailMeta) : null
-  const record = createRecord(user, raw, [{ payload, note: null }], { email: mail, pushId, upload: null })
+  const active = mockDb.companies.filter((c) => c.state === 'active')
+  const companyId = active.length === 1 ? active[0].id : null
+  const record = createRecord(user, raw, [{ payload, note: null }], {
+    email: mail,
+    pushId,
+    upload: null,
+    companyId,
+    companySource: companyId === null ? null : 'default',
+    companyMatch: null,
+  })
   addEvent(record, 'created', actorOf(user), { source: 'email' })
   return detailResponse(record, user, { status: 201 })
 }
@@ -197,8 +250,31 @@ function saveUpload(body: Record<string, unknown>, raw: string, user: MockUser) 
     })
   }
 
-  const { upload: _upload, ...reviewed } = body
-  void _upload
+  const { upload: sentUpload, ...reviewed } = body
+  // The chosen company travels inside `upload`; a top-level companyId is ignored and nothing reaches the payload.
+  const chosen = (sentUpload as Record<string, unknown>).companyId
+  delete reviewed.companyId
+  if (chosen !== undefined && (typeof chosen !== 'number' || !Number.isInteger(chosen) || chosen < 1)) {
+    return problem(400, 'invalid-request', 'Invalid upload', 'upload.extractionId must be a UUID, and upload.companyId, when sent, a company id. Nothing was saved.')
+  }
+  let companyId: number | null = null
+  let companySource: CompanySource | null = null
+  const active = mockDb.companies.filter((c) => c.state === 'active')
+  if (typeof chosen === 'number') {
+    const picked = findCompany(chosen)
+    if (!picked || !(picked.state === 'active' || picked.state === 'ambiguous')) {
+      return problem(400, 'invalid-request', 'Company not assignable', `Company ${chosen} does not exist, or is missing or disabled. Choose an active company. Nothing was saved.`)
+    }
+    companyId = chosen
+    companySource = 'chosen'
+  } else if (active.length === 1) {
+    // The one company there is wins over the extraction's match, as on the API (M17 4.6).
+    companyId = active[0].id
+    companySource = 'default'
+  } else if (x.company.match === 'matched' && x.company.companyId !== null) {
+    companyId = x.company.companyId
+    companySource = 'matched'
+  }
   const header = { reference: reviewed.reference ?? null, controlTotal: reviewed.controlTotal ?? null }
   const read: Payload = { ...header, transactions: x.payload.transactions }
   const final = withRowIds({ ...reviewed, ...header } as Payload)
@@ -212,7 +288,14 @@ function saveUpload(body: Record<string, unknown>, raw: string, user: MockUser) 
     promptVersion: x.promptVersion,
     extractedUtc: x.extractedUtc,
   }
-  const record = createRecord(user, raw, versions, { email: null, pushId: null, upload })
+  const record = createRecord(user, raw, versions, {
+    email: null,
+    pushId: null,
+    upload,
+    companyId,
+    companySource,
+    companyMatch: { match: x.company.match, printedName: x.company.printedName, dbaName: x.company.dbaName, candidates: x.company.candidates.map((c) => c.id) },
+  })
   x.savedRequestId = record.id
   addEvent(record, 'created', actorOf(user), { source: 'upload', fileName: x.file.name })
   return detailResponse(record, user, { status: 201 })
@@ -223,7 +306,7 @@ function createRecord(
   user: MockUser,
   raw: string,
   payloads: { payload: Payload; note: string | null }[],
-  meta: Pick<RequestRecord, 'email' | 'pushId' | 'upload'>,
+  meta: Pick<RequestRecord, 'email' | 'pushId' | 'upload' | 'companyId' | 'companySource' | 'companyMatch'>,
 ): RequestRecord {
   const utc = nowUtc()
   const by = actorOf(user)
@@ -243,7 +326,7 @@ function createRecord(
     original: raw,
     versions,
     readErrors: allReadErrors(last.payload),
-    validation: computeValidation(last.payload, mockDb.lists, last.number, utc),
+    validation: computeValidation(last.payload, listsFor(meta.companyId).lists, last.number, utc),
     duplicate: { of: null, reasons: [], acknowledgedBy: null },
     attempts: [],
     events: [],
@@ -280,7 +363,12 @@ export const requestHandlers = [
 
   http.get(`${API}/saved-requests/stats`, ({ request }) => {
     const auth = authenticate(request, 'requests:read')
-    return 'error' in auth ? auth.error : HttpResponse.json(stats())
+    if ('error' in auth) return auth.error
+    const company = new URL(request.url).searchParams.get('company')
+    if (company !== null && company !== 'none' && !/^[1-9]\d*$/.test(company)) {
+      return problem(400, 'invalid-request', 'Invalid query', 'company is a company id (a whole number, 1 or more) or none, sent once.')
+    }
+    return HttpResponse.json(stats(company))
   }),
 
   http.get(`${API}/saved-requests/:id`, ({ request, params }) => {
@@ -327,10 +415,36 @@ export const requestHandlers = [
   http.post(`${API}/saved-requests/:id/validate`, ({ request, params }) => {
     const f = lookup(request, params.id, 'requests:edit')
     if ('error' in f) return f.error
-    if (!allowedActionsFor(f.r.status, f.user.role).includes('validate')) return invalidState(f.r, 'validated')
+    const gate = companyGate(f.r)
+    if (gate) return gate
+    if (!allowedActionsFor(f.r.status, f.user.role, f.r.companyId).includes('validate')) return invalidState(f.r, 'validated')
     revalidate(f.r)
     touch(f.r, f.user)
     addEvent(f.r, 'validated', actorOf(f.user), { state: f.r.validation.state })
+    return detailResponse(f.r, f.user)
+  }),
+
+  http.post(`${API}/saved-requests/:id/company`, async ({ request, params }) => {
+    const f = lookup(request, params.id, 'requests:edit')
+    if ('error' in f) return f.error
+    const ifMatch = parseIfMatch(request)
+    if (ifMatch === undefined) return precondition()
+    if (f.r.status !== 'pending') return invalidState(f.r, 'given a company')
+    if (ifMatch !== f.r.rowVersion) return stale(f.r)
+    const body = await readJson(request)
+    const id = isObj(body) && typeof body.companyId === 'number' && Number.isInteger(body.companyId) && body.companyId >= 1 ? body.companyId : null
+    if (id === null) return problem(400, 'invalid-request', 'Invalid company', 'Send { "companyId": <company id> }. Nothing was changed.')
+    // A person may give a statement an active or ambiguous company; a missing, disabled or unknown one is a 400 (M17 4.6).
+    const company = findCompany(id)
+    if (!company || !(company.state === 'active' || company.state === 'ambiguous')) {
+      return problem(400, 'invalid-request', 'Company not assignable', `Company ${id} does not exist, or is missing or disabled. Choose an active company. Nothing was changed.`)
+    }
+    const from = companyRef(f.r.companyId)
+    f.r.companyId = company.id
+    f.r.companySource = 'chosen'
+    f.r.validation = { state: 'ok' }
+    touch(f.r, f.user)
+    addEvent(f.r, 'company-assigned', actorOf(f.user), { companyId: company.id, from, to: companyRef(company.id), source: 'chosen' })
     return detailResponse(f.r, f.user)
   }),
 

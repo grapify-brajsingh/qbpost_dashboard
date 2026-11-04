@@ -11,6 +11,8 @@ import type {
   RequestStatus,
   RequestSummary,
   Role,
+  QbListSyncRun,
+  QbLists,
   Stats,
   ValidationSummary,
 } from '@/api/schema'
@@ -27,7 +29,9 @@ import {
   rowsOf,
   toPostedRows,
 } from '../payloadRules'
+import { DEFAULT_COMPANY_ID } from '../fixtures/companies'
 import { actorOf, nowUtc, paginate, problem } from './common'
+import { companyRef, findCompany, isReady } from './companies'
 
 export const publicRef = (id: number) => `SR-${String(id).padStart(6, '0')}`
 
@@ -39,13 +43,28 @@ export function findRecord(idParam: unknown): RequestRecord | undefined {
 }
 
 /** The single place that decides which buttons exist (API spec §7.1 and §11.1). */
-export function allowedActionsFor(status: RequestStatus, role: Role): Action[] {
+export function allowedActionsFor(status: RequestStatus, role: Role, companyId: number | null): Action[] {
   if (role === 'viewer') return []
-  if (status === 'pending') return ['edit', 'validate', 'post', 'discard']
+  if (status === 'pending') {
+    const company = companyId === null ? undefined : findCompany(companyId)
+    return company && isReady(company) ? ['edit', 'validate', 'post', 'discard', 'set-company'] : ['edit', 'discard', 'set-company']
+  }
   if (role !== 'admin') return []
   if (status === 'discarded') return ['restore']
   if (status === 'partial' || status === 'unknown') return ['resolve']
   return []
+}
+
+/** The lists a company validates against: the default company's live tables, or its own store (R-18). */
+export function listsFor(companyId: number | null | undefined): {
+  lists: QbLists
+  accountTypes: Record<string, string>
+  listSyncs: QbListSyncRun[]
+} {
+  if (companyId == null || companyId === DEFAULT_COMPANY_ID) {
+    return { lists: mockDb.lists, accountTypes: mockDb.accountTypes, listSyncs: mockDb.listSyncs }
+  }
+  return mockDb.companyLists[companyId]
 }
 
 export const current = (r: RequestRecord) => r.versions[r.versions.length - 1]
@@ -127,7 +146,9 @@ export function toSummary(r: RequestRecord, role: Role): RequestSummary {
     discardReason: r.discardReason,
     created: r.created,
     updated: r.updated,
-    allowedActions: allowedActionsFor(r.status, role),
+    company: companyRef(r.companyId),
+    companySource: r.companySource,
+    allowedActions: allowedActionsFor(r.status, role, r.companyId),
   }
 }
 
@@ -135,6 +156,7 @@ export function toDetail(r: RequestRecord, role: Role, ledgerBatch = r.ledgerBat
   const exposeBatch = (r.status === 'partial' || r.status === 'unknown') && ledgerBatch
   return {
     ...toSummary(r, role),
+    companyMatch: r.companyMatch,
     payload: current(r).payload,
     readErrors: r.readErrors,
     otherUnpostedPushes: otherUnpostedPushes(r),
@@ -163,7 +185,7 @@ export function touch(r: RequestRecord, user: MockUser) {
 export function revalidate(r: RequestRecord) {
   const v = current(r)
   r.readErrors = allReadErrors(v.payload)
-  r.validation = computeValidation(v.payload, mockDb.lists, v.number, nowUtc())
+  r.validation = computeValidation(v.payload, listsFor(r.companyId).lists, v.number, nowUtc())
 }
 
 /** Re-runs the duplicate rules against older, non-discarded requests (the oldest match wins). */
@@ -190,6 +212,9 @@ export const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 
 
 // ---- list ----
 
+const matchesCompany = (r: RequestRecord, company: string | null | undefined) =>
+  company == null || (company === 'none' ? r.companyId === null : r.companyId === Number(company))
+
 export function listRequests(request: Request, user: MockUser) {
   const url = new URL(request.url)
   const bad = (detail: string) => problem(400, 'invalid-query', 'Invalid query', detail)
@@ -200,6 +225,8 @@ export function listRequests(request: Request, user: MockUser) {
     if (v === null) return undefined
     return v === 'true' ? true : v === 'false' ? false : new Error(name)
   }
+  const company = url.searchParams.get('company')
+  if (company !== null && company !== 'none' && !/^[1-9]\d*$/.test(company)) return bad('company is a company id (a whole number, 1 or more) or none, sent once.')
   const na = flag('needsAttention')
   const dup = flag('duplicate')
   if (na instanceof Error || dup instanceof Error) return bad('needsAttention and duplicate must be true or false.')
@@ -230,6 +257,7 @@ export function listRequests(request: Request, user: MockUser) {
   const received = (r: RequestRecord) => r.email?.receivedUtc ?? r.created.utc
   let rows = mockDb.requests.filter((r) => {
     if (statuses.length && !statuses.includes(r.status)) return false
+    if (!matchesCompany(r, company)) return false
     if (na !== undefined && needsAttention(r) !== na) return false
     if (dup !== undefined && (r.duplicate.of !== null) !== dup) return false
     if (source && r.source.id !== source && r.source.kind !== source) return false
@@ -274,18 +302,20 @@ export function listRequests(request: Request, user: MockUser) {
   return 'error' in page ? page.error : HttpResponse.json(page)
 }
 
-export function stats(): Stats {
+export function stats(company?: string | null): Stats {
   const byStatus = Object.fromEntries(STATUSES.map((s) => [s, 0])) as Record<RequestStatus, number>
   const counts = { needsAttention: { pending: 0, all: 0 }, duplicate: { pending: 0, all: 0 }, hasErrors: { pending: 0, all: 0 } }
-  for (const r of mockDb.requests) {
+  let needsCompany = 0
+  for (const r of mockDb.requests.filter((x) => matchesCompany(x, company))) {
     byStatus[r.status]++
+    if (r.status === 'pending' && r.companyId === null) needsCompany++
     for (const [flag, on] of [['needsAttention', needsAttention(r)], ['duplicate', r.duplicate.of !== null], ['hasErrors', hasErrors(r)]] as const) {
       if (!on) continue
       counts[flag].all++
       if (r.status === 'pending') counts[flag].pending++
     }
   }
-  return { byStatus, ...counts }
+  return { byStatus, ...counts, needsCompany }
 }
 
 

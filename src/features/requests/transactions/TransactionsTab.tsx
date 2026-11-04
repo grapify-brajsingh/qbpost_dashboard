@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router'
+import { LockIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { useQbLists } from '@/api/queries/lists'
 import type { Finding, RequestDetail, Txn } from '@/api/schema'
@@ -43,6 +44,14 @@ import { useDraft } from './useDraft'
 /** How long a row named by `?row=` stays highlighted. */
 const HIGHLIGHT_MS = 2000
 
+/** Shown on the name cells and in the status line while the statement has no company (R-19). */
+const NAMES_LOCKED = 'Choose the company first'
+
+/** The company whose QuickBooks lists apply: `undefined` on an older API (the default lists), `null` with none chosen. */
+function listsCompany(request: RequestDetail): number | null | undefined {
+  return request.company === undefined ? undefined : (request.company?.id ?? null)
+}
+
 export interface PageActions {
   /** The page's Validate and Post buttons, shown in the save bar. */
   validate?: ReactNode
@@ -81,7 +90,8 @@ function breakdownText(b: ChangeBreakdown): string {
 export function TransactionsTab({ request, etag, findingsOverride, referenceSlot, validate, post }: TabProps) {
   const shape = tableShape(request.payload)
   const baseRows = useMemo(() => (shape === 'table' ? (request.payload.transactions as Txn[]) : []), [shape, request.payload])
-  const lists = useQbLists({ enabled: shape === 'table' && request.allowedActions.includes('edit') })
+  const company = listsCompany(request)
+  const lists = useQbLists(company ?? undefined, { enabled: shape === 'table' && request.allowedActions.includes('edit') && company !== null })
   const shown = findingsOverride ?? request.validation.validation
   const findings = useMemo(() => findingsByRow(baseRows, dropResolvedFindings(baseRows, shown ?? [], lists.data)), [baseRows, shown, lists.data])
 
@@ -113,7 +123,9 @@ function TableEditor({ request, etag, findings, referenceSlot, validate, post }:
   // Buttons and editing come from allowedActions only.
   const editable = request.allowedActions.includes('edit')
   const { draft, dirty, update, reset } = useDraft(id, `${request.currentVersion}:${request.status}`, request.payload)
-  const lists = useQbLists({ enabled: editable })
+  const company = listsCompany(request)
+  // No company yet: there are no lists to read, and the name cells stay locked until one is chosen.
+  const lists = useQbLists(company ?? undefined, { enabled: editable && company !== null })
   const readErrors = useMemo(() => readErrorCells(request.readErrors), [request.readErrors])
   const [adding, setAdding] = useState(false)
 
@@ -168,6 +180,7 @@ function TableEditor({ request, etag, findings, referenceSlot, validate, post }:
         onCell: (rowKey, field, value) => update((d) => setCell(d, rowKey, field, value)),
         onPost: (rowKey, on) => update((d) => setPost(d, rowKey, on)),
         onToggleDelete: (rowKey) => update((d) => toggleDeleteRow(d, rowKey)),
+        ...(company === null ? { namesLocked: NAMES_LOCKED } : {}),
       }
     : undefined
 
@@ -207,7 +220,12 @@ function TableEditor({ request, etag, findings, referenceSlot, validate, post }:
         <span>{filtered ? `Showing ${visible.length} of ${all.length} rows (filtered)` : plural(all.length, 'row', 'rows')}</span>
         {editable && (
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <QbListsStatus />
+            {company === null ? (
+              <span className="inline-flex items-center gap-1 text-xs">
+                <LockIcon className="size-3" aria-hidden />
+                {NAMES_LOCKED}
+              </span>
+            ) : <QbListsStatus company={company} />}
             <span className="text-xs">Click any cell to edit it. Enter or Tab keeps the change, Esc cancels.</span>
           </span>
         )}

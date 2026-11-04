@@ -27,6 +27,8 @@ export interface ListParams {
   minTotal?: number
   maxTotal?: number
   hasErrors?: boolean
+  /** A company id as text, or `none` for statements without one. */
+  company?: string
   /** `received`, `created`, `updated`, `controlTotal`, `total`, `rows`; a leading `-` sorts descending. */
   sort?: string
   page?: number
@@ -39,7 +41,7 @@ export const POSTING_POLL_MS = 3000
 export const requestKeys = {
   all: ['requests'] as const,
   list: (params: ListParams) => [...requestKeys.all, 'list', params] as const,
-  stats: () => [...requestKeys.all, 'stats'] as const,
+  stats: (company?: string) => (company ? ([...requestKeys.all, 'stats', company] as const) : ([...requestKeys.all, 'stats'] as const)),
   detail: (id: number | string) => [...requestKeys.all, 'detail', String(id)] as const,
   versions: (id: number | string) => [...requestKeys.detail(id), 'versions'] as const,
   version: (id: number | string, n: number) => [...requestKeys.detail(id), 'versions', n] as const,
@@ -63,6 +65,7 @@ export function listQuery(params: ListParams): string {
   if (params.minTotal !== undefined) qs.set('minTotal', String(params.minTotal))
   if (params.maxTotal !== undefined) qs.set('maxTotal', String(params.maxTotal))
   if (params.hasErrors !== undefined) qs.set('hasErrors', String(params.hasErrors))
+  if (params.company) qs.set('company', params.company)
   if (params.sort) qs.set('sort', params.sort)
   if (params.page && params.page > 1) qs.set('page', String(params.page))
   if (params.pageSize) qs.set('pageSize', String(params.pageSize))
@@ -80,10 +83,11 @@ export function useRequestsList(params: ListParams) {
   })
 }
 
-export function useStats(opts: { refetchInterval?: number } = {}) {
+export function useStats(opts: { refetchInterval?: number; company?: string } = {}) {
   return useQuery({
-    queryKey: requestKeys.stats(),
-    queryFn: ({ signal }) => api.get<Stats>('/saved-requests/stats', { signal }).then((r) => r.data),
+    queryKey: requestKeys.stats(opts.company),
+    queryFn: ({ signal }) =>
+      api.get<Stats>(`/saved-requests/stats${opts.company ? `?company=${encodeURIComponent(opts.company)}` : ''}`, { signal }).then((r) => r.data),
     refetchInterval: opts.refetchInterval,
   })
 }
@@ -124,6 +128,22 @@ export function useValidate(id: string) {
       else void qc.invalidateQueries({ queryKey: requestKeys.detail(id), exact: true })
       void qc.invalidateQueries({ queryKey: ['audit'] })
     },
+  })
+}
+
+/** `POST /saved-requests/{id}/company` with If-Match: assigns the company and clears validation. */
+export function useSetCompany(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ companyId, etag }: { companyId: number; etag: string }): Promise<RequestWithEtag> => {
+      const r = await api.post<RequestDetail>(`/saved-requests/${id}/company`, { companyId }, { headers: { 'If-Match': etag } })
+      return { request: r.data, etag: r.headers.get('ETag') ?? '' }
+    },
+    onSuccess: (data) => {
+      if (data.etag) qc.setQueryData(requestKeys.detail(id), data)
+      return Promise.all([qc.invalidateQueries({ queryKey: requestKeys.all }), qc.invalidateQueries({ queryKey: ['audit'] })])
+    },
+    onError: () => qc.invalidateQueries({ queryKey: requestKeys.detail(id), exact: true }),
   })
 }
 

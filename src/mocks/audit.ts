@@ -24,6 +24,7 @@ const REQUEST_EVENT_ACTIONS: Record<string, AuditAction> = {
   discarded: 'discarded',
   restored: 'restored',
   resolved: 'resolved',
+  'company-assigned': 'company-assigned',
 }
 
 const API_PREFIX = 'api-client:'
@@ -64,7 +65,7 @@ function requestEvents(r: RequestRecord): AuditEvent[] {
   const payload = r.versions[r.versions.length - 1].payload
   const reference = typeof payload.reference === 'string' ? payload.reference : null
   const request = { id: r.id, publicRef: publicRef(r.id), reference, pushId: r.pushId, emailSubject: r.email?.subject ?? null }
-  const base = { request, row: null, field: null, old: null, new: null, versionNumber: null, detail: null }
+  const base = { request, row: null, field: null, old: null, new: null, versionNumber: null, detail: null, companyId: r.companyId }
   const out: AuditEvent[] = []
 
   r.versions.forEach((v, vi) => {
@@ -97,14 +98,22 @@ function userEvents(): AuditEvent[] {
       const role = row.kind === 'created' || row.kind === 'role-changed' ? { role: subject?.role } : {}
       return [{
         id: `u${row.id}`, atUtc: row.atUtc, actor: actorOf(row.actor), action, request: null, row: null,
-        field: null, old: null, new: null, versionNumber: null, detail: { ...role, ...row.detail, ...who, userId },
+        field: null, old: null, new: null, versionNumber: null, detail: { ...role, ...row.detail, ...who, userId }, companyId: null,
       }]
     }),
   )
 }
 
+/** Company events (scan, check, update) are visible to every role; their ids cannot collide with user events (`u`). */
+function companyEvents(): AuditEvent[] {
+  return mockDb.companyAudit.map((row) => ({
+    id: `c${row.id}`, atUtc: row.atUtc, actor: actorOf(row.actor), action: row.action, request: null, row: null,
+    field: null, old: null, new: null, versionNumber: null, detail: row.detail, companyId: row.companyId,
+  }))
+}
+
 /** Every audit event the viewer may see, newest first (`atUtc` desc, then `id` desc). */
 export function deriveAuditEvents(viewerRole: Role): AuditEvent[] {
-  const all = [...mockDb.requests.flatMap(requestEvents), ...(viewerRole === 'admin' ? userEvents() : [])]
+  const all = [...mockDb.requests.flatMap(requestEvents), ...companyEvents(), ...(viewerRole === 'admin' ? userEvents() : [])]
   return all.sort((a, b) => (a.atUtc === b.atUtc ? (a.id < b.id ? 1 : a.id > b.id ? -1 : 0) : a.atUtc < b.atUtc ? 1 : -1))
 }

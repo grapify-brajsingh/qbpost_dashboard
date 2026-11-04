@@ -1,7 +1,8 @@
 import { http, HttpResponse } from 'msw'
 import { addDays, eachDayOfInterval, eachWeekOfInterval, format, startOfDay, startOfWeek } from 'date-fns'
-import type { DashboardSummary } from '@/api/schema'
+import type { AuditEvent, DashboardSummary } from '@/api/schema'
 import { deriveAuditEvents } from '../audit'
+import type { RequestRecord } from '../db'
 import { mockDb } from '../db'
 import { API, authenticate, problem } from './common'
 
@@ -28,9 +29,9 @@ function inRange(at: string, from: number, to: number): boolean {
   return t >= from && t < to
 }
 
-function countsIn(from: number, to: number, role: Parameters<typeof deriveAuditEvents>[0]): Counts {
+function countsIn(from: number, to: number, events: AuditEvent[]): Counts {
   const c = zero()
-  for (const e of deriveAuditEvents(role)) {
+  for (const e of events) {
     const key = COUNTED[e.action as keyof typeof COUNTED]
     if (key && inRange(e.atUtc, from, to)) c[key]++
   }
@@ -38,10 +39,10 @@ function countsIn(from: number, to: number, role: Parameters<typeof deriveAuditE
 }
 
 /** Rows and money that reached QuickBooks: the posted rows of attempts that finished posted or partial in the range. */
-function postedIn(from: number, to: number): { rows: number; amount: number } {
+function postedIn(from: number, to: number, requests: RequestRecord[]): { rows: number; amount: number } {
   let rows = 0
   let cents = 0
-  for (const r of mockDb.requests) {
+  for (const r of requests) {
     for (const a of r.attempts) {
       if ((a.outcome !== 'posted' && a.outcome !== 'partial') || !a.finishedUtc || !inRange(a.finishedUtc, from, to)) continue
       const posted = ((a.result as { posted?: PostedRowLike[] } | undefined)?.posted ?? []).filter((p) => typeof p.amount === 'number')
@@ -52,9 +53,9 @@ function postedIn(from: number, to: number): { rows: number; amount: number } {
   return { rows, amount: cents / 100 }
 }
 
-function timeToPostIn(from: number, to: number): DashboardSummary['timeToPost'] {
+function timeToPostIn(from: number, to: number, requests: RequestRecord[]): DashboardSummary['timeToPost'] {
   const minutes: number[] = []
-  for (const r of mockDb.requests) {
+  for (const r of requests) {
     const first = r.attempts.filter((a) => a.outcome === 'posted' && a.finishedUtc).sort((a, b) => a.id - b.id)[0]
     if (!first?.finishedUtc || !inRange(first.finishedUtc, from, to)) continue
     const start = Date.parse(r.email?.receivedUtc ?? r.created.utc)
@@ -84,7 +85,11 @@ export const dashboardHandlers = [
     if (bucket !== 'day' && bucket !== 'week') return invalid('bucket is day or week.')
 
     const role = auth.user.role
-    const events = deriveAuditEvents(role)
+    const company = q.get('company')
+    if (company !== null && !/^\d+$/.test(company)) return invalid('company must be a company id.')
+    const keep = (c: number | null | undefined) => company === null || c === Number(company)
+    const events = deriveAuditEvents(role).filter((e) => keep(e.companyId))
+    const requests = mockDb.requests.filter((r) => keep(r.companyId))
     const last = new Date(to - 1)
     const starts =
       bucket === 'week'
@@ -101,14 +106,14 @@ export const dashboardHandlers = [
       return { start: format(bucket === 'week' ? startOfWeek(start, { weekStartsOn: 1 }) : startOfDay(start), 'yyyy-MM-dd'), received: c.received, posted: c.posted, postFailed: c.postFailed }
     })
 
-    const now = postedIn(from, to)
-    const before = cFrom === null ? null : postedIn(cFrom, cTo!)
+    const now = postedIn(from, to, requests)
+    const before = cFrom === null ? null : postedIn(cFrom, cTo!, requests)
     const body: DashboardSummary = {
       range: { from: new Date(from).toISOString(), to: new Date(to).toISOString(), tz: q.get('tz') ?? 'UTC', bucket },
-      counts: countsIn(from, to, role),
-      previous: cFrom === null ? null : countsIn(cFrom, cTo!, role),
+      counts: countsIn(from, to, events),
+      previous: cFrom === null ? null : countsIn(cFrom, cTo!, events),
       posted: { rows: now.rows, amount: now.amount, previousRows: before?.rows ?? null, previousAmount: before?.amount ?? null },
-      timeToPost: timeToPostIn(from, to),
+      timeToPost: timeToPostIn(from, to, requests),
       series,
     }
     return HttpResponse.json(body)

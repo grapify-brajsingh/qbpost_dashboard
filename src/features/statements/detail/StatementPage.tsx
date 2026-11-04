@@ -3,13 +3,16 @@ import { FileQuestionIcon, Loader2Icon, SendIcon, ShieldCheckIcon } from 'lucide
 import { toast } from 'sonner'
 import { Link, useParams } from 'react-router'
 import { ApiError } from '@/api/problem'
+import { useCompanies } from '@/api/queries/companies'
 import { useRequest, useValidate } from '@/api/queries/requests'
 import type { RequestDetail, Txn } from '@/api/schema'
 import { ProblemAlert } from '@/components/ProblemAlert'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { CompanyHoldBanner } from '@/features/requests/detail/CompanyHoldBanner'
 import { StatusBanner } from '@/features/requests/detail/StatusBanner'
+import { ChooseCompanyDialog } from '@/features/requests/dialogs/ChooseCompanyDialog'
 import { DiscardDialog } from '@/features/requests/dialogs/DiscardDialog'
 import { ResolveDialog } from '@/features/requests/dialogs/ResolveDialog'
 import { RestoreDialog } from '@/features/requests/dialogs/RestoreDialog'
@@ -35,6 +38,8 @@ interface Seen {
   version: number
   /** The saved payload the user saw, so the dialog's counts match the ETag it posts. */
   payload: RequestDetail['payload']
+  /** The company that version belongs to, named in the dialog's question; undefined on an older API. */
+  company: RequestDetail['company']
 }
 
 /** The page title and last crumb: the email subject, else the uploaded file name, else the SR ref. */
@@ -71,6 +76,7 @@ export function StatementPage() {
   const dirty = useDraftDirty(id)
   const post = usePost(id)
   const validate = useValidate(id)
+  const companies = useCompanies()
   const sheet = useStatementSheet()
   useBreadcrumb(q.data ? titleOf(q.data.request) : '')
   // The post dialog; `dup` is the other request when this one may be a duplicate. `seen` is the version the dialog
@@ -80,6 +86,7 @@ export function StatementPage() {
   // on screen. A 409 duplicate-unconfirmed reopens the dialog on the same version.
   const [sent, setSent] = useState<Seen | null>(null)
   const [other, setOther] = useState<MenuAction | null>(null)
+  const [choosingCompany, setChoosingCompany] = useState(false)
   // The header's reference lives in the draft, which the table editor owns: the editor renders it into this element.
   const [referenceSlot, setReferenceSlot] = useState<HTMLElement | null>(null)
   const outcome = post.outcome
@@ -114,12 +121,15 @@ export function StatementPage() {
 
   const { request, etag } = q.data
   const can = (a: RequestDetail['allowedActions'][number]) => request.allowedActions.includes(a)
+  const companyItems = companies.data?.items ?? []
+  const company = request.company ? companyItems.find((c) => c.id === request.company!.id) : undefined
+  const chooseCompany = can('set-company') ? () => setChoosingCompany(true) : undefined
 
   const openPost = () => {
     const d = request.duplicate
     setDialog({
       dup: d.flagged ? { of: d.of, ofRef: d.ofRef, ofStatus: d.ofStatus } : null,
-      seen: { etag, version: request.currentVersion, payload: request.payload },
+      seen: { etag, version: request.currentVersion, payload: request.payload, company: request.company },
     })
   }
   const postBlocked = post.isPosting
@@ -180,8 +190,11 @@ export function StatementPage() {
         onOpenSheet={(tab) => sheet.open(request.id, tab)}
         onMenu={setOther}
         referenceSlot={can('edit') && tableShape(request.payload) === 'table' ? setReferenceSlot : undefined}
+        company={company}
+        onChangeCompany={chooseCompany}
       />
       <StatusBanner request={request} />
+      <CompanyHoldBanner request={request} onChoose={chooseCompany} />
       <ValidationProblems request={request} findings={heldFindings} />
       {(post.isPosting || request.status === 'posting') && <PostingProgress rows={request.transactionCount} />}
       {showResult && <PostResultBanner outcome={outcome} requestId={id} shownAbove={request.validation.errors ?? []} />}
@@ -193,6 +206,7 @@ export function StatementPage() {
           onOpenChange={(o) => !o && setDialog(null)}
           request={request}
           seenPayload={dialog.seen.payload}
+          seenCompany={dialog.seen.company}
           duplicate={dialog.dup}
           changed={dialog.seen.version !== request.currentVersion}
           onConfirm={(opts) => {
@@ -204,6 +218,15 @@ export function StatementPage() {
       )}
       <DiscardDialog open={other === 'discard'} onOpenChange={(o) => !o && setOther(null)} requestId={id} />
       <RestoreDialog open={other === 'restore'} onOpenChange={(o) => !o && setOther(null)} requestId={id} />
+      {chooseCompany && (
+        <ChooseCompanyDialog
+          open={choosingCompany}
+          onOpenChange={setChoosingCompany}
+          request={request}
+          etag={etag}
+          companies={companyItems}
+        />
+      )}
       <ResolveDialog open={other === 'resolve'} onOpenChange={(o) => !o && setOther(null)} request={request} />
       <StatementSheet />
     </div>

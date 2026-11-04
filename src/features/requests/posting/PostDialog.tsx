@@ -30,6 +30,8 @@ interface Props {
   request: RequestDetail
   /** The payload of the version the dialog opened on (the one whose ETag is posted). */
   seenPayload: RequestDetail['payload']
+  /** The company of the version the dialog opened on, named in the question; null or undefined leaves it out. */
+  seenCompany?: RequestDetail['company']
   /** The other request when this one may be a duplicate (flagged, or named by a 409 duplicate-unconfirmed). */
   duplicate: DuplicateInfo | null
   /** A newer version arrived while the dialog was open; Confirm still posts the one it opened on (the API answers 412). */
@@ -45,7 +47,7 @@ export function PostDialog({ open, onOpenChange, ...rest }: Props) {
   )
 }
 
-function Body({ request, seenPayload, duplicate, changed, onConfirm, onCancel }: Omit<Props, 'open' | 'onOpenChange'> & { onCancel: () => void }) {
+function Body({ request, seenPayload, seenCompany, duplicate, changed, onConfirm, onCancel }: Omit<Props, 'open' | 'onOpenChange'> & { onCancel: () => void }) {
   const [anyway, setAnyway] = useState(false)
   const [sent, setSent] = useState(false)
   const v = request.validation
@@ -58,7 +60,7 @@ function Body({ request, seenPayload, duplicate, changed, onConfirm, onCancel }:
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{`Post ${rowsLabel} to QuickBooks?`}</DialogTitle>
+        <DialogTitle>{seenCompany ? `Post ${rowsLabel} to QuickBooks for ${seenCompany.displayName}?` : `Post ${rowsLabel} to QuickBooks?`}</DialogTitle>
         <DialogDescription>
           {`${formatCents(stats.allCents - stats.skippedCents)} will post.`}
           {stats.skipped > 0 && ` ${stats.skipped} ${stats.skipped === 1 ? 'row' : 'rows'} marked don't post ${stats.skipped === 1 ? 'is' : 'are'} skipped.`}

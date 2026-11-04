@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { toast } from 'sonner'
-import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { mockControl, mockDb } from '@/mocks/db'
 import { server } from '@/mocks/server'
 import { renderApp } from '@/test/render'
@@ -174,5 +174,76 @@ describe('sync now and history', () => {
     expect(await screen.findByText('Sync history needs a newer API.')).toBeInTheDocument()
     await user.click(await tab(/^Accounts/))
     expect(await table('Accounts')).toBeInTheDocument()
+  })
+})
+
+describe('company (R-20)', () => {
+  /** Records every GET /quickbooks/lists URL, then answers as the fake API does. */
+  function recordListUrls() {
+    const urls: URL[] = []
+    server.events.on('request:start', ({ request }) => {
+      const u = new URL(request.url)
+      if (request.method === 'GET' && u.pathname === API) urls.push(u)
+    })
+    return urls
+  }
+  afterEach(() => server.events.removeAllListeners())
+
+  test('defaults to the default company and sends company=1', async () => {
+    const urls = recordListUrls()
+    open('/lists')
+    await table('Accounts')
+    expect(await screen.findByRole('combobox', { name: 'Company' })).toHaveValue('1')
+    expect(urls.length).toBeGreaterThan(0)
+    expect(urls.every((u) => u.searchParams.get('company') === '1')).toBe(true)
+  })
+
+  test('choosing 440 shows its own names and history, and puts ?company=2 in the URL', async () => {
+    const { user, router } = open('/lists?tab=vendors')
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Company' }), '2')
+    expect(await screen.findByText('Coastal Beverage Supply')).toBeInTheDocument()
+    expect(router.state.location.search).toContain('company=2')
+    await user.click(screen.getByRole('tab', { name: 'Sync history' }))
+    await waitFor(() => expect(within(screen.getByRole('table', { name: 'Sync history' })).getAllByRole('row')).toHaveLength(3))
+  })
+
+  test('Sync now for 440 shows the not-ready message; for 18 it syncs company=1 only', async () => {
+    const posts: URL[] = []
+    server.events.on('request:start', ({ request }) => {
+      if (request.method === 'POST') posts.push(new URL(request.url))
+    })
+    const first = open('/lists?company=2')
+    await table('Accounts')
+    await first.user.click(screen.getByRole('button', { name: 'Sync now' }))
+    await waitFor(() =>
+      expect(toast.warning).toHaveBeenCalledWith("This company isn't ready in QuickBooks yet. Check its access on the Companies page."),
+    )
+    expect(toast.success).not.toHaveBeenCalled()
+    first.unmount()
+
+    const second = open('/lists')
+    await table('Accounts')
+    await second.user.click(screen.getByRole('button', { name: 'Sync now' }))
+    await waitFor(() => expect(toast.success).toHaveBeenCalled())
+    expect(posts.slice(-1)[0].searchParams.get('company')).toBe('1')
+  })
+
+  test('an unknown ?company=99 falls back to the default company (Review Focus 2)', async () => {
+    const urls = recordListUrls()
+    open('/lists?company=99')
+    await table('Accounts')
+    expect(await screen.findByRole('combobox', { name: 'Company' })).toHaveValue('1')
+    expect(urls.length).toBeGreaterThan(0)
+    expect(urls.some((u) => u.searchParams.get('company') === '99')).toBe(false)
+  })
+
+  test('an older API (GET /companies 404) shows no selector and loads the lists without company (Review Focus 1)', async () => {
+    server.use(http.get('/api/v2/companies', () => new HttpResponse(null, { status: 404 })))
+    const urls = recordListUrls()
+    open('/lists')
+    await table('Accounts')
+    expect(screen.queryByRole('combobox', { name: 'Company' })).not.toBeInTheDocument()
+    expect(urls.length).toBeGreaterThan(0)
+    expect(urls.every((u) => !u.searchParams.has('company'))).toBe(true)
   })
 })

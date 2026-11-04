@@ -1,4 +1,4 @@
-import { FileTextIcon, HistoryIcon, LayoutDashboardIcon, ListIcon, LogOutIcon, MoonIcon, SearchIcon, SunIcon, UserIcon, UsersIcon, type LucideIcon } from 'lucide-react'
+import { Building2Icon, FileTextIcon, HistoryIcon, LayoutDashboardIcon, ListIcon, LogOutIcon, MoonIcon, SearchIcon, SunIcon, UserIcon, UsersIcon, type LucideIcon } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { NavLink, useLocation } from 'react-router'
 import { useStats } from '@/api/queries/requests'
@@ -103,6 +103,11 @@ export function AppSidebar({ onOpenSearch }: { onOpenSearch(): void }) {
             <SidebarMenuItem>
               <NavItem to="/lists" icon={ListIcon} label="Lists" active={on('/lists')} />
             </SidebarMenuItem>
+            {hasScope(me, 'lists:read') && (
+              <SidebarMenuItem>
+                <NavItem to="/companies" icon={Building2Icon} label="Companies" active={on('/companies')} />
+              </SidebarMenuItem>
+            )}
           </SidebarMenu>
         </SidebarGroup>
         <SidebarGroup>

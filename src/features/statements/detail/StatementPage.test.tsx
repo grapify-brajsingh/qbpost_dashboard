@@ -4,6 +4,7 @@ import { afterEach, vi } from 'vitest'
 import { toast } from 'sonner'
 import type { Payload, RequestDetail, Txn } from '@/api/schema'
 import { mockControl, mockDb } from '@/mocks/db'
+import { toDetail } from '@/mocks/handlers/requestHelpers'
 import { diffPayload } from '@/mocks/payloadRules'
 import { server } from '@/mocks/server'
 import { renderApp } from '@/test/render'
@@ -716,5 +717,135 @@ describe('polling', () => {
     })
     expect(await screen.findByRole('alert')).toHaveTextContent('Server error')
     expect(screen.getByRole('heading', { level: 1, name: 'Subject 6' })).toBeInTheDocument()
+  })
+})
+
+describe('company (R-19)', () => {
+  const hold = () => screen.queryByRole('alert', { name: 'Company hold' })
+
+  async function chooseTakoma(user: ReturnType<typeof renderApp>['user']) {
+    await user.click(within(hold()!).getByRole('button', { name: 'Choose company' }))
+    const d = await screen.findByRole('dialog', { name: 'Choose company' })
+    // The companies load next to the statement: wait for the option rather than assuming it is there.
+    await within(d).findByRole('option', { name: '18 · Takoma Park Grocery Store Inc' })
+    await user.selectOptions(within(d).getByRole('combobox', { name: 'Company' }), '18 · Takoma Park Grocery Store Inc')
+    await user.click(within(d).getByRole('button', { name: 'Assign company' }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Choose company' })).not.toBeInTheDocument())
+  }
+
+  test('no company: hold banner with the printed name, no Validate or Post; choosing Takoma shows it in the header and Validate appears', async () => {
+    const { user } = await open(14, '', 'u-editor')
+    expect(hold()).toHaveTextContent('Choose the company before validating or posting. The printed name on this statement was SA CONVENIENCE MARKET.')
+    expect(within(screen.getByTestId('statement-meta')).getByText('Needs company')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Validate' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Post to QuickBooks' })).not.toBeInTheDocument()
+    await chooseTakoma(user)
+    expect(await within(screen.getByTestId('statement-meta')).findByText('18 · Takoma Park Grocery Store Inc')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Validate' })).toBeInTheDocument()
+    expect(hold()).not.toBeInTheDocument()
+    expect(toast.success).toHaveBeenCalledWith('Assigned to Takoma Park Grocery Store Inc')
+    expect(record(14).companyId).toBe(1)
+  })
+
+  test('without a printed name the second sentence is left out; a viewer gets no Choose company button', async () => {
+    record(14).companyMatch = null
+    await open(14, '', 'u-viewer')
+    expect(hold()).toHaveTextContent(/^Choose the company before validating or posting\.$/)
+    expect(within(hold()!).queryByRole('button', { name: 'Choose company' })).not.toBeInTheDocument()
+    expect(within(screen.getByTestId('statement-meta')).queryByRole('button', { name: 'Change' })).not.toBeInTheDocument()
+  })
+
+  test('a discarded statement with no company is not on hold: no banner', async () => {
+    record(14).status = 'discarded'
+    await open(14, '', 'u-editor')
+    expect(within(screen.getByTestId('statement-meta')).getByText('Needs company')).toBeInTheDocument()
+    expect(hold()).not.toBeInTheDocument()
+  })
+
+  test('a company that is not ready shows its access badge and a link to Companies', async () => {
+    record(2).companyId = 2
+    await open(2, '', 'u-editor')
+    const meta = screen.getByTestId('statement-meta')
+    expect(within(meta).getByText('440 · S & A Convenience Market LLC')).toBeInTheDocument()
+    expect(await within(meta).findByText('Needs approval')).toBeInTheDocument()
+    expect(within(meta).getByRole('link', { name: 'Companies' })).toHaveAttribute('href', '/companies')
+    expect(screen.queryByRole('button', { name: 'Validate' })).not.toBeInTheDocument()
+    expect(hold()).not.toBeInTheDocument()
+  })
+
+  test('an older API without company fields shows no banner, keeps Validate and Post, and reads the default lists (Review Focus 1)', async () => {
+    server.use(
+      http.get(`${API}/1`, () => {
+        const r = record(1)
+        const body: Partial<RequestDetail> = toDetail(r, 'editor')
+        delete body.company
+        delete body.companySource
+        delete body.companyMatch
+        return HttpResponse.json(body, { headers: { ETag: `"${r.rowVersion}"` } })
+      }),
+    )
+    const lists: string[] = []
+    server.events.on('request:start', ({ request }) => {
+      const u = new URL(request.url)
+      if (u.pathname.endsWith('/quickbooks/lists')) lists.push(u.search)
+    })
+    await open(1, '', 'u-editor')
+    expect(hold()).not.toBeInTheDocument()
+    expect(within(screen.getByTestId('statement-meta')).queryByText('Company')).not.toBeInTheDocument()
+    expect(within(saveBar()).getByRole('button', { name: 'Validate' })).toBeInTheDocument()
+    expect(postButton()).toBeEnabled()
+    await waitFor(() => expect(lists.length).toBeGreaterThan(0))
+    expect(lists.every((q) => q === '')).toBe(true)
+  })
+
+  test('a post refused because another file is open toasts both file names, once', async () => {
+    mockControl.companyOpenElsewhere = 'S & A Convenience Market LLC.qbw'
+    const posts: string[] = []
+    server.events.on('request:start', ({ request }) => {
+      if (request.method === 'POST' && new URL(request.url).pathname.endsWith('/1/post')) posts.push(request.url)
+    })
+    vi.mocked(toast.error).mockClear()
+    const { user } = await open(1, '', 'u-editor')
+    await user.click(postButton())
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /^Post \d+ rows?$/ }))
+    const text = 'QuickBooks has S & A Convenience Market LLC.qbw open — close it or open Takoma Park Grocery Store Inc.qbw, then post again.'
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(text, { description: undefined }))
+    expect(toast.error).toHaveBeenCalledTimes(1)
+    expect(posts).toHaveLength(1)
+    // Nothing waits or re-sends: Post is usable again, and only by pressing it.
+    await waitFor(() => expect(postButton()).toBeEnabled())
+    expect(posts).toHaveLength(1)
+  })
+
+  test('unsaved row edits survive choosing a company, and then save with the new ETag (Review Focus 3)', async () => {
+    const { user } = await open(14, '', 'u-editor')
+    await user.click(cell(0, 'memo'))
+    await user.type(screen.getByRole('textbox', { name: 'Memo' }), ' kept')
+    await user.keyboard('{Enter}')
+    expect(cell(0, 'memo')).toHaveAttribute('data-dirty', 'true')
+    expect(saveBar()).toHaveTextContent('1 unsaved change')
+    const before = record(14).rowVersion
+
+    await chooseTakoma(user)
+    expect(await within(screen.getByTestId('statement-meta')).findByText('18 · Takoma Park Grocery Store Inc')).toBeInTheDocument()
+    const assigned = record(14).rowVersion
+    expect(assigned).toBeGreaterThan(before)
+    expect(cell(0, 'memo')).toHaveAttribute('data-dirty', 'true')
+    expect(cell(0, 'memo')).toHaveTextContent(/ kept/)
+    expect(saveBar()).toHaveTextContent('1 unsaved change')
+
+    const puts: { ifMatch: string | null; status?: number }[] = []
+    server.events.on('request:start', ({ request }) => {
+      if (request.method === 'PUT') puts.push({ ifMatch: request.headers.get('If-Match') })
+    })
+    server.events.on('response:mocked', ({ request, response }) => {
+      if (request.method === 'PUT') puts[puts.length - 1].status = response.status
+    })
+    await user.click(within(saveBar()).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(puts[0]?.status).toBe(200))
+    expect(puts).toHaveLength(1)
+    expect(puts[0].ifMatch).toBe(`"${assigned}"`)
+    await waitFor(() => expect(cell(0, 'memo')).not.toHaveAttribute('data-dirty'))
+    expect((payloadOf(14).transactions as Txn[])[0].memo).toMatch(/ kept$/)
   })
 })

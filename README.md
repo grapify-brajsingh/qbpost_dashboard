@@ -14,6 +14,7 @@ Built with React, TypeScript, Vite, Tailwind/shadcn, TanStack Query and React Ro
 | `/` | Home (landing page after sign-in): the live queue (to review, has errors, possible duplicates, needs a decision), what moved in the last 7 / 30 / 90 days against the period before, a received-vs-posted chart, all statements by status, waiting times and the oldest statements, recent activity. Every figure links to the page that lists it |
 | `/statements` | Statements: status tabs, filters kept in the URL, new-arrivals pill |
 | `/statements/:id` | One statement: reconciliation meter, editable rows with a Post switch per row, Validate, Post; the Results, History and Versions sheet opens beside it |
+| `/companies` | Companies: the QuickBooks company files found in the server folder, access approval, match names, Sync / Check access (admin); needs `lists:read` |
 | `/audit` | Audit trail: every event across statements and users, visible to every role |
 | `/users`, `/users/:id` | Users: filters, inline actions, activity (needs `users:manage`) |
 | `/account` | My account: change password |

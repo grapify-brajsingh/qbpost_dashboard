@@ -30,10 +30,13 @@ function filterEvents(url: URL, role: Parameters<typeof deriveAuditEvents>[0]): 
   const reference = p.get('reference')
   const pushId = p.get('pushId')?.toLowerCase().replace(/-/g, '')
   const q = p.get('q')?.toLowerCase()
+  const company = p.get('company')
+  if (company !== null && !/^\d+$/.test(company)) return 'company must be a company id.'
 
   return deriveAuditEvents(role).filter((e) => {
     const t = Date.parse(e.atUtc)
     if ((from !== null && t < from) || (to !== null && t > to)) return false
+    if (company !== null && e.companyId !== Number(company)) return false
     if (actor && e.actor.id !== actor) return false
     if (requestId !== null && e.request?.id !== requestId) return false
     if (reference && e.request?.reference !== reference) return false

@@ -1,7 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '@/api/problem'
 import type { QbListSync, QbListsSyncResponse } from '@/api/schema'
-import { ageText, listsStatus, syncFailure, syncSuccessText } from './qbListsSync'
+import { ageText, companyFileMessage, listsStatus, syncFailure, syncSuccessText } from './qbListsSync'
+
+describe('companyFileMessage', () => {
+  it('names both files when the open one is known', () =>
+    expect(companyFileMessage({ openFile: 'A.qbw', neededFile: 'B.qbw' }, 'check')).toBe(
+      'QuickBooks has A.qbw open — close it or open B.qbw, then check again.',
+    ))
+  it('reads well without openFile', () =>
+    expect(companyFileMessage({ neededFile: 'Takoma Park Grocery Store Inc.qbw' }, 'check')).toBe(
+      'Another company file is open in QuickBooks — close it or open Takoma Park Grocery Store Inc.qbw, then check again.',
+    ))
+  it('takes the verb for posting', () => expect(companyFileMessage({ neededFile: 'B.qbw' }, 'post')).toMatch(/then post again\.$/))
+  it('takes the verb for syncing', () => expect(companyFileMessage({ neededFile: 'B.qbw' }, 'sync')).toMatch(/then sync again\.$/))
+  it('copes with no file names at all', () => expect(companyFileMessage({}, 'post')).toContain('open the right company file'))
+})
 
 const NOW = new Date(2026, 9, 29, 12, 0).getTime() // local noon, so the day tests do not depend on the time zone
 const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
@@ -143,6 +157,28 @@ describe('syncFailure', () => {
     [403, 'forbidden', 'Forbidden'],
   ])('shows the problem title as an error for %i %s', (status, type, title) => {
     expect(syncFailure(problem(status, type, title))).toEqual({ level: 'error', text: title })
+  })
+
+  it('company-not-ready is a warning pointing at Companies', () => {
+    expect(syncFailure(problem(409, 'company-not-ready', 'Company not ready'))).toEqual({
+      level: 'warning',
+      text: "This company isn't ready in QuickBooks yet. Check its access on the Companies page.",
+    })
+  })
+
+  it('names both files for 409 company-file-open-elsewhere, asking to sync again', () => {
+    const e = new ApiError(
+      { type: 'company-file-open-elsewhere', title: 'Another company file is open', status: 409, openFile: 'A.qbw', neededFile: 'B.qbw' },
+      new Headers(),
+    )
+    expect(syncFailure(e)).toEqual({ level: 'error', text: 'QuickBooks has A.qbw open — close it or open B.qbw, then sync again.' })
+  })
+
+  it('names the file for 503 company-file-unavailable, and never marks it as still running', () => {
+    const e = new ApiError({ type: 'company-file-unavailable', title: 'Company file unavailable', status: 503, neededFile: 'B.qbw' }, new Headers())
+    expect(syncFailure(e)).toEqual({ level: 'error', text: "QuickBooks couldn't open B.qbw. Check that QuickBooks can open it, then sync again." })
+    const bare = new ApiError({ type: 'company-file-unavailable', title: 'Company file unavailable', status: 503 }, new Headers())
+    expect(syncFailure(bare).text).toContain("couldn't open the company file")
   })
 
   it('falls back to a plain message for a network error', () => {

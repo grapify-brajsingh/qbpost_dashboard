@@ -71,6 +71,18 @@ function signedIn(route = '/statements') {
 const useList = (items: RequestSummary[], extra?: Partial<Page<RequestSummary>>) =>
   server.use(http.get(LIST, () => HttpResponse.json(page(items, extra))))
 
+const cellRow = async (subject: string) => (await screen.findByText(subject)).closest('tr')!
+/** List and stats URLs the app asks for. */
+function recordUrls() {
+  const rec = { list: [] as URL[], stats: [] as URL[] }
+  server.events.on('request:start', ({ request }) => {
+    const u = new URL(request.url)
+    if (u.pathname.endsWith('/saved-requests/stats')) rec.stats.push(u)
+    else if (u.pathname.endsWith('/saved-requests')) rec.list.push(u)
+  })
+  return rec
+}
+
 afterEach(() => {
   server.events.removeAllListeners()
   vi.useRealTimers()
@@ -365,5 +377,74 @@ describe('statements list', () => {
     await waitFor(() => expect(seen.length).toBe(listBefore + 1))
     await waitFor(() => expect(screen.queryByText(/new — show/)).not.toBeInTheDocument())
     expect(await screen.findByRole('tab', { name: 'To review 11' })).toBeInTheDocument()
+  })
+  describe('company', () => {
+    test('the Company column shows code and name, or a Needs company badge', async () => {
+      useList([summary({ id: 1, company: { id: 1, code: '18', displayName: 'Takoma Park Grocery Store Inc' } }), summary({ id: 2, company: null })])
+      signedIn()
+      expect(within(await cellRow('Subject 1')).getByText('18 · Takoma Park Grocery Store Inc')).toBeInTheDocument()
+      expect(within(await cellRow('Subject 2')).getByText('Needs company')).toBeInTheDocument()
+    })
+
+    test('an older API row without a company key shows a muted dash and no badge', async () => {
+      useList([summary({ id: 1 })])
+      signedIn()
+      const row = await cellRow('Subject 1')
+      expect(within(row).queryByText('Needs company')).not.toBeInTheDocument()
+      expect(screen.getByRole('columnheader', { name: 'Company' })).toBeInTheDocument()
+    })
+
+    test('?company=2 (code 440) sends company=2 to the list and the stats, and shows the chip', async () => {
+      const seenUrls = recordUrls()
+      mockControl.signInAs('u-editor')
+      renderApp('/statements?company=2')
+      expect(await screen.findByRole('button', { name: /Company: 440 · S & A Convenience Market LLC/ })).toBeInTheDocument()
+      await waitFor(() => expect(seenUrls.list[seenUrls.list.length - 1].searchParams.get('company')).toBe('2'))
+      await waitFor(() => expect(seenUrls.stats[seenUrls.stats.length - 1].searchParams.get('company')).toBe('2'))
+    })
+
+    test.each(['abc', '0', '-2', '2.5', '0x2', 'None'])('?company=%s is ignored: never sent, no chip, nothing to clear', async (raw) => {
+      const seenUrls = recordUrls()
+      mockControl.signInAs('u-editor')
+      renderApp(`/statements?company=${encodeURIComponent(raw)}`)
+      expect(await screen.findByRole('button', { name: 'Company' })).toBeInTheDocument()
+      await waitFor(() => expect(seenUrls.list.length).toBeGreaterThan(0))
+      await waitFor(() => expect(seenUrls.stats.length).toBeGreaterThan(0))
+      expect([...seenUrls.list, ...seenUrls.stats].every((u) => !u.searchParams.has('company'))).toBe(true)
+      expect(screen.getByRole('button', { name: 'Clear filters' })).toBeDisabled()
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
+    test('No company filters with company=none against the fake API and lists SR-000014 only', async () => {
+      mockControl.signInAs('u-admin')
+      renderApp('/statements?company=none&tab=all')
+      expect(await screen.findByRole('link', { name: 'Credit card 440 ; S & A CONVENIENCE MARKET LLC.pdf' })).toBeInTheDocument()
+      expect(await screen.findByRole('button', { name: 'Company: No company' })).toBeInTheDocument()
+      await waitFor(() => expect(screen.getAllByRole('link', { name: /Subject|\.pdf/ })).toHaveLength(1))
+    })
+
+    test('Clear filters removes company', async () => {
+      const { user, router } = signedIn('/statements?tab=posted&company=2')
+      await screen.findByRole('button', { name: /^Company: 440/ })
+      await user.click(screen.getByRole('button', { name: 'Clear filters' }))
+      await waitFor(() => expect(router.state.location.search).toBe('?tab=posted'))
+      expect(await screen.findByRole('button', { name: 'Company' })).toBeInTheDocument()
+    })
+
+    test('an older API: no Company chip when GET /companies is 404', async () => {
+      let asked = false
+      server.use(
+        http.get('/api/v2/companies', () => {
+          asked = true
+          return new HttpResponse(null, { status: 404 })
+        }),
+      )
+      mockControl.signInAs('u-admin')
+      renderApp('/statements')
+      await screen.findByRole('button', { name: 'Reference' })
+      await waitFor(() => expect(asked).toBe(true))
+      await screen.findByText('Subject 1', {}, { timeout: 100 }).catch(() => undefined)
+      expect(screen.queryByRole('button', { name: 'Company' })).not.toBeInTheDocument()
+    })
   })
 })

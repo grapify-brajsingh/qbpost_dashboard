@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 // Manual PDF upload (issue #4). The mock API "reads" any file that starts with %PDF- as a 14-row statement with two
-// rows missing their account.
+// rows missing their account, and no company matched.
 const PASSWORD = 'correct horse battery'
 const PDF = { name: 'chase-sep-2026.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n% e2e statement\n') }
 
@@ -31,6 +31,10 @@ test('upload a PDF, fill the empty accounts, set the total, save, and land on th
   const save = page.getByRole('button', { name: 'Save statement' })
   await expect(save).toBeDisabled()
 
+  // The PDF names no company and there are several: the name cells stay locked until one is chosen.
+  await expect(page.getByText('Choose the company first').first()).toBeVisible()
+  await page.getByRole('combobox', { name: 'Company' }).selectOption({ label: '18 · Takoma Park Grocery Store Inc' })
+  await expect(page.getByText('Choose the company first')).toHaveCount(0)
   await pickAccount(page, 2)
   await pickAccount(page, 9)
   await page.getByRole('button', { name: 'Edit control total' }).click()

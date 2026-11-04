@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
+import { companyLabel } from '@/features/companies/companiesView'
 import { nextSort, type SortKey, type SortValue } from './statusTabs'
 import { statementSubject } from '@/lib/statementTitle'
 
@@ -115,11 +116,12 @@ export function StatementsTable({
   }
 
   return (
-    <Table className="min-w-[920px]">
+    <Table className="min-w-[1080px]">
       <TableHeader className="bg-muted/40">
         <TableRow>
           <SortHead label="Received" sortKey="received" sort={sort} onSort={onSort} />
           <TableHead>Email or file</TableHead>
+          <TableHead>Company</TableHead>
           <TableHead>Reference</TableHead>
           <SortHead label="Rows" sortKey="rows" sort={sort} onSort={onSort} className="text-right" />
           <SortHead label="Total" sortKey="total" sort={sort} onSort={onSort} className="text-right" />
@@ -163,6 +165,18 @@ export function StatementsTable({
                 </span>
               ) : (
                 <span className="block truncate text-xs text-muted-foreground">{r.email?.from ?? '—'}</span>
+              )}
+            </TableCell>
+            <TableCell>
+              {r.company ? (
+                <span className="block max-w-48 truncate text-[13px]">{companyLabel(r.company)}</span>
+              ) : r.company === null ? (
+                <Badge variant="warning">
+                  <TriangleAlertIcon aria-hidden />
+                  Needs company
+                </Badge>
+              ) : (
+                <span className="text-muted-foreground">—</span>
               )}
             </TableCell>
             <TableCell>

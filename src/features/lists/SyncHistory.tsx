@@ -29,17 +29,20 @@ const ICONS: Record<QbListSync['outcome'], LucideIcon> = { ok: CheckCircle2Icon,
 
 /** Every recorded list sync attempt, newest first (R-17), with who started it and what came of it. */
 export function SyncHistory({
+  company,
   by,
   result,
   onFilter,
 }: {
+  /** `undefined` = the API's default company. */
+  company?: number
   by?: StartedBy
   result?: Result
   onFilter: (patch: { by?: StartedBy; result?: Result }) => void
 }) {
   const [search, setSearch] = useSearchParams()
   const page = parsePage(search.get('page'))
-  const syncs = useQbListSyncs(syncFiltersFrom({ by, result }, page))
+  const syncs = useQbListSyncs(company, syncFiltersFrom({ by, result }, page))
   const filtered = by !== undefined || result !== undefined
 
   const setPage = (n: number) =>

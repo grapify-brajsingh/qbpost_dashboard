@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CircleAlertIcon, FileTextIcon, Loader2Icon, PlusIcon, SaveIcon } from 'lucide-react'
+import { CircleAlertIcon, FileTextIcon, Loader2Icon, LockIcon, PlusIcon, SaveIcon } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import { ApiError, problemCode } from '@/api/problem'
+import { useCompanies } from '@/api/queries/companies'
 import { useQbLists } from '@/api/queries/lists'
 import { useSaveUpload } from '@/api/queries/extractions'
 import type { Extraction } from '@/api/schema'
@@ -23,6 +24,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { assignableCompanies } from '@/features/companies/companiesView'
 import { AddTransactionDialog } from '@/features/statements/detail/AddTransactionDialog'
 import { ReconciliationMeter } from '@/features/statements/detail/ReconciliationMeter'
 import type { DisplayRow } from '@/features/statements/detail/rowFilters'
@@ -32,10 +34,13 @@ import { ActionBarFrame } from '@/features/requests/transactions/SaveBar'
 import { TxTable, type TxEditing } from '@/features/requests/transactions/TxTable'
 import { UnsavedGuard } from '@/features/requests/transactions/UnsavedGuard'
 import { useDraft } from '@/features/requests/transactions/useDraft'
+import { CompanyBlock } from './CompanyBlock'
 import { DuplicateWarning } from './DuplicateWarning'
 import { badValues, emptyFields, emptyFindings, requiredCount, saveBlocker } from './emptyFields'
 import { isValidReference, REFERENCE_RULE } from '@/lib/reference'
 import { cleanReference, referenceFromFileName } from './format'
+
+const NAMES_LOCKED = 'Choose the company first'
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
@@ -51,7 +56,20 @@ function displayRows(d: Draft): DisplayRow[] {
 export function ReviewEditor({ extraction, onDiscard }: { extraction: Extraction; onDiscard: () => void }) {
   const navigate = useNavigate()
   const { draft, update } = useDraft(`upload:${extraction.extractionId}`, '1', extraction.payload)
-  const lists = useQbLists()
+  const companies = useCompanies()
+  // Set only by the user; a kept match is not sent, the server saves it as matched.
+  const [chosen, setChosen] = useState<number | undefined>()
+  const matchedId = extraction.company?.match === 'matched' ? (extraction.company.companyId ?? undefined) : undefined
+  const effective = chosen ?? matchedId
+  // Spec 3.5 (final review ruling): the statement named no company we could match and none is chosen yet. With more
+  // than one company to choose from, the default company's names would be a guess, so the name cells stay locked and
+  // no lists are read until one is chosen (as on the statement page). An older API sends no block: never locked.
+  const needsCompany = extraction.company !== undefined && extraction.company.match !== 'matched' && chosen === undefined
+  const assignableCount = companies.data ? assignableCompanies(companies.data.items).length : undefined
+  const namesLocked = needsCompany && assignableCount !== undefined && assignableCount > 1
+  // While the companies load it is not known yet whether to lock, so the lists (and their status) wait too.
+  const listsOpen = !namesLocked && !(needsCompany && companies.isPending)
+  const lists = useQbLists(effective, { enabled: listsOpen })
   const save = useSaveUpload()
   const [reference, setReference] = useState(() => {
     const read = extraction.payload.reference
@@ -83,6 +101,7 @@ export function ReviewEditor({ extraction, onDiscard }: { extraction: Extraction
         onCell: (rowKey, field, value) => update((d) => setCell(d, rowKey, field, value)),
         onPost: (rowKey, on) => update((d) => setPost(d, rowKey, on)),
         onToggleDelete: (rowKey) => update((d) => toggleDeleteRow(d, rowKey)),
+        ...(namesLocked ? { namesLocked: NAMES_LOCKED } : {}),
       }
 
   const onSave = () => {
@@ -91,6 +110,7 @@ export function ReviewEditor({ extraction, onDiscard }: { extraction: Extraction
       {
         extractionId: extraction.extractionId,
         reference: reference.trim(),
+        companyId: chosen,
         controlTotal: typeof ct === 'number' && Number.isFinite(ct) ? ct : null,
         transactions: draftToPayload(draft).transactions,
       },
@@ -139,21 +159,25 @@ export function ReviewEditor({ extraction, onDiscard }: { extraction: Extraction
         </div>
       </header>
 
-      <div className="grid max-w-md gap-1.5">
-        <Label htmlFor="upload-reference">Reference</Label>
-        <Input
-          id="upload-reference"
-          value={reference}
-          disabled={save.isPending}
-          onChange={(e) => setReference(e.target.value)}
-          aria-invalid={!isValidReference(reference.trim())}
-          aria-describedby={isValidReference(reference.trim()) ? undefined : 'upload-reference-rule'}
-        />
-        {!isValidReference(reference.trim()) && (
-          <p id="upload-reference-rule" className="text-xs text-destructive">
-            {reference.trim() === '' ? 'Enter a reference' : REFERENCE_RULE}
-          </p>
-        )}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid content-start gap-1.5">
+          <Label htmlFor="upload-reference">Reference</Label>
+          <Input
+            id="upload-reference"
+            value={reference}
+            disabled={save.isPending}
+            onChange={(e) => setReference(e.target.value)}
+            aria-invalid={!isValidReference(reference.trim())}
+            aria-describedby={isValidReference(reference.trim()) ? undefined : 'upload-reference-rule'}
+          />
+          {!isValidReference(reference.trim()) && (
+            <p id="upload-reference-rule" className="text-xs text-destructive">
+              {reference.trim() === '' ? 'Enter a reference' : REFERENCE_RULE}
+            </p>
+          )}
+        </div>
+
+        <CompanyBlock match={extraction.company} companies={companies.data?.items} value={chosen} onChange={setChosen} disabled={save.isPending} />
       </div>
 
       <DuplicateWarning items={extraction.possibleDuplicates ?? []} />
@@ -201,7 +225,14 @@ export function ReviewEditor({ extraction, onDiscard }: { extraction: Extraction
           readErrors={unreadable}
           toolbar={
             <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
-              <QbListsStatus />
+              {namesLocked ? (
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                  <LockIcon className="size-3" aria-hidden />
+                  {NAMES_LOCKED}
+                </span>
+              ) : (
+                listsOpen && <QbListsStatus company={effective} />
+              )}
               <Button size="sm" variant="outline" onClick={() => setAdding(true)} disabled={!edit}>
                 <PlusIcon aria-hidden />
                 Add row

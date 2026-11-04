@@ -1,6 +1,6 @@
 # API requirements from the dashboard
 
-**Date**: 2026-10-27 · **Last updated**: 2026-10-29 (integration against the real API: R-15, R-7.3 gap; see [Changelog](#changelog))
+**Date**: 2026-10-27 · **Last updated**: 2026-11-03 (multiple company files: R-18, R-19, R-20; see [Changelog](#changelog))
 **For**: the qbautopost API project (`D:\qb_post-issue-2`), to be turned into its own spec
 and plan, as an amendment to `docs/saved-requests-postgres.md` (ticket #2) or as a follow-up ticket.
 **From**: the dashboard designs in https://github.com/grapify-brajsingh/qbpost_dashboard:
@@ -49,6 +49,9 @@ Status values: **Open** (not started or not yet answered) · **Accepted** (agree
 | R-15 | Users list rows carry `rowVersion` (the user's ETag value), so a row action can send `If-Match` | New field | 2026-10-29 (integration) | Users page: **Enable** from the list | Implemented | In progress (M13 T-1301) |
 | R-16 | QuickBooks lists: last-sync status on `GET /quickbooks/lists`, and `POST /quickbooks/lists/sync` for editors and admins (the API also syncs every 30 min) | New endpoint + new fields | 2026-10-29 (list sync) | Statement page rows editor, upload review (status, **Sync now**) | Implemented | In progress (API M14 built on branch `feature/m14-qb-list-sync`, not merged; server check T-1409 pending) |
 | R-17 | QuickBooks list sync history: `GET /quickbooks/lists/syncs`, every attempt (automatic, manual, import) newest first, paged, filterable | **New endpoint** | 2026-10-30 (lists page) | **Lists** page, Sync history tab | Implemented | In progress (API M15 built on branch `feature/m15-qb-lists-page`, not merged; tested end to end in the Docker stack) |
+| R-18 | Companies: `GET /companies`, `POST /companies/scan` (re-scan the server folder `Companies:RootFolder`), `POST /companies/{id}/check` (QuickBooks access), `PATCH /companies/{id}` | **New endpoints** | 2026-11-03 (multi-company) | **Companies** page; company pickers everywhere | Implemented | Open (API M17) |
+| R-19 | Company on statements: `company`, `companySource` on rows; `company=` filter on list and stats; `stats.needsCompany`; action `set-company` + `POST /saved-requests/{id}/company`; `companyId` on upload save; `409 company-required` | New fields + endpoint | 2026-11-03 (multi-company) | Statements list, statement page, upload review | Implemented | Open (API M17) |
+| R-20 | Company-scoped extraction match, lists, summary, audit: `company` block on `POST /statement-extractions`; `company=` on lists, lists sync, sync history, `/dashboard/summary`, `/audit-events`; `409 company-file-open-elsewhere` | New fields + filters | 2026-11-03 (multi-company) | Upload review, Lists, Home, audit trail, Post | Implemented | Open (API M17) |
 
 ### APIs the dashboard needs built
 
@@ -74,6 +77,9 @@ QuickBooks lists) is already in that spec.
 | `GET /users` rows add `rowVersion` | R-15 | Users page (Enable from the list) | Must |
 | `POST /quickbooks/lists/sync`; `GET /quickbooks/lists` adds `lastSync`, `nextSyncUtc` | R-16 | Statement page, upload review | Should: without it new QuickBooks names stay flagged until an operator syncs |
 | `GET /quickbooks/lists/syncs` (filters `trigger`, `outcome`; paged) | R-17 | Lists page (Sync history) | Should: the Lists page shows names without it, history says "needs a newer API" |
+| `GET /companies`, `POST /companies/scan`, `POST /companies/{id}/check`, `PATCH /companies/{id}` | R-18 | Companies page | **Must** for multi-company |
+| `POST /saved-requests/{id}/company`; `company` fields, filter, `needsCompany` stat; `companyId` on upload save | R-19 | Statements, statement page, upload review | **Must** for multi-company |
+| `company` block on `POST /statement-extractions`; `company=` on lists/sync/syncs/summary/audit | R-20 | Upload review, Lists, Home, Audit | **Must** for multi-company (lists, extraction); Should (summary, audit) |
 
 ---
 
@@ -723,12 +729,105 @@ first; `trigger=dashboard` returns only the editor's with their name; `outcome=s
 
 ---
 
+# Multiple company files (2026-11-03)
+
+**From**: owner request 2026-11-03 (brainstorm). Dashboard spec `docs/superpowers/specs/2026-11-03-multi-company-spec.md`;
+API contract `D:\qbautopost\qb_post\docs\multi-company-m17.md` (M17) — the API spec holds the full shapes and wins
+on any difference.
+
+## R-18. Companies (new)
+
+**Need**: the server finds QuickBooks company files in `Companies:RootFolder` (each subfolder holds one `.qbw`); the
+dashboard lists them, re-scans on demand, and shows whether QuickBooks has approved the app for each file.
+
+1. `GET /api/v2/companies` (`lists:read`) → `{ rootFolder, rootConfigured, rootReachable, lastScanUtc, items: Company[] }`.
+   `Company = { id, code, displayName, folderName (may be null for the default company), fileName, filePath, state: 'active'|'ambiguous'|'missing'|'disabled',
+   candidateFiles: string[], access: 'unchecked'|'approved'|'needs-approval'|'file-not-found'|'error', accessCheckedUtc,
+   accessMessage, qbCompanyName, qbLegalName, matchNames: string[], isDefault, rowVersion, lists: { syncedUtc, outcome } | null,
+   waitingCount }`.
+2. `POST /api/v2/companies/scan` (`requests:admin`) → `{ added, updated, missing, ambiguous, noCompanyFile: string[], items }`.
+   Root unavailable → `503 company-root-unavailable`. Audit `companies-scanned`.
+3. `POST /api/v2/companies/{id}/check` (`requests:admin`) → the updated `Company` (and its `ETag`). Answers, in the API's order:
+   `409 company-not-ready` (`state`, `access`) for a company with no file to open (not `active`: ambiguous, missing or
+   disabled); `412 edited-by-someone-else` (`rowVersion`) when the company's file was re-pointed while QuickBooks answered,
+   nothing stamped; `503 quickbooks-not-open`; `409 company-file-open-elsewhere` (`openFile`, `neededFile`);
+   `503 company-file-unavailable` (`neededFile`). An `active` company whose file is gone from disk is recorded as
+   `file-not-found` (200) without a session. Audit `company-checked`.
+4. `PATCH /api/v2/companies/{id}` (`requests:admin`, `If-Match: "<rowVersion>"`) body any of `matchNames`, `filePath`
+   (one of `candidateFiles`), `disabled` → the updated `Company` (and its `ETag`); `428` without `If-Match`; `412
+   edited-by-someone-else` (`rowVersion`) on a stale version; `400 invalid-request` for a bad body, an unknown field, a
+   `filePath` that is not a candidate, or disabling the default company. Choosing a different file resets `access` to
+   `unchecked`. Audit `company-updated`.
+
+**Dashboard notes (2026-11-04, checked against API M17 on 2026-11-04 by reading its code)**: settled: `Company.rowVersion` is in the
+M17 `Company` shape (§5.1) and the dashboard sends `If-Match: "<rowVersion>"`. The audit `detail` shapes the API writes
+(`EfCompanyStore`): `companies-scanned` `{ added, updated, missing, ambiguous, noCompanyFile: string[] }` (no `companyId`),
+`company-checked` `{ companyId, access }`, `company-updated` `{ companyId, filePath?, state?, matchNames? }` (only what
+changed). None carries a company reference, so the sentences for checked and updated say "a company"; the fake API writes
+the same shapes. A check that returns 412 changes and audits nothing.
+
+**Acceptance**: API spec M17 A-1…A-3; a viewer gets `200` on GET and `403` on the others.
+
+---
+
+## R-19. Company on statements (new)
+
+1. List and detail rows add `company: { id, code, displayName } | null` and `companySource:
+   'matched'|'chosen'|'migrated'|'default'|null`; detail adds `companyMatch: { match, printedName, dbaName,
+   candidates: number[] } | null` (the extraction's match copied at save; `candidates` are company **ids**, not references, so
+   names come from `GET /companies`). With multi-company off or one active company, new statements get that company (`default`).
+6. A statement whose company is not `active` + `approved`: no `validate`/`post` in `allowedActions`; the routes answer
+   `409 company-not-ready` (`state`, `access`).
+2. `GET /saved-requests` and `GET /saved-requests/stats` accept `company=<id>` or `company=none`; stats add `needsCompany`.
+3. A pending statement with no company: `allowedActions` has `set-company` (editors, admins) and **not** `validate` or
+   `post`; `POST …/validate` and `…/post` answer `409 company-required`.
+4. `POST /saved-requests/{id}/company` (`requests:edit`, `If-Match`) body `{ companyId }`: only while `pending`;
+   clears validation; audit `company-assigned` (`from`, `to`). `400 invalid-request` for a bad body or a company that does not
+   exist or is `missing` or `disabled` (an `active` or `ambiguous` one is accepted); `428` without `If-Match`; `412` stale.
+5. `POST /saved-requests` with `upload` accepts optional `upload.companyId` (beside `extractionId`; a top-level
+   `companyId` is ignored; a `companyId` that is not a company id, or names a missing, disabled or unknown company, is `400
+   invalid-request`). Without it the company is the one company there is (`default`), else the extraction's matched company
+   (`matched`), else none. The n8n body is unchanged (owner, 2026-11-04); emailed statements with several companies arrive
+   with `company: null`.
+
+**Dashboard notes (2026-11-04, checked against API M17 on 2026-11-04 by reading its code)**: settled: the upload save sends
+`upload.companyId` (inside `upload`, never top level). The audit `company-assigned` `detail` is `{ companyId, from, to, source:
+"chosen" }` with `from` (or null) and `to` as `{ id, code, displayName }`; a company that no longer exists comes back as `{ id,
+code: null, displayName: null }`. `POST …/companies/{id}/check` answers `409 company-not-ready` for a company with no file
+to open (ambiguous, missing or disabled), now listed in R-18.3.
+
+**Acceptance**: API spec M17 A-5, A-6.
+
+---
+
+## R-20. Company-scoped extraction, lists, summary and audit (new)
+
+1. `POST /statement-extractions` adds `company: { match: 'matched'|'none'|'ambiguous', printedName, dbaName,
+   companyId | null, candidates: { id, code, displayName }[] }`. The name is read from the PDF content only.
+2. `GET /quickbooks/lists`, `POST /quickbooks/lists/sync` (also `{ "company": n }` in the body), `GET /quickbooks/lists/syncs`
+   accept `company=<id>`; absent = the default company. A value that is not a positive integer, or an id no company has, is
+   `400 invalid-request` on lists and sync (never the default company); the history answers an empty page for an unknown id.
+   Sync of a company that is not ready is `409 company-not-ready`. A sync refused by the company's file answers as a post
+   does (item 4): `409 company-file-open-elsewhere` (`openFile`, `neededFile`) or `503 company-file-unavailable`
+   (`neededFile`), recorded as a `skipped` attempt with that reason, and never retried.
+3. `GET /dashboard/summary` and `GET /audit-events` accept `company=<id>` (a positive integer, else `400`; an id no company
+   has matches nothing); absent = all companies. Audit events carry `companyId` when known. `GET /saved-requests` and
+   `/stats` take `company=<id>|none` (anything else `400`; an unknown id matches nothing).
+4. A post refused because another company file is open: attempt outcome `unavailable`, problem
+   `409 company-file-open-elsewhere` with `openFile` and `neededFile` (or `503 company-file-unavailable` when the cause
+   is not certain).
+
+**Acceptance**: API spec M17 A-7, A-8; old calls without `company` answer as before.
+
+---
+
 ## Not needed (decided)
 
 - No bulk endpoints. About 10 statements a day doesn't justify them.
 - No PDF or attachment storage. The accountant reads the PDF from email. Uploaded PDFs are discarded after reading
   (R-13.6); only name, size and SHA-256 are kept.
 - No multi-file upload. One PDF per upload (R-13.1).
+- No browser folder picker for company files: the folder is a server path in the API's settings (R-18).
 - No server push (SSE or WebSocket). The dashboard polls stats every 60 s and a posting request every 3 s.
 - No merging of repeat pushes into one statement (v2): the owner wants each push as its own row.
 - No editing or deleting of audit events, ever.
@@ -743,6 +842,10 @@ the reason.
 
 | Date | Change | Requirements | Source |
 |---|---|---|---|
+| 2026-11-04 | R-20.2 amended: Sync now refused by the company's file answers `409 company-file-open-elsewhere` / `503 company-file-unavailable` (API `SyncProblem`), recorded as a skipped attempt; the fake API follows. | R-20 | `docs/superpowers/plans/2026-11-03-multi-company-plan.md` §6 (Final review fixes) |
+| 2026-11-04 | Static check of R-18–R-20 against API M17 (read from its code and `openapi-v2.json`, no live run): amended R-18.3/18.4 (check answers incl. `412`, `503 company-file-unavailable`, `409 company-not-ready` for a missing company), R-19 (`companyMatch.candidates` are ids; set-company accepts `ambiguous`; upload `400`s; `default` beats `matched`), R-20 (unknown company id is `400` on lists and sync, an empty page on the history) and the audit `detail` shapes; the fake API follows. | R-18, R-19, R-20 | `docs/superpowers/plans/2026-11-03-multi-company-plan.md` §6 |
+| 2026-11-04 | R-18–R-20 implemented in the fake API (`src/mocks/handlers/companies.ts`, `requests.ts`, `extractions.ts`, `support.ts`, `dashboard.ts`, `audit.ts`) and used by Companies, Statements, Upload, Lists and Home. Open for the API side: audit `detail` shapes (notes on R-18, R-19). | R-18, R-19, R-20 | `docs/superpowers/plans/2026-11-03-multi-company-plan.md` §6 |
+| 2026-11-03 | New **R-18**, **R-19**, **R-20**: company files found in a server folder, company on statements with a *needs company* hold, company-scoped extraction match, lists, summary and audit (API M17). | R-18, R-19, R-20 | `docs/superpowers/specs/2026-11-03-multi-company-spec.md` |
 | 2026-10-30 | R-17 implemented in the fake API (`src/mocks/handlers/support.ts`, seeded history in `mocks/fixtures/lists.ts`) and used by the new **Lists** page; API M15 built and tested end to end. | R-17 | `docs/superpowers/plans/2026-10-30-qb-lists-page-plan.md` §6 |
 | 2026-10-30 | New **R-17**: `GET /quickbooks/lists/syncs`, the QuickBooks list sync history (automatic, manual and import attempts, paged, filterable) for the new **Lists** page (API M15). | R-17 | `docs/superpowers/specs/2026-10-30-qb-lists-page-spec.md` |
 | 2026-10-29 | R-16 implemented in the fake API (`src/mocks/handlers/support.ts`, bare-string problem `type`) and used by the statement page and the upload review (`QbListsStatus`). | R-16 | `docs/superpowers/specs/2026-10-29-qb-list-sync-spec.md` |

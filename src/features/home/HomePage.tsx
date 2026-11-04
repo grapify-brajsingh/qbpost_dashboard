@@ -2,11 +2,13 @@ import { lazy, Suspense, useMemo, useState } from 'react'
 import { useIsFetching, useQueryClient } from '@tanstack/react-query'
 import { RotateCwIcon } from 'lucide-react'
 import { format } from 'date-fns'
+import { useCompanies } from '@/api/queries/companies'
 import { useAuditEvents } from '@/api/queries/audit'
 import { useAuditCounts, useAuditTrend, useSummaryCounts, useSummaryFigures, useSummaryTrend, type SummaryParams } from '@/api/queries/home'
 import { requestKeys, STATS_POLL_MS, useRequestsList, useStats } from '@/api/queries/requests'
 import { hasScope, useSession } from '@/auth/useSession'
 import { formatDate, useUrlFilters } from '@/components/filters'
+import { CompanySelect } from '@/components/CompanySelect'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -27,7 +29,7 @@ import { WaitingCard } from './WaitingCard'
 const FlowChart = lazy(() => import('./FlowChart').then((m) => ({ default: m.FlowChart })))
 
 // Module level: useUrlFilters memoises on the spec's identity.
-const VIEW_SPEC = { period: { kind: 'enum', values: PERIOD_VALUES } } as const
+const VIEW_SPEC = { period: { kind: 'enum', values: PERIOD_VALUES }, company: { kind: 'text' } } as const
 
 /** The server's largest page: the queue's oldest 100 are enough for its ages and its oldest five. */
 const QUEUE_PAGE_SIZE = 100
@@ -41,6 +43,11 @@ export function HomePage() {
   const qc = useQueryClient()
   const view = useUrlFilters(VIEW_SPEC)
   const period = view.values.period ?? DEFAULT_PERIOD
+  // The URL holds text; only plain digits for a positive whole number are a company id, anything else means "All companies".
+  const companyText = view.values.company
+  const companyNumber = companyText !== undefined && /^[1-9]\d*$/.test(companyText) ? Number(companyText) : undefined
+  const companyParam = companyNumber === undefined ? undefined : String(companyNumber)
+  const companies = useCompanies().data?.items
   const days = Number(period)
   const periodLabel = `${days} days`
 
@@ -50,20 +57,20 @@ export function HomePage() {
   const current = useMemo(() => ({ from: range.from.toISOString(), to: queryEnd(range).toISOString() }), [range])
   const previous = useMemo(() => ({ from: range.prevFrom.toISOString(), to: range.prevTo.toISOString() }), [range])
 
-  const stats = useStats({ refetchInterval: STATS_POLL_MS })
-  const queue = useRequestsList({ status: paramsFor('review', isAdmin).status, sort: 'received', pageSize: QUEUE_PAGE_SIZE })
+  const stats = useStats({ refetchInterval: STATS_POLL_MS, company: companyParam })
+  const queue = useRequestsList({ status: paramsFor('review', isAdmin).status, sort: 'received', pageSize: QUEUE_PAGE_SIZE, company: companyParam })
   // R-11 first: one call for the period band, the chart and the posted figures. The summary's `to` is exclusive, so
   // the previous period ends exactly where this one starts. Only a 404 (an older API) falls back to the audit feed.
   const summaryParams = useMemo<SummaryParams>(
-    () => ({ current, previous: { from: previous.from, to: current.from }, bucket: days > 31 ? 'week' : 'day', tz: TIME_ZONE }),
-    [current, previous, days],
+    () => ({ current, previous: { from: previous.from, to: current.from }, bucket: days > 31 ? 'week' : 'day', tz: TIME_ZONE, company: companyNumber }),
+    [current, previous, days, companyNumber],
   )
   const summaryCounts = useSummaryCounts(summaryParams)
   const summaryTrend = useSummaryTrend(summaryParams)
   const figures = useSummaryFigures(summaryParams)
   const olderApi = summaryCounts.isSuccess && summaryCounts.data === null
-  const auditCounts = useAuditCounts(current, previous, { enabled: olderApi })
-  const auditTrend = useAuditTrend(current, { enabled: olderApi })
+  const auditCounts = useAuditCounts(current, previous, { enabled: olderApi, company: companyNumber })
+  const auditTrend = useAuditTrend(current, { enabled: olderApi, company: companyNumber })
   const counts = olderApi ? auditCounts : summaryCounts
   const trend = olderApi ? auditTrend : summaryTrend
   const recent = useAuditEvents({ pageSize: RECENT_COUNT })
@@ -91,6 +98,17 @@ export function HomePage() {
         }
         actions={
           <>
+            {/* Only worth choosing between two or more companies, as on Lists. */}
+            {companies && companies.length > 1 && (
+              <CompanySelect
+                label="Company"
+                emptyLabel="All companies"
+                size="sm"
+                companies={companies}
+                value={companyNumber}
+                onChange={(id) => view.set({ company: id === undefined ? undefined : String(id) })}
+              />
+            )}
             <ToggleGroup
               type="single"
               variant="outline"

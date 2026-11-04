@@ -18,24 +18,26 @@ export interface InstantRange {
 
 // Under ['audit']: every mutation that invalidates the audit feed refreshes these too.
 export const homeKeys = {
-  counts: (current: InstantRange, previous: InstantRange) => ['audit', 'home', 'counts', current, previous] as const,
-  trend: (range: InstantRange) => ['audit', 'home', 'trend', range] as const,
+  counts: (current: InstantRange, previous: InstantRange, company?: number) =>
+    ['audit', 'home', 'counts', current, previous, ...(company === undefined ? [] : [company])] as const,
+  trend: (range: InstantRange, company?: number) => ['audit', 'home', 'trend', range, ...(company === undefined ? [] : [company])] as const,
   summary: (params: SummaryParams) => ['audit', 'home', 'summary', params] as const,
 }
 
-function auditUrl(actions: readonly string[], range: InstantRange, page: number, pageSize: number): string {
+function auditUrl(actions: readonly string[], range: InstantRange, page: number, pageSize: number, company?: number): string {
   const qs = new URLSearchParams()
   for (const a of actions) qs.append('action', a)
   qs.set('from', range.from)
   qs.set('to', range.to)
+  if (company !== undefined) qs.set('company', String(company))
   if (page > 1) qs.set('page', String(page))
   qs.set('pageSize', String(pageSize))
   return `/audit-events?${qs.toString()}`
 }
 
 /** How many events of one action the feed holds in a range: the page's `total`, one row fetched. */
-async function auditTotal(action: string, range: InstantRange, signal?: AbortSignal): Promise<number> {
-  const r = await api.get<Page<AuditEvent>>(auditUrl([action], range, 1, 1), { signal })
+async function auditTotal(action: string, range: InstantRange, company: number | undefined, signal?: AbortSignal): Promise<number> {
+  const r = await api.get<Page<AuditEvent>>(auditUrl([action], range, 1, 1, company), { signal })
   return r.data.total
 }
 
@@ -46,18 +48,18 @@ export interface PeriodCounts {
   previous: ActionCounts
 }
 
-async function countsFor(range: InstantRange, signal?: AbortSignal): Promise<ActionCounts> {
-  const totals = await Promise.all(THROUGHPUT_ACTIONS.map((a) => auditTotal(a, range, signal)))
+async function countsFor(range: InstantRange, company: number | undefined, signal?: AbortSignal): Promise<ActionCounts> {
+  const totals = await Promise.all(THROUGHPUT_ACTIONS.map((a) => auditTotal(a, range, company, signal)))
   return Object.fromEntries(THROUGHPUT_ACTIONS.map((a, i) => [a, totals[i]])) as ActionCounts
 }
 
 /** Exact counts per action for the period and the one before it. */
-export function useAuditCounts(current: InstantRange, previous: InstantRange, opts: { enabled?: boolean } = {}) {
+export function useAuditCounts(current: InstantRange, previous: InstantRange, opts: { enabled?: boolean; company?: number } = {}) {
   return useQuery<PeriodCounts>({
-    queryKey: homeKeys.counts(current, previous),
+    queryKey: homeKeys.counts(current, previous, opts.company),
     enabled: opts.enabled,
     queryFn: async ({ signal }) => {
-      const [c, p] = await Promise.all([countsFor(current, signal), countsFor(previous, signal)])
+      const [c, p] = await Promise.all([countsFor(current, opts.company, signal), countsFor(previous, opts.company, signal)])
       return { current: c, previous: p }
     },
     placeholderData: keepPreviousData,
@@ -74,15 +76,15 @@ export interface Trend {
 }
 
 /** Received and posted events in the range, newest first, at most `TREND_MAX_PAGES` pages. */
-export function useAuditTrend(range: InstantRange, opts: { enabled?: boolean } = {}) {
+export function useAuditTrend(range: InstantRange, opts: { enabled?: boolean; company?: number } = {}) {
   return useQuery<Trend>({
-    queryKey: homeKeys.trend(range),
+    queryKey: homeKeys.trend(range, opts.company),
     enabled: opts.enabled,
     queryFn: async ({ signal }) => {
       const events: Trend['events'] = []
       let total = 0
       for (let page = 1; page <= TREND_MAX_PAGES; page++) {
-        const r = await api.get<Page<AuditEvent>>(auditUrl(['received', 'posted'], range, page, TREND_PAGE_SIZE), { signal })
+        const r = await api.get<Page<AuditEvent>>(auditUrl(['received', 'posted'], range, page, TREND_PAGE_SIZE, opts.company), { signal })
         total = r.data.total
         for (const e of r.data.items) events.push({ atUtc: e.atUtc, action: e.action })
         if (r.data.items.length === 0 || events.length >= total) break
@@ -102,6 +104,8 @@ export interface SummaryParams {
   bucket: 'day' | 'week'
   /** IANA zone for the day buckets: the browser's. */
   tz: string
+  /** One company's figures; omitted means all companies. */
+  company?: number
 }
 
 function summaryUrl(p: SummaryParams): string {
@@ -113,6 +117,7 @@ function summaryUrl(p: SummaryParams): string {
     bucket: p.bucket,
     tz: p.tz,
   })
+  if (p.company !== undefined) qs.set('company', String(p.company))
   return `/dashboard/summary?${qs.toString()}`
 }
 

@@ -2,7 +2,8 @@ import { ClearFilters, DateRangeChip, FilterChip, SearchBox } from '@/components
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import type { Stats } from '@/api/schema'
+import type { Company, Stats } from '@/api/schema'
+import { companyLabel } from '@/features/companies/companiesView'
 import { countFor, STATUS_TABS, type StatusTab } from './statusTabs'
 
 export interface ToolbarFilters {
@@ -14,6 +15,8 @@ export interface ToolbarFilters {
   minTotal?: number
   maxTotal?: number
   duplicate?: boolean
+  /** A company id as text, or `none`. */
+  company?: string
 }
 
 export function StatusTabs({
@@ -120,11 +123,14 @@ export function StatementsToolbar({
   onSet,
   onClear,
   activeCount,
+  companies,
 }: {
   filters: ToolbarFilters
   onSet: (patch: Partial<ToolbarFilters>) => void
   onClear: () => void
   activeCount: number
+  /** Undefined on an older API: the Company chip is left out. */
+  companies?: readonly Company[]
 }) {
   return (
     <div role="search" aria-label="Filters" className="flex flex-wrap items-center gap-2">
@@ -149,6 +155,14 @@ export function StatementsToolbar({
         options={DUPLICATE_OPTIONS}
         onChange={(v) => onSet({ duplicate: v === undefined ? undefined : v === 'true' })}
       />
+      {companies && (
+        <FilterChip
+          label="Company"
+          value={filters.company}
+          options={[{ value: 'none', label: 'No company' }, ...companies.map((c) => ({ value: String(c.id), label: companyLabel(c) }))]}
+          onChange={(v) => onSet({ company: v })}
+        />
+      )}
       <ClearFilters onClear={onClear} disabled={activeCount === 0} />
     </div>
   )

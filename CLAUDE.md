@@ -88,9 +88,9 @@ the 5 s timeout under full-suite load but pass when run alone; say so if it happ
 ```
 src/
   main.tsx            providers (theme, QueryClient, Tooltip, Router); starts MSW when MODE === 'mock'
-  router.tsx          route table: / (Home), /statements[/:id], /audit, /users[/:id] (admin), /account, auth pages
+  router.tsx          route table: / (Home), /statements[/:id], /companies, /audit, /users[/:id] (admin), /account, auth pages
   api/
-    client.ts         fetch wrapper: base /api/v1, bearer token from memory, one refresh-and-retry on 401
+    client.ts         fetch wrapper: base /api/v2, bearer token from memory, one refresh-and-retry on 401
     schema.ts         hand-written API types (to be replaced by `npm run gen:api` output)
     problem.ts        RFC 7807 problems → ApiError
     queries/*.ts      every server call lives here as a React Query hook, with its query keys
@@ -99,17 +99,17 @@ src/
   components/ui/      shadcn primitives (added with the shadcn CLI; see below)
   components/         app-wide pieces: PageHeader, DataPanel/EmptyState/Pager, ProblemAlert, StatusBadge,
                       FlagChips, Money, Timestamp, PushId, filters/ (URL-backed filter chips)
-  features/<area>/    one folder per page/area: home, statements/{list,detail,sheet}, requests/{transactions,
+  features/<area>/    one folder per page/area: home, companies, statements/{list,detail,sheet}, requests/{transactions,
                       posting,versions,attempts,dialogs}, audit, users, account
   lib/                pure helpers (dates, money, pushId, pageParam, motion)
   mocks/              fake API: handlers/ per area, fixtures/, in-memory db, derived audit feed
   test/               vitest setup (MSW server, jsdom shims) and renderApp / renderWithProviders
 docs/
-  api-requirements-for-dashboard.md   what the API must provide: R-1…R-12, tracker, changelog
+  api-requirements-for-dashboard.md   what the API must provide: R-1…R-20, tracker, changelog
   superpowers/specs, superpowers/plans
 ```
 
-**Data flow**: page component → hook in `api/queries/` → `api` client → `/api/v1/...` (the real API, or MSW in mock mode
+**Data flow**: page component → hook in `api/queries/` → `api` client → `/api/v2/...` (the real API, or MSW in mock mode
 and tests). No other state library. URL search params hold filters and view state (`useUrlFilters`). Small stores hold
 cross-component flags (`draftDirtyStore`, `postFlightStore`).
 

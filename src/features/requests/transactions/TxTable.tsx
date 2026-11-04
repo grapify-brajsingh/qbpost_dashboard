@@ -49,6 +49,8 @@ export interface TxEditing {
   onCell: (rowKey: string, field: TxField, value: unknown) => void
   onPost: (rowKey: string, post: boolean) => void
   onToggleDelete: (rowKey: string) => void
+  /** Set while the QuickBooks names cannot be picked (no company yet): the reason, shown on the locked cells. */
+  namesLocked?: string
 }
 
 export interface TxTableProps {
@@ -62,6 +64,9 @@ export interface TxTableProps {
   /** Payload index of a row to scroll to and highlight. */
   highlight?: number | null
 }
+
+/** The cells whose values are QuickBooks names, picked from the company's lists. */
+const NAME_FIELDS: ReadonlySet<string> = new Set(['payee', 'account', 'lineAccount'])
 
 /** The finding reasons whose candidates fill a cell. */
 const CANDIDATE_FIELD: Partial<Record<string, TxField>> = { 'no-account-rule': 'lineAccount', 'unknown-payee': 'payee' }
@@ -199,7 +204,8 @@ export function TxTable({ rows, edit, findings, readErrors, toolbar, highlight =
   const nav = columns.filter(isNavColumn)
   const baseRows: Txn[] = edit && Array.isArray(edit.draft.base.transactions) ? (edit.draft.base.transactions as Txn[]) : []
   const isDirtyCell = (key: string, field: TxField | undefined) => edit !== undefined && field !== undefined && edit.draft.dirtyCells.has(`${key}:${field}`)
-  const canEdit = (r: DisplayRow, col: TxColumn) => edit !== undefined && isEditableField(col.field) && !r.deleted
+  const namesLocked = (col: TxColumn) => edit?.namesLocked !== undefined && col.field !== undefined && NAME_FIELDS.has(col.field)
+  const canEdit = (r: DisplayRow, col: TxColumn) => edit !== undefined && isEditableField(col.field) && !r.deleted && !namesLocked(col)
 
   // Rows with a line under a cell ("was …" or a problem reason) are taller. Worked out once per render.
   const tallKeys = new Set<string>()
@@ -438,7 +444,7 @@ export function TxTable({ rows, edit, findings, readErrors, toolbar, highlight =
                           data-field={c.field}
                           data-dirty={dirty ? 'true' : undefined}
                           data-read-error={unreadable ? 'true' : undefined}
-                          title={unreadable ? 'This value could not be read' : undefined}
+                          title={unreadable ? 'This value could not be read' : namesLocked(c) ? edit?.namesLocked : undefined}
                           tabIndex={tabStop?.row === index && tabStop.col === c.id ? 0 : -1}
                           onFocus={(e) => {
                             if (e.target === e.currentTarget && (focus?.row !== index || focus.col !== c.id)) setFocus(pos)
@@ -469,7 +475,7 @@ export function TxTable({ rows, edit, findings, readErrors, toolbar, highlight =
                                   n={n}
                                   found={found}
                                   unreadable={[...(bad ?? [])]}
-                                  onCandidate={edit && !deleted ? (field, v) => edit.onCell(key, field, v) : undefined}
+                                  onCandidate={edit && !deleted && edit.namesLocked === undefined ? (field, v) => edit.onCell(key, field, v) : undefined}
                                 />
                               )}
                             </span>
