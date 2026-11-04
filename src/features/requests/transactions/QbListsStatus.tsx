@@ -23,15 +23,15 @@ function useNow(): number {
  * How fresh the QuickBooks lists are, and (for editors and admins) a Sync now button (R-16). The draft is never
  * touched: a sync only replaces the lists cache, so "not in QuickBooks" flags update where they stand.
  */
-export function QbListsStatus({ className }: { className?: string }) {
+export function QbListsStatus({ className, company }: { className?: string; /** `undefined` = the API's default company. */ company?: number }) {
   const { me } = useSession()
-  const lists = useQbLists()
-  const sync = useSyncQbLists()
+  const lists = useQbLists(company)
+  const sync = useSyncQbLists(company)
   const qc = useQueryClient()
   const now = useNow()
   const canSync = hasScope(me, 'requests:edit')
   // Read from the mutation cache, so a sync started before leaving the page still shows after coming back.
-  const syncing = useIsMutating({ mutationKey: listKeys.sync }) > 0
+  const syncing = useIsMutating({ mutationKey: listKeys.sync(company) }) > 0
   const view = lists.data && listsStatus(lists.data, now)
 
   async function syncNow() {
@@ -41,7 +41,7 @@ export function QbListsStatus({ className }: { className?: string }) {
     } catch (e) {
       const f = syncFailure(e)
       toast[f.level](f.text)
-      if (f.stillRunning) startQbListRechecks(qc)
+      if (f.stillRunning) startQbListRechecks(qc, company)
     }
   }
 

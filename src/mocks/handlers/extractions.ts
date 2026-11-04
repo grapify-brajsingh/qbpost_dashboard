@@ -1,7 +1,7 @@
 // R-13: `POST /statement-extractions`. Reads one uploaded PDF and returns the rows, saving nothing but a short-lived
 // extraction record (no PDF bytes, no text).
 import { http, HttpResponse } from 'msw'
-import type { DuplicateReason, Extraction, Payload, PossibleDuplicate, Txn } from '@/api/schema'
+import type { DuplicateReason, Extraction, ExtractionCompany, Payload, PossibleDuplicate, Txn } from '@/api/schema'
 import { mockControl, mockDb, type ExtractionRecord, type RequestRecord } from '../db'
 import { EXTRACTION_MODEL, outcomeFor, PROMPT_VERSION } from '../fixtures/extractions'
 import { duplicateReasons, rowsOf } from '../payloadRules'
@@ -107,6 +107,8 @@ export const extractionHandlers = [
     if (outcome.kind === 'problem') return problem(outcome.status, outcome.code, outcome.title, outcome.detail)
 
     const now = Date.now()
+    const company: ExtractionCompany = mockControl.nextMatch ?? { match: 'none', printedName: null, dbaName: null, companyId: null, candidates: [] }
+    mockControl.nextMatch = null
     const record: ExtractionRecord = {
       id: crypto.randomUUID(),
       userId: auth.user.id,
@@ -114,6 +116,7 @@ export const extractionHandlers = [
       model: EXTRACTION_MODEL,
       promptVersion: PROMPT_VERSION,
       payload: outcome.payload,
+      company,
       extractedUtc: nowUtc(),
       expiresUtc: new Date(now + RECORD_TTL_MS).toISOString(),
       savedRequestId: null,
@@ -129,6 +132,7 @@ export const extractionHandlers = [
       isBankStatement: true,
       payload: structuredClone(record.payload),
       possibleDuplicates: possibleDuplicates(record.payload, record.file.sha256),
+      company: structuredClone(company),
     }
     return HttpResponse.json(body)
   }),

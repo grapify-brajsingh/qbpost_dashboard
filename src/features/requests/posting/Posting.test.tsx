@@ -66,7 +66,7 @@ describe('Post button and dialog', () => {
 
   test('the dialog shows subject, rows, control total and validation state; a stale snapshot still allows posting', async () => {
     payloadOf(1).controlTotal = 4820.17
-    record(1).validation.versionNumber = 2
+    record(1).validation!.versionNumber = 2
     const { user } = await open(1)
     await user.click(postButton())
     const d = await screen.findByRole('dialog')
@@ -82,11 +82,25 @@ describe('Post button and dialog', () => {
     const { user } = await open(1)
     await user.click(postButton())
     const d = await screen.findByRole('dialog')
-    expect(within(d).getByRole('heading', { name: 'Post 12 rows to QuickBooks?' })).toBeInTheDocument()
+    expect(within(d).getByRole('heading', { name: 'Post 12 rows to QuickBooks for Takoma Park Grocery Store Inc?' })).toBeInTheDocument()
     expect(within(d).getByRole('button', { name: 'Post 12 rows' })).toBeEnabled()
     expect(d).not.toHaveTextContent(/skipped/)
     expect(d).toHaveTextContent(/will post\./)
     await user.click(within(d).getByRole('button', { name: 'Cancel' }))
+  })
+
+  test('names no company on an older API whose statement has no company key', async () => {
+    server.use(
+      http.get(`${API}/1`, async () => {
+        const body = toDetail(record(1), 'admin') as unknown as Record<string, unknown>
+        delete body.company
+        return HttpResponse.json(body, { headers: { ETag: `"${record(1).rowVersion}"` } })
+      }),
+    )
+    const { user } = await open(1)
+    await user.click(postButton())
+    const d = await screen.findByRole('dialog')
+    expect(within(d).getByRole('heading', { name: 'Post 12 rows to QuickBooks?' })).toBeInTheDocument()
   })
 
   test("rows marked don't post are skipped: count, amount and sentence follow the saved payload", async () => {
@@ -97,7 +111,7 @@ describe('Post button and dialog', () => {
     const { user } = await open(1)
     await user.click(postButton())
     const d = await screen.findByRole('dialog')
-    expect(within(d).getByRole('heading', { name: 'Post 10 rows to QuickBooks?' })).toBeInTheDocument()
+    expect(within(d).getByRole('heading', { name: 'Post 10 rows to QuickBooks for Takoma Park Grocery Store Inc?' })).toBeInTheDocument()
     expect(within(d).getByRole('button', { name: 'Post 10 rows' })).toBeInTheDocument()
     expect(d).toHaveTextContent("2 rows marked don't post are skipped.")
     expect(d).toHaveTextContent(`${(posting / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} will post.`)
@@ -428,7 +442,7 @@ describe('the version the dialog showed (counts)', () => {
     const { user, queryClient } = await open(1)
     await user.click(postButton())
     const d = await screen.findByRole('dialog')
-    expect(within(d).getByRole('heading', { name: 'Post 12 rows to QuickBooks?' })).toBeInTheDocument()
+    expect(within(d).getByRole('heading', { name: 'Post 12 rows to QuickBooks for Takoma Park Grocery Store Inc?' })).toBeInTheDocument()
     const r = record(1)
     const next = structuredClone(r.versions[r.versions.length - 1])
     ;(next.payload.transactions as Txn[]).splice(0, 4)
@@ -437,8 +451,20 @@ describe('the version the dialog showed (counts)', () => {
     r.rowVersion++
     await act(() => queryClient.invalidateQueries({ queryKey: requestKeys.detail('1'), exact: true }))
     expect(await within(d).findByText('This request changed while this dialog was open.')).toBeInTheDocument()
-    expect(within(d).getByRole('heading', { name: 'Post 12 rows to QuickBooks?' })).toBeInTheDocument()
+    expect(within(d).getByRole('heading', { name: 'Post 12 rows to QuickBooks for Takoma Park Grocery Store Inc?' })).toBeInTheDocument()
     expect(within(d).getByRole('button', { name: 'Post 12 rows' })).toBeInTheDocument()
+  })
+
+  test('a reload that moved the statement to another company keeps the company the dialog opened on', async () => {
+    const { user, queryClient } = await open(1)
+    await user.click(postButton())
+    const d = await screen.findByRole('dialog')
+    const r = record(1)
+    r.companyId = 2
+    r.rowVersion++
+    await act(() => queryClient.invalidateQueries({ queryKey: requestKeys.detail('1'), exact: true }))
+    await waitFor(() => expect(queryClient.getQueryData<RequestWithEtag>(requestKeys.detail('1'))?.request.company?.id).toBe(2))
+    expect(within(d).getByRole('heading', { name: 'Post 12 rows to QuickBooks for Takoma Park Grocery Store Inc?' })).toBeInTheDocument()
   })
 })
 

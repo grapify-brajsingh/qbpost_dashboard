@@ -30,6 +30,8 @@ interface Props {
   request: RequestDetail
   /** The payload of the version the dialog opened on (the one whose ETag is posted). */
   seenPayload: RequestDetail['payload']
+  /** The company of the version the dialog opened on, named in the question; null or undefined leaves it out. */
+  seenCompany?: RequestDetail['company']
   /** The other request when this one may be a duplicate (flagged, or named by a 409 duplicate-unconfirmed). */
   duplicate: DuplicateInfo | null
   /** A newer version arrived while the dialog was open; Confirm still posts the one it opened on (the API answers 412). */
@@ -45,11 +47,12 @@ export function PostDialog({ open, onOpenChange, ...rest }: Props) {
   )
 }
 
-function Body({ request, seenPayload, duplicate, changed, onConfirm, onCancel }: Omit<Props, 'open' | 'onOpenChange'> & { onCancel: () => void }) {
+function Body({ request, seenPayload, seenCompany, duplicate, changed, onConfirm, onCancel }: Omit<Props, 'open' | 'onOpenChange'> & { onCancel: () => void }) {
   const [anyway, setAnyway] = useState(false)
   const [sent, setSent] = useState(false)
   const v = request.validation
-  const outdated = v.versionNumber !== undefined && v.versionNumber < request.currentVersion
+  // Null: no stored validation (set-company cleared it); the API validates again before posting.
+  const outdated = v?.versionNumber !== undefined && v.versionNumber < request.currentVersion
   const blocked = duplicate !== null && !anyway
   // The dialog only opens on a saved (not dirty) draft, so the saved payload is what will be posted.
   const stats = postStats(createDraft(seenPayload))
@@ -58,7 +61,7 @@ function Body({ request, seenPayload, duplicate, changed, onConfirm, onCancel }:
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{`Post ${rowsLabel} to QuickBooks?`}</DialogTitle>
+        <DialogTitle>{seenCompany ? `Post ${rowsLabel} to QuickBooks for ${seenCompany.displayName}?` : `Post ${rowsLabel} to QuickBooks?`}</DialogTitle>
         <DialogDescription>
           {`${formatCents(stats.allCents - stats.skippedCents)} will post.`}
           {stats.skipped > 0 && ` ${stats.skipped} ${stats.skipped === 1 ? 'row' : 'rows'} marked don't post ${stats.skipped === 1 ? 'is' : 'are'} skipped.`}
@@ -74,9 +77,9 @@ function Body({ request, seenPayload, duplicate, changed, onConfirm, onCancel }:
         <dd className="font-medium tabular-nums">{formatMoney(typeof seenPayload.controlTotal === 'number' ? seenPayload.controlTotal : null)}</dd>
       </dl>
       <div className="space-y-1 text-sm">
-        <p>Validation: {STATE_LABEL[v.state]}</p>
-        {v.state !== 'ok' && <p className="text-warning">Validation found problems. The API checks again before posting.</p>}
-        {v.errors && v.errors.length > 0 && (
+        <p>Validation: {v ? STATE_LABEL[v.state] : 'Not checked yet'}</p>
+        {v && v.state !== 'ok' && <p className="text-warning">Validation found problems. The API checks again before posting.</p>}
+        {v?.errors && v.errors.length > 0 && (
           <ul aria-label="Validation problems" className="list-disc pl-5 text-muted-foreground">
             {v.errors.map((e, i) => (
               <li key={i} className="break-words">

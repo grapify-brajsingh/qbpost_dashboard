@@ -17,7 +17,7 @@ export type AttemptOutcome =
   | 'unavailable'
   | 'error'
   | 'unknown'
-export type Action = 'edit' | 'validate' | 'post' | 'discard' | 'restore' | 'resolve'
+export type Action = 'edit' | 'validate' | 'post' | 'discard' | 'restore' | 'resolve' | 'set-company'
 export type Role = 'admin' | 'editor' | 'viewer'
 
 /** Deliberately loose: stored payloads may be unreadable or carry extra fields. */
@@ -100,6 +100,82 @@ export interface PossibleDuplicate {
   reasons: DuplicateReason[]
 }
 
+export type CompanyState = 'active' | 'ambiguous' | 'missing' | 'disabled'
+export type CompanyAccess = 'unchecked' | 'approved' | 'needs-approval' | 'file-not-found' | 'error'
+export type CompanySource = 'matched' | 'chosen' | 'migrated' | 'default'
+
+/** The short form of a company that other payloads carry (R-18). */
+export interface CompanyRef {
+  id: number
+  code: string | null
+  displayName: string
+}
+
+/** One QuickBooks company file the API knows about (R-18, R-19). */
+export interface Company extends CompanyRef {
+  folderName: string
+  fileName: string | null
+  filePath: string | null
+  state: CompanyState
+  candidateFiles: string[]
+  access: CompanyAccess
+  accessCheckedUtc: string | null
+  accessMessage: string | null
+  qbCompanyName: string | null
+  qbLegalName: string | null
+  matchNames: string[]
+  isDefault: boolean
+  rowVersion: number
+  lists: { syncedUtc: string | null; outcome: QbListSync['outcome'] | null } | null
+  waitingCount: number
+}
+
+/** `GET /companies` answer. */
+export interface CompaniesResponse {
+  rootFolder: string | null
+  rootConfigured: boolean
+  rootReachable: boolean
+  lastScanUtc: string | null
+  items: Company[]
+}
+
+/** `POST /companies/scan` answer. */
+export interface CompanyScanResult {
+  added: number
+  updated: number
+  missing: number
+  ambiguous: number
+  noCompanyFile: string[]
+  items: Company[]
+}
+
+/** `PATCH /companies/{id}` body; send only what changes. */
+export interface CompanyPatch {
+  matchNames?: string[]
+  filePath?: string
+  disabled?: boolean
+}
+
+/** How the printed business name on a statement matched the companies (R-20). */
+export interface CompanyMatch {
+  match: 'matched' | 'none' | 'ambiguous'
+  printedName: string | null
+  dbaName: string | null
+  candidates: CompanyRef[]
+}
+
+/**
+ * `RequestDetail.companyMatch`: the extraction's match copied at save. Unlike the extraction's own block it lists the
+ * candidates as company ids (the real API sends `[2, 5]`, not references), so names come from `GET /companies`.
+ */
+export interface RequestCompanyMatch extends Omit<CompanyMatch, 'candidates'> {
+  candidates: number[]
+}
+
+export interface ExtractionCompany extends CompanyMatch {
+  companyId: number | null
+}
+
 /** `POST /statement-extractions` answer (R-13.7): the rows read from a PDF, nothing saved yet. */
 export interface Extraction {
   extractionId: string
@@ -111,6 +187,8 @@ export interface Extraction {
   isBankStatement: boolean
   payload: Payload
   possibleDuplicates?: PossibleDuplicate[]
+  /** Missing on an older API means unknown. */
+  company?: ExtractionCompany
 }
 
 export interface ValidationSummary {
@@ -154,7 +232,8 @@ export interface RequestSummary {
     reasons: string[]
     acknowledgedBy: Actor | null
   }
-  validation: Omit<ValidationSnapshot, 'validation'>
+  /** Null when the statement has no stored validation, e.g. after set-company cleared it (R-19.4). */
+  validation: Omit<ValidationSnapshot, 'validation'> | null
   lastAttempt: {
     id: number
     outcome: AttemptOutcome
@@ -174,13 +253,18 @@ export interface RequestSummary {
   created: { utc: string; by: Actor }
   updated: { utc: string; by: Actor }
   allowedActions: Action[]
+  /** The company the statement belongs to; a missing key on an older API means unknown. */
+  company?: CompanyRef | null
+  companySource?: CompanySource | null
 }
 
 export interface RequestDetail extends RequestSummary {
+  companyMatch?: RequestCompanyMatch | null
   payload: Payload
   readErrors: string[]
   otherUnpostedPushes: OtherPush[]
-  validation: ValidationSnapshot
+  /** Null when the statement has no stored validation, e.g. after set-company cleared it (R-19.4). */
+  validation: ValidationSnapshot | null
   ledgerBatch?: {
     postId: string
     status: string
@@ -206,6 +290,7 @@ export interface Stats {
   needsAttention: { pending: number; all: number }
   duplicate: { pending: number; all: number }
   hasErrors: { pending: number; all: number }
+  needsCompany?: number
 }
 
 export interface VersionSummary {
@@ -395,6 +480,11 @@ export const AUDIT_ACTIONS = [
   'request-edited',
   'user-session-revoked',
   'user-other',
+  // Multiple company files (R-18, R-19).
+  'companies-scanned',
+  'company-checked',
+  'company-updated',
+  'company-assigned',
 ] as const
 export type AuditAction = (typeof AUDIT_ACTIONS)[number]
 
@@ -418,4 +508,5 @@ export interface AuditEvent {
   new: unknown
   versionNumber: number | null
   detail: Record<string, unknown> | null
+  companyId?: number | null
 }

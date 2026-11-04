@@ -2,6 +2,7 @@
 import { ApiTimeoutError } from '@/api/client'
 import { ApiError, problemCode, retryAfterSeconds } from '@/api/problem'
 import type { Finding, RequestDetail } from '@/api/schema'
+import { companyFileMessage } from '@/features/requests/transactions/qbListsSync'
 
 export type PostOutcomeKind =
   | 'posted'
@@ -91,6 +92,14 @@ function fromProblem(e: ApiError): PostOutcome {
   if (code === 'post-outcome-unknown' || p.savedRequestStatus === 'unknown') {
     return { kind: 'unknown', title: UNKNOWN_TITLE, detail: str(p.detail), attemptId }
   }
+  // The wrong company file is open, or this company's file can't be opened: nothing posted, and waiting won't fix it,
+  // so no retryAfter (Post stays enabled and nothing re-sends on its own).
+  if (code === 'company-file-open-elsewhere') {
+    return { kind: 'unavailable', title: companyFileMessage(p, 'post'), attemptId }
+  }
+  if (code === 'company-file-unavailable') {
+    return { kind: 'unavailable', title: `QuickBooks couldn't open ${str(p.neededFile) ?? 'the company file'}.`, detail: str(p.detail), attemptId }
+  }
   const retryAfter = retryAfterSeconds(e.headers) ?? num(p.retryAfterSeconds) ?? undefined
   switch (p.status) {
     case 422:
@@ -106,6 +115,10 @@ function fromProblem(e: ApiError): PostOutcome {
         const by = isObj(p.startedBy) ? str(p.startedBy.name) : undefined
         const what = code === 'already-posting' ? 'is already posting' : 'was already posted'
         return { kind: 'conflict', title: `${by ?? 'Someone else'} pressed Post: this request ${what}.`, attemptId }
+      }
+      // The statement has no company, or its company isn't approved in QuickBooks: nothing was sent.
+      if (code === 'company-required' || code === 'company-not-ready') {
+        return { kind: 'refused', title: p.title, detail: str(p.detail), errors: [], attemptId }
       }
       if (code === 'duplicate-unconfirmed') {
         const other = isObj(p.duplicate) ? p.duplicate : {}

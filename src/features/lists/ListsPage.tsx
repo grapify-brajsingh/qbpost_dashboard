@@ -1,11 +1,14 @@
+import { useCompanies } from '@/api/queries/companies'
 import { useQbListsDetail } from '@/api/queries/lists'
 import { hasScope, useSession } from '@/auth/useSession'
+import { CompanySelect } from '@/components/CompanySelect'
 import { DataPanel, TableSkeleton } from '@/components/DataPanel'
 import { FilterChip, SearchBox, useUrlFilters } from '@/components/filters'
 import { PageHeader } from '@/components/PageHeader'
 import { ProblemAlert } from '@/components/ProblemAlert'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { defaultCompanyId } from '@/features/companies/companiesView'
 import { QbListsStatus } from '@/features/requests/transactions/QbListsStatus'
 import { NamesTable, NeverSynced, type ListKind } from './NamesTable'
 import { accountTypeLabel, RESULTS, STARTED_BY } from './qbListsView'
@@ -26,6 +29,7 @@ const FILTER_SPEC = {
   type: { kind: 'text' },
   by: { kind: 'enum', values: STARTED_BY },
   result: { kind: 'enum', values: RESULTS },
+  company: { kind: 'text' },
 } as const
 
 const triggerClass =
@@ -40,9 +44,17 @@ const countClass =
 export function ListsPage() {
   const { me } = useSession()
   const canSync = hasScope(me, 'requests:edit')
-  const lists = useQbListsDetail()
   const filters = useUrlFilters(FILTER_SPEC)
   const f = filters.values
+  // null on an older API: no selector, and the lists load without `company`.
+  const companies = useCompanies()
+  const items = companies.data?.items ?? []
+  const defaultId = defaultCompanyId(companies.data)
+  // An id in the URL that is not (or no longer) a company falls back to the default; it is never sent.
+  const urlId = f.company !== undefined && /^[1-9]\d*$/.test(f.company) ? Number(f.company) : undefined
+  const company = urlId !== undefined && items.some((c) => c.id === urlId) ? urlId : defaultId
+  // Wait for the companies to settle, so the default company is never fetched first and then the right one.
+  const lists = useQbListsDetail(company, { enabled: !companies.isPending })
   const tab: Tab = f.tab ?? 'accounts'
   const data = lists.data
   const neverSynced = !!data && data.syncedUtc === null && !data.accounts.length && !data.vendors.length && !data.customers.length
@@ -57,7 +69,22 @@ export function ListsPage() {
             ? 'The accounts, vendors and customers the review checks names against. Automatic sync is off; use Sync now.'
             : 'The accounts, vendors and customers the review checks names against. The server syncs them from QuickBooks every 30 minutes while QuickBooks is open.'
         }
-        actions={<QbListsStatus />}
+        actions={
+          !companies.isPending && (
+            <>
+              {items.length > 1 && (
+                <CompanySelect
+                  label="Company"
+                  size="sm"
+                  companies={items}
+                  value={company}
+                  onChange={(id) => filters.set({ company: id === defaultId || id === undefined ? undefined : String(id) })}
+                />
+              )}
+              <QbListsStatus company={company} />
+            </>
+          )
+        }
       />
 
       <Tabs value={tab} onValueChange={(v) => filters.set({ tab: v === 'accounts' ? undefined : (v as Tab) })}>
@@ -128,7 +155,9 @@ export function ListsPage() {
         ))}
 
         <TabsContent value="history" className="mt-4">
-          <SyncHistory by={f.by} result={f.result} onFilter={(patch) => filters.set(patch)} />
+          {!companies.isPending && (
+            <SyncHistory company={company} by={f.by} result={f.result} onFilter={(patch) => filters.set(patch)} />
+          )}
         </TabsContent>
       </Tabs>
     </div>

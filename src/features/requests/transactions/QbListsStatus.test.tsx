@@ -184,6 +184,32 @@ describe('Sync now button (spec 3.2)', () => {
     expect(await shown(/last sync failed/)).toBeInTheDocument()
   })
 
+  test("409 company-file-open-elsewhere: error toast naming both files, sent once and never retried", async () => {
+    mockControl.companyOpenElsewhere = 'S & A Convenience Market LLC.qbw'
+    let calls = 0
+    const counter = ({ request }: { request: Request }) => {
+      if (request.method === 'POST' && new URL(request.url).pathname.endsWith('/quickbooks/lists/sync')) calls += 1
+    }
+    server.events.on('request:start', counter)
+    try {
+      const { user } = show()
+      await user.click(await syncButton())
+      await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1))
+      expect(vi.mocked(toast.error).mock.calls[0][0]).toMatch(/^QuickBooks has S & A Convenience Market LLC\.qbw open — close it or open .+, then sync again\.$/)
+      expect(await shown(/last sync skipped/)).toBeInTheDocument()
+      expect(calls).toBe(1)
+    } finally {
+      server.events.removeListener('request:start', counter)
+    }
+  })
+
+  test('503 company-file-unavailable: error toast naming the file', async () => {
+    mockControl.companyFileUnavailable = true
+    const { user } = show()
+    await user.click(await syncButton())
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/^QuickBooks couldn't open .+\.qbw\. Check that QuickBooks can open it, then sync again\.$/)))
+  })
+
   test('coming back during a sync shows Syncing… and offers no second press', async () => {
     let release: () => void = () => undefined
     const gate = new Promise<void>((r) => (release = r))

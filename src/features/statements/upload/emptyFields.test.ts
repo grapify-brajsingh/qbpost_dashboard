@@ -35,6 +35,17 @@ describe('emptyFields', () => {
   })
 })
 
+describe('names locked (no company chosen yet)', () => {
+  it('lists an empty account as recommended, so it does not block Save; other gaps still do', () => {
+    const d = draftOf([{ ...full, account: '' }])
+    expect(emptyFields(d, { namesLocked: true }).get(0)).toEqual({ required: [], recommended: ['account'] })
+    expect(emptyFindings(emptyFields(d, { namesLocked: true })).get(0)).toEqual([{ index: 0, reason: 'empty-account', detail: 'Empty (optional)' }])
+    expect(saveBlocker(d, 'x', false, { namesLocked: true })).toBeNull()
+    expect(saveBlocker(d, 'x', false)).toBe('Fill in 1 empty required field')
+    expect(saveBlocker(draftOf([{ ...full, account: '', date: '' }]), 'x', false, { namesLocked: true })).toBe('Fill in 1 empty required field')
+  })
+})
+
 describe('saveBlocker', () => {
   const ok = draftOf([full])
   it('is null when the statement can be saved', () => {

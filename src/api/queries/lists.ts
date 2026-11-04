@@ -9,14 +9,18 @@ export const LIST_SYNCS_PAGE_SIZE = 25
 const RECHECK_AFTER_MS = [15_000, 45_000, 90_000, 150_000]
 
 export const listKeys = {
-  /** The lists as the API sends them; the history key sits under this prefix, so list refetches use `exact`. */
-  qb: ['quickbooks', 'lists'] as const,
-  sync: ['quickbooks', 'lists', 'sync'] as const,
+  all: ['quickbooks', 'lists'] as const,
+  /** The lists as the API sends them, per company (`undefined` = the API's default company, no `company=` sent). */
+  qb: (company?: number) => ['quickbooks', 'lists', 'names', company ?? 'default'] as const,
+  sync: (company?: number) => ['quickbooks', 'lists', 'sync', company ?? 'default'] as const,
   syncsAll: ['quickbooks', 'lists', 'syncs'] as const,
-  syncs: (f: QbListSyncFilters) => ['quickbooks', 'lists', 'syncs', f] as const,
+  syncs: (company: number | undefined, f: QbListSyncFilters) => ['quickbooks', 'lists', 'syncs', company ?? 'default', f] as const,
 }
 
-const fetchQbLists = ({ signal }: { signal: AbortSignal }) => api.get<QbListsResponse>('/quickbooks/lists', { signal }).then((r) => r.data)
+const companyQuery = (company?: number) => (company === undefined ? '' : `?company=${company}`)
+
+const fetchQbLists = (company: number | undefined) => ({ signal }: { signal: AbortSignal }) =>
+  api.get<QbListsResponse>(`/quickbooks/lists${companyQuery(company)}`, { signal }).then((r) => r.data)
 
 /**
  * The pickers only need names (the API's account objects also carry the QuickBooks type); the status line reads
@@ -31,10 +35,10 @@ export function toQbLists(r: QbListsResponse): QbLists {
 }
 
 /** QuickBooks accounts, vendors and customers for the name comboboxes. */
-export function useQbLists(opts: { enabled?: boolean } = {}) {
+export function useQbLists(company?: number, opts: { enabled?: boolean } = {}) {
   return useQuery({
-    queryKey: listKeys.qb,
-    queryFn: fetchQbLists,
+    queryKey: listKeys.qb(company),
+    queryFn: fetchQbLists(company),
     select: toQbLists,
     staleTime: 5 * 60_000,
     enabled: opts.enabled,
@@ -42,20 +46,22 @@ export function useQbLists(opts: { enabled?: boolean } = {}) {
 }
 
 /** The same query with each account's QuickBooks type, for the Lists page. */
-export function useQbListsDetail() {
+export function useQbListsDetail(company?: number, opts: { enabled?: boolean } = {}) {
   return useQuery({
-    queryKey: listKeys.qb,
-    queryFn: fetchQbLists,
+    queryKey: listKeys.qb(company),
+    queryFn: fetchQbLists(company),
     staleTime: 5 * 60_000,
+    enabled: opts.enabled,
   })
 }
 
 /** `GET /quickbooks/lists/syncs` (R-17): one page of sync attempts, newest first. */
-export function useQbListSyncs(f: QbListSyncFilters) {
+export function useQbListSyncs(company: number | undefined, f: QbListSyncFilters) {
   return useQuery<Page<QbListSyncRun>>({
-    queryKey: listKeys.syncs(f),
+    queryKey: listKeys.syncs(company, f),
     queryFn: ({ signal }) => {
       const p = new URLSearchParams()
+      if (company !== undefined) p.set('company', String(company))
       if (f.trigger.length) p.set('trigger', f.trigger.join(','))
       if (f.outcome.length) p.set('outcome', f.outcome.join(','))
       p.set('page', String(f.page))
@@ -67,7 +73,7 @@ export function useQbListSyncs(f: QbListSyncFilters) {
   })
 }
 
-const lastFinished = (qc: QueryClient) => qc.getQueryData<QbListsResponse>(listKeys.qb)?.lastSync?.finishedUtc
+const lastFinished = (qc: QueryClient, company?: number) => qc.getQueryData<QbListsResponse>(listKeys.qb(company))?.lastSync?.finishedUtc
 
 /** Pending re-reads per client. They live here, not in a component, so leaving the page does not lose them. */
 const rechecks = new WeakMap<QueryClient, ReturnType<typeof setTimeout>[]>()
@@ -82,14 +88,14 @@ export function stopQbListRechecks(qc: QueryClient) {
  * sync's own re-read: the running sync cannot be in that read, so it is a safe baseline. A sign-out clears the cache,
  * which leaves a late timer nothing to read.
  */
-export function startQbListRechecks(qc: QueryClient) {
+export function startQbListRechecks(qc: QueryClient, company?: number) {
   stopQbListRechecks(qc)
-  const since = lastFinished(qc)
+  const since = lastFinished(qc, company)
   const ids = RECHECK_AFTER_MS.map((ms) =>
     setTimeout(() => {
       void qc.invalidateQueries({ queryKey: listKeys.syncsAll })
-      void qc.refetchQueries({ queryKey: listKeys.qb, exact: true }).then(() => {
-        const finished = lastFinished(qc)
+      void qc.refetchQueries({ queryKey: listKeys.qb(company), exact: true }).then(() => {
+        const finished = lastFinished(qc, company)
         // A newer set may have replaced this one; only this set's own callback may stop it.
         if (rechecks.get(qc) === ids && finished && (!since || Date.parse(finished) > Date.parse(since))) stopQbListRechecks(qc)
       })
@@ -104,18 +110,18 @@ export function startQbListRechecks(qc: QueryClient) {
  * failure re-reads the lists to show it (awaited, so the caller sees that read). No client timeout: the API waits up
  * to 120 s for QuickBooks and answers 504 itself.
  */
-export function useSyncQbLists() {
+export function useSyncQbLists(company?: number) {
   const qc = useQueryClient()
   return useMutation({
-    mutationKey: listKeys.sync,
-    mutationFn: () => api.post<QbListsSyncResponse>('/quickbooks/lists/sync').then((r) => r.data),
+    mutationKey: listKeys.sync(company),
+    mutationFn: () => api.post<QbListsSyncResponse>(`/quickbooks/lists/sync${companyQuery(company)}`).then((r) => r.data),
     onSuccess: async (body) => {
       stopQbListRechecks(qc)
       // A GET that started before the sync finished must not replace its answer.
-      await qc.cancelQueries({ queryKey: listKeys.qb, exact: true })
-      qc.setQueryData<QbListsResponse>(listKeys.qb, body)
+      await qc.cancelQueries({ queryKey: listKeys.qb(company), exact: true })
+      qc.setQueryData<QbListsResponse>(listKeys.qb(company), body)
     },
-    onError: () => qc.refetchQueries({ queryKey: listKeys.qb, exact: true }),
+    onError: () => qc.refetchQueries({ queryKey: listKeys.qb(company), exact: true }),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: listKeys.syncsAll })
     },

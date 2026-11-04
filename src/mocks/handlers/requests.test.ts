@@ -108,7 +108,7 @@ describe('GET /saved-requests/{id}', () => {
     const res = await call('/saved-requests/1')
     const body = (await res.json()) as RequestDetail
     expect(res.headers.get('ETag')).toBe(`"${body.rowVersion}"`)
-    expect(body.allowedActions).toEqual(['edit', 'validate', 'post', 'discard'])
+    expect(body.allowedActions).toEqual(['edit', 'validate', 'post', 'discard', 'set-company'])
   })
 
   it('resolves SR- references and 404s unknown ids', async () => {
@@ -220,8 +220,8 @@ describe('validate, discard, restore, resolve', () => {
   it('re-validates', async () => {
     const res = await call('/saved-requests/2/validate', { method: 'POST' })
     const body = (await res.json()) as RequestDetail
-    expect(body.validation.validation).toHaveLength(3)
-    expect(body.validation.versionNumber).toBe(body.currentVersion)
+    expect(body.validation!.validation).toHaveLength(3)
+    expect(body.validation!.versionNumber).toBe(body.currentVersion)
   })
 
   it('discards with a reason, then an admin restores', async () => {

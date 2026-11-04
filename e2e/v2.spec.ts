@@ -48,7 +48,8 @@ test('edit a payee, switch a row off, save, validate, post, and see the TxnIDs a
   // Post: the dialog counts only the rows that will post (6 rows, 1 off).
   await saveBar.getByRole('button', { name: 'Post to QuickBooks' }).click()
   const dialog = page.getByRole('dialog')
-  await expect(dialog).toContainText('Post 5 rows to QuickBooks?')
+  // The question names the statement's company (the default company here).
+  await expect(dialog).toContainText('Post 5 rows to QuickBooks for Takoma Park Grocery Store Inc?')
   // The other push of this reference is also pending: the dialog says so and asks for an explicit yes.
   await expect(dialog).toContainText('Possible duplicate of SR-000011')
   await expect(dialog.getByRole('button', { name: 'Post 5 rows' })).toBeDisabled()
@@ -64,7 +65,7 @@ test('edit a payee, switch a row off, save, validate, post, and see the TxnIDs a
   await page.keyboard.press('Escape')
 
   // The Audit trail shows both edits, by Asha K.
-  await page.getByRole('link', { name: 'Audit trail' }).click()
+  await page.getByLabel('Main menu').getByRole('link', { name: 'Audit trail' }).click()
   await expect(page).toHaveURL(/\/audit/)
   const payeeEvent = page.getByRole('row').filter({ hasText: 'Edited' }).filter({ hasText: 'f0e2…f13' }).filter({ hasText: 'ABC Plumbing LLC' })
   await expect(payeeEvent).toContainText('payee')
@@ -75,7 +76,8 @@ test('edit a payee, switch a row off, save, validate, post, and see the TxnIDs a
 
 test('in-app navigation keeps the user signed in', async ({ page }) => {
   await signIn(page)
-  await page.getByRole('link', { name: 'Audit trail' }).click()
+  // Home also links to the audit trail (summary tiles, a button): use the sidebar's link.
+  await page.getByLabel('Main menu').getByRole('link', { name: 'Audit trail' }).click()
   await expect(page).toHaveURL(/\/audit/)
   await page.getByRole('link', { name: 'Lists', exact: true }).click()
   await expect(page).toHaveURL(/\/lists/)

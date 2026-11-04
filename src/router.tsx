@@ -8,6 +8,7 @@ import { SignInPage } from '@/auth/SignInPage'
 import { hasScope, useSession } from '@/auth/useSession'
 import { AccountPage } from '@/features/account/AccountPage'
 import { AuditPage } from '@/features/audit/AuditPage'
+import { CompaniesPage } from '@/features/companies/CompaniesPage'
 import { HomePage } from '@/features/home/HomePage'
 import { ListsPage } from '@/features/lists/ListsPage'
 import { StatementPage } from '@/features/statements/detail/StatementPage'
@@ -98,6 +99,15 @@ export const routes: RouteObject[] = [
           },
           { path: '/audit', element: <AuditPage />, handle: { crumb: 'Audit trail' } },
           { path: '/lists', element: <ListsPage />, handle: { crumb: 'QuickBooks lists' } },
+          {
+            path: '/companies',
+            element: (
+              <RequireScope scope="lists:read">
+                <CompaniesPage />
+              </RequireScope>
+            ),
+            handle: { crumb: 'Companies' },
+          },
           {
             path: '/users',
             handle: { crumb: 'Users' },

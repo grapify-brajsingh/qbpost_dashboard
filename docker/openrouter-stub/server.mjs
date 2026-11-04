@@ -1,7 +1,8 @@
 // A stand-in for OpenRouter's chat completions endpoint, for integration tests without a real key or model.
 // It answers the statement-extraction prompt deterministically from the PDF text in the user message:
 //   lines "YYYY-MM-DD DEP|CHK <amount> <description>" become rows; "REFERENCE: <x>" sets the reference;
-//   "NOT A STATEMENT" anywhere makes is_bank_statement false.
+//   "NOT A STATEMENT" anywhere makes is_bank_statement false; "HOLDER: <name>" and "DBA: <name>" set
+//   accountHolderName and dbaName (multi-company matching, API M17).
 // Never used in production. Listens on 127.0.0.1 inside the API container's network namespace, because the API
 // refuses a plain-http OpenRouter:BaseUrl unless the host is loopback.
 import http from 'node:http'
@@ -12,6 +13,8 @@ function answerFor(text) {
   if (/NOT A STATEMENT/i.test(text)) return { is_bank_statement: false, transactions: [] }
   const ref = /REFERENCE:\s*(\S+)/i.exec(text)?.[1]
   const account = /ACCOUNT:\s*(.+?)\s*$/im.exec(text)?.[1]
+  const holder = /HOLDER:\s*(.+?)\s*$/im.exec(text)?.[1]
+  const dba = /DBA:\s*(.+?)\s*$/im.exec(text)?.[1]
   const rows = []
   const re = /(\d{4}-\d{2}-\d{2})\s+(DEP|CHK)\s+([\d.]+)\s+(.+)/g
   for (let m; (m = re.exec(text)); ) {
@@ -25,7 +28,13 @@ function answerFor(text) {
     if (account) row.account = account
     rows.push(row)
   }
-  return { is_bank_statement: true, ...(ref ? { reference: ref } : {}), transactions: rows }
+  return {
+    is_bank_statement: true,
+    ...(ref ? { reference: ref } : {}),
+    ...(holder ? { accountHolderName: holder } : {}),
+    ...(dba ? { dbaName: dba } : {}),
+    transactions: rows,
+  }
 }
 
 http

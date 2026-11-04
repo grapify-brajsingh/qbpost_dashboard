@@ -85,6 +85,36 @@ describe('POST /quickbooks/lists/sync (R-16)', () => {
     expect(((await (await get()).json()) as QbListsResponse).lastSync).toMatchObject({ outcome: 'failed', reason: 'quickbooks-unavailable' })
   })
 
+  it("answers 409 company-file-open-elsewhere naming both files when another company's file is open, and records a skipped attempt", async () => {
+    const def = mockDb.companies.find((c) => c.isDefault)!
+    mockControl.companyOpenElsewhere = 'S & A Convenience Market LLC.qbw'
+    const before = mockDb.lists.syncedUtc
+    const res = await sync()
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({
+      type: 'company-file-open-elsewhere',
+      status: 409,
+      openFile: 'S & A Convenience Market LLC.qbw',
+      neededFile: def.fileName,
+    })
+    const body = (await (await get()).json()) as QbListsResponse
+    expect(body.lastSync).toMatchObject({ outcome: 'skipped', reason: 'company-file-open-elsewhere' })
+    expect(body.syncedUtc).toBe(before)
+  })
+
+  it("syncs as usual when the open file is the company's own", async () => {
+    mockControl.companyOpenElsewhere = mockDb.companies.find((c) => c.isDefault)!.fileName
+    expect((await sync()).status).toBe(200)
+  })
+
+  it('answers 503 company-file-unavailable naming the file, and records a skipped attempt', async () => {
+    mockControl.companyFileUnavailable = true
+    const res = await sync()
+    expect(res.status).toBe(503)
+    expect(await res.json()).toMatchObject({ type: 'company-file-unavailable', neededFile: mockDb.companies.find((c) => c.isDefault)!.fileName })
+    expect(((await (await get()).json()) as QbListsResponse).lastSync).toMatchObject({ outcome: 'skipped', reason: 'company-file-unavailable' })
+  })
+
   it('resets the controls with mockDb.reset()', () => {
     mockControl.qbNotOpen = true
     mockControl.qbDown = true

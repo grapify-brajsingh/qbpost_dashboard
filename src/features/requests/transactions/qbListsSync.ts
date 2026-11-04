@@ -88,6 +88,15 @@ export function syncFailure(error: unknown): SyncFailure {
   if (code === 'quickbooks-not-open') {
     return { level: 'warning', text: "QuickBooks isn't open. Open the company file in QuickBooks, then sync again." }
   }
+  if (code === 'company-not-ready') {
+    return { level: 'warning', text: "This company isn't ready in QuickBooks yet. Check its access on the Companies page." }
+  }
+  // M17 4.7: the company's own file refused. The attempt was not made and is never retried; waiting won't fix it.
+  if (code === 'company-file-open-elsewhere') return { level: 'error', text: companyFileMessage(p, 'sync') }
+  if (code === 'company-file-unavailable') {
+    const file = typeof p.neededFile === 'string' && p.neededFile ? p.neededFile : 'the company file'
+    return { level: 'error', text: `QuickBooks couldn't open ${file}. Check that QuickBooks can open it, then sync again.` }
+  }
   if (p.status === 429) {
     const wait = retryAfterSeconds(error.headers)
     return { level: 'warning', text: `Too many syncs; try again in ${wait ? plural(wait, 'second', 'seconds') : 'a minute'}.` }
@@ -96,4 +105,15 @@ export function syncFailure(error: unknown): SyncFailure {
     return { level: 'warning', text: 'The sync is still running in QuickBooks; the status will update when it finishes.', stillRunning: true }
   }
   return { level: 'error', text: p.detail ? `${p.title}. ${p.detail}` : p.title }
+}
+
+/**
+ * Spec 3.7: the 409 `company-file-open-elsewhere` message, shared by Check access, posting and Sync now. It reads well without
+ * `openFile` (the API may not know which file is open). `verb` is the action to repeat once the right file is open.
+ */
+export function companyFileMessage(p: { [key: string]: unknown; openFile?: unknown; neededFile?: unknown }, verb: 'check' | 'post' | 'sync'): string {
+  const needed = typeof p.neededFile === 'string' && p.neededFile ? p.neededFile : 'the right company file'
+  const open = typeof p.openFile === 'string' && p.openFile ? p.openFile : null
+  const head = open ? `QuickBooks has ${open} open` : 'Another company file is open in QuickBooks'
+  return `${head} — close it or open ${needed}, then ${verb} again.`
 }

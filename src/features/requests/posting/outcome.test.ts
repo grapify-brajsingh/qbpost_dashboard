@@ -140,6 +140,30 @@ describe('interpretPost', () => {
     expect(o).toMatchObject({ kind: 'unavailable', title: 'QuickBooks Desktop is not running.', detail: 'Try again later.' })
   })
 
+  test('a 409 company-file-open-elsewhere post is unavailable with the plain message and no retryAfter', () => {
+    const o = interpretPost(err({ title: 'Wrong company file', status: 409, code: 'company-file-open-elsewhere', openFile: 'A.qbw', neededFile: 'B.qbw', attemptId: 7 }))
+    expect(o).toMatchObject({ kind: 'unavailable', title: 'QuickBooks has A.qbw open — close it or open B.qbw, then post again.', attemptId: 7 })
+    expect(o.retryAfter).toBeUndefined()
+  })
+
+  test('a 503 company-file-unavailable names the file and carries the server detail, with no retryAfter', () => {
+    const o = interpretPost(
+      err(
+        { title: 'Company file unavailable', status: 503, code: 'company-file-unavailable', neededFile: 'B.qbw', detail: 'The file is locked.' },
+        { 'Retry-After': '30' },
+      ),
+    )
+    expect(o).toEqual({ kind: 'unavailable', title: "QuickBooks couldn't open B.qbw.", detail: 'The file is locked.', attemptId: undefined })
+    expect(interpretPost(err({ title: 'x', status: 503, code: 'company-file-unavailable' })).title).toBe("QuickBooks couldn't open the company file.")
+  })
+
+  test.each([
+    ['company-required', 'Company required', 'Choose the company before validating or posting.'],
+    ['company-not-ready', 'Company not ready', 'QuickBooks has not approved this company file yet.'],
+  ])('409 %s is a refusal with the API title', (code, title, detail) => {
+    expect(interpretPost(err({ title, status: 409, code, detail, attemptId: 9 }))).toEqual({ kind: 'refused', title, detail, errors: [], attemptId: 9 })
+  })
+
   test('ApiTimeoutError → timeout', () => {
     expect(interpretPost(new ApiTimeoutError()).kind).toBe('timeout')
   })

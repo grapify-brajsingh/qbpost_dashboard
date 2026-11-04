@@ -2,7 +2,8 @@ import { screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { startOfDay, subDays } from 'date-fns'
 import type { DashboardSummary, Stats } from '@/api/schema'
-import { mockControl } from '@/mocks/db'
+import { companyKeys } from '@/api/queries/companies'
+import { mockControl, mockDb } from '@/mocks/db'
 import { server } from '@/mocks/server'
 import { renderApp } from '@/test/render'
 
@@ -172,5 +173,88 @@ describe('Home', () => {
     const activity = screen.getByText('Recent activity').closest('[data-slot=card]') as HTMLElement
     expect(within(activity).getByRole('link', { name: 'Audit trail' })).toHaveAttribute('href', '/audit')
     expect((await within(activity).findAllByRole('listitem')).length).toBeGreaterThan(0)
+  })
+})
+
+describe('Home company selector', () => {
+  const PATHS = ['/api/v2/saved-requests/stats', '/api/v2/saved-requests', '/api/v2/dashboard/summary', '/api/v2/audit-events']
+  function recordUrls(paths: string[]) {
+    const urls: Record<string, URL[]> = Object.fromEntries(paths.map((p) => [p, []]))
+    server.events.on('request:start', ({ request }) => {
+      const u = new URL(request.url)
+      if (request.method === 'GET' && u.pathname in urls) urls[u.pathname].push(u)
+    })
+    return urls
+  }
+  afterEach(() => server.events.removeAllListeners())
+
+  test('the company selector filters stats, the waiting list and the summary; recent activity stays all-companies', async () => {
+    const urls = recordUrls(PATHS)
+    mockControl.signInAs('u-editor')
+    const { user } = renderApp('/')
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Company' }), '2')
+    await waitFor(() => expect(urls['/api/v2/saved-requests/stats'].slice(-1)[0].searchParams.get('company')).toBe('2'))
+    await waitFor(() => expect(urls['/api/v2/saved-requests'].slice(-1)[0].searchParams.get('company')).toBe('2'))
+    await waitFor(() => expect(urls['/api/v2/dashboard/summary'].slice(-1)[0].searchParams.get('company')).toBe('2'))
+    expect(urls['/api/v2/audit-events'].length).toBeGreaterThan(0)
+    expect(urls['/api/v2/audit-events'].every((u) => !u.searchParams.has('company'))).toBe(true)
+  })
+
+  test('Home counts change with the company selector', async () => {
+    mockControl.signInAs('u-editor')
+    const { user } = renderApp('/')
+    const all = (await screen.findByTestId('to-review')).textContent
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Company' }), '2')
+    await waitFor(() => expect(screen.getByTestId('to-review').textContent).not.toBe(all))
+  })
+
+  test('"All companies" is the default and sends no company', async () => {
+    const urls = recordUrls(PATHS)
+    mockControl.signInAs('u-editor')
+    renderApp('/')
+    const select = await screen.findByRole('combobox', { name: 'Company' })
+    expect(select).toHaveValue('')
+    expect(within(select).getByRole('option', { name: 'All companies' })).toBeInTheDocument()
+    await screen.findByTestId('to-review')
+    for (const p of PATHS.slice(0, 3)) {
+      expect(urls[p].length).toBeGreaterThan(0)
+      expect(urls[p].every((u) => !u.searchParams.has('company'))).toBe(true)
+    }
+  })
+
+  test('a company in the URL that is not a whole number means All companies and is never sent', async () => {
+    const urls = recordUrls(PATHS)
+    mockControl.signInAs('u-editor')
+    renderApp('/?company=abc')
+    expect(await screen.findByRole('combobox', { name: 'Company' })).toHaveValue('')
+    await screen.findByTestId('to-review')
+    expect(urls['/api/v2/saved-requests/stats'].every((u) => !u.searchParams.has('company'))).toBe(true)
+  })
+
+  test('a hex-looking company in the URL (0x2) is not accepted and is never sent', async () => {
+    const urls = recordUrls(PATHS)
+    mockControl.signInAs('u-editor')
+    renderApp('/?company=0x2')
+    expect(await screen.findByRole('combobox', { name: 'Company' })).toHaveValue('')
+    await screen.findByTestId('to-review')
+    expect(urls['/api/v2/saved-requests/stats'].every((u) => !u.searchParams.has('company'))).toBe(true)
+  })
+
+  test('with only one company there is no selector, as on Lists', async () => {
+    mockDb.companies = mockDb.companies.slice(0, 1)
+    mockControl.signInAs('u-editor')
+    const { queryClient } = renderApp('/')
+    await screen.findByTestId('to-review')
+    // The companies answer separately from the counts: wait until they are in the cache before asserting absence.
+    await waitFor(() => expect(queryClient.getQueryData<{ items: unknown[] }>(companyKeys.all)?.items).toHaveLength(1))
+    expect(screen.queryByRole('combobox', { name: 'Company' })).not.toBeInTheDocument()
+  })
+
+  test('an older API (GET /companies 404) shows no selector', async () => {
+    server.use(http.get('/api/v2/companies', () => new HttpResponse(null, { status: 404 })))
+    mockControl.signInAs('u-editor')
+    renderApp('/')
+    await screen.findByTestId('to-review')
+    expect(screen.queryByRole('combobox', { name: 'Company' })).not.toBeInTheDocument()
   })
 })

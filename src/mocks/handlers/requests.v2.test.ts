@@ -32,10 +32,10 @@ describe('list summaries (R-5, R-8)', () => {
     const rows = await list()
     const byId = new Map(rows.map((r) => [r.id, r]))
     for (const r of rows) {
-      if (r.id === 12) expect(r.pushId).toBeNull()
+      if (r.id === 12 || r.id === 14) expect(r.pushId).toBeNull()
       else expect(r.pushId).toMatch(UUID)
     }
-    expect(new Set(rows.map((r) => r.pushId).filter(Boolean)).size).toBe(rows.length - 1)
+    expect(new Set(rows.map((r) => r.pushId).filter(Boolean)).size).toBe(rows.length - 2)
 
     // posted: postSummary matches the attempt; pending: null
     expect(byId.get(7)!.postSummary).toMatchObject({ postId: 'api-savings-1177-2026-07', postedCount: 8, postedBy: { id: 'u-admin' } })
@@ -58,8 +58,8 @@ describe('list summaries (R-5, R-8)', () => {
 
   it('a request that was never validated has state none and 0 problems', async () => {
     const rec = mockDb.requests.find((r) => r.id === 1)!
-    delete rec.validation.validatedUtc
-    delete rec.validation.versionNumber
+    delete rec.validation!.validatedUtc
+    delete rec.validation!.versionNumber
     const row = (await list()).find((r) => r.id === 1)!
     expect(row.validationSummary).toEqual({ state: 'none', problemCount: 0, validatedUtc: null, versionNumber: null })
   })
@@ -149,7 +149,7 @@ describe('POST /saved-requests (R-5, R-6)', () => {
     const res = await save({ pushId: existing.pushId, reference: 'something-else', controlTotal: 1, transactions: [] })
     expect(res.status).toBe(200)
     expect(((await res.json()) as RequestDetail).id).toBe(1)
-    expect(mockDb.requests).toHaveLength(13)
+    expect(mockDb.requests).toHaveLength(14)
 
     const created = await save({ pushId: NEW_UUID, reference: 'fresh', controlTotal: 16.5, transactions: rows() })
     expect(created.status).toBe(201)
@@ -158,7 +158,7 @@ describe('POST /saved-requests (R-5, R-6)', () => {
     const again = await save({ pushId: NEW_UUID.toUpperCase(), reference: 'fresh', controlTotal: 16.5, transactions: rows() })
     expect(again.status).toBe(200)
     expect(((await again.json()) as RequestDetail).id).toBe(body.id)
-    expect(mockDb.requests).toHaveLength(14)
+    expect(mockDb.requests).toHaveLength(15)
   })
 
   it('save assigns row-<n> externalIds to rows without one, in version 1', async () => {

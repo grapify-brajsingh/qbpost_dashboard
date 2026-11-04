@@ -1,12 +1,16 @@
 import type { ReactNode } from 'react'
-import { History, List, MoreHorizontal, ScaleIcon, Trash2Icon, Undo2Icon, type LucideIcon } from 'lucide-react'
-import type { RequestDetail } from '@/api/schema'
+import { BanIcon, CircleSlashIcon, History, List, MoreHorizontal, ScaleIcon, Trash2Icon, Undo2Icon, type LucideIcon } from 'lucide-react'
+import { Link } from 'react-router'
+import type { Company, RequestDetail } from '@/api/schema'
 import { FlagChips } from '@/components/FlagChips'
 import { PushId } from '@/components/PushId'
 import { StatusBadge } from '@/components/StatusBadge'
 import { Timestamp } from '@/components/Timestamp'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { AccessBadge } from '@/features/companies/AccessBadge'
+import { companyLabel, isCompanyReady } from '@/features/companies/companiesView'
 import type { SheetTab } from '@/features/statements/sheet/useStatementSheet'
 import { cn } from '@/lib/utils'
 
@@ -34,6 +38,8 @@ export function StatementHeader({
   onOpenSheet,
   onMenu,
   referenceSlot,
+  company,
+  onChangeCompany,
 }: {
   request: RequestDetail
   /** The email subject, else the uploaded file name, else the SR ref. */
@@ -42,6 +48,10 @@ export function StatementHeader({
   onMenu: (action: MenuAction) => void
   /** Present when the reference is editable: receives the element the owner of the draft renders the editor into. */
   referenceSlot?: (el: HTMLElement | null) => void
+  /** The statement's company as `GET /companies` lists it, when known: its readiness shows next to the name. */
+  company?: Company
+  /** Present when the API allows `set-company`: opens Choose company. */
+  onChangeCompany?: () => void
 }) {
   const menu = MENU.filter((m) => request.allowedActions.includes(m.action))
   const dup = request.duplicate
@@ -72,6 +82,28 @@ export function StatementHeader({
             <Meta label="Push">
               <PushId value={request.pushId} fallback={request.publicRef} />
             </Meta>
+            {'company' in request && (
+              <Meta label="Company" overflow>
+                <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className={cn(request.company === null && 'text-warning')}>
+                    {request.company ? companyLabel(request.company) : 'Needs company'}
+                  </span>
+                  {company && !isCompanyReady(company) && (
+                    <>
+                      <CompanyReadiness company={company} />
+                      <Link to="/companies" className="text-primary underline-offset-4 hover:underline">
+                        Companies
+                      </Link>
+                    </>
+                  )}
+                  {onChangeCompany && (
+                    <Button variant="link" size="sm" className="h-auto p-0 text-[13px]" onClick={onChangeCompany}>
+                      Change
+                    </Button>
+                  )}
+                </span>
+              </Meta>
+            )}
           </dl>
           <StatusBadge status={request.status} />
           <FlagChips request={request} linkDuplicate />
@@ -105,4 +137,19 @@ export function StatementHeader({
       </div>
     </header>
   )
+}
+
+/** Why the company can't be used yet: a missing folder or a disabled company, else its QuickBooks access. */
+function CompanyReadiness({ company }: { company: Company }) {
+  if (company.state === 'missing' || company.state === 'disabled') {
+    const missing = company.state === 'missing'
+    const Icon = missing ? BanIcon : CircleSlashIcon
+    return (
+      <Badge variant={missing ? 'danger' : 'muted'}>
+        <Icon aria-hidden />
+        {missing ? 'Folder missing' : 'Disabled'}
+      </Badge>
+    )
+  }
+  return <AccessBadge access={company.access} />
 }

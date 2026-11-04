@@ -4,7 +4,7 @@
 //  8 unknown (+ledgerBatch)   9 partial (+ledgerBatch)   10 discarded   11 pending, hostile subject, last attempt busy
 //  12 pending, no email metadata, no pushId, one row marked don't post
 //  13 pending, second push of 11's reference (5 h later, one more row)
-import type { Actor, Attempt, EmailMeta, Payload, RequestEvent, RequestStatus, Txn } from '@/api/schema'
+import type { Actor, Attempt, CompanySource, RequestCompanyMatch, EmailMeta, Payload, RequestEvent, RequestStatus, Txn, UploadMeta } from '@/api/schema'
 import type { RequestRecord } from '../db'
 import { computeValidation, diffPayload, readErrorsOf, sumCents, toPostedRows } from '../payloadRules'
 import { QB_LISTS } from './lists'
@@ -61,6 +61,10 @@ interface Opts {
   ledgerBatch?: RequestRecord['ledgerBatch']
   laterVersions?: { payload: Payload; by: Actor; utc: string; note: string }[]
   original?: Payload
+  upload?: UploadMeta | null
+  companyId?: number | null
+  companySource?: CompanySource | null
+  companyMatch?: RequestCompanyMatch | null
 }
 
 function build(o: Opts): RequestRecord {
@@ -93,7 +97,10 @@ function build(o: Opts): RequestRecord {
     updated: { utc: events[events.length - 1].atUtc, by: lastBy },
     email: o.email === undefined ? null : o.email,
     pushId: o.pushId ?? null,
-    upload: null,
+    upload: o.upload ?? null,
+    companyId: o.companyId === undefined ? 1 : o.companyId,
+    companySource: o.companySource === undefined ? 'migrated' : o.companySource,
+    companyMatch: o.companyMatch ?? null,
     original: JSON.stringify(first),
     versions,
     readErrors: readErrorsOf(current.payload),
@@ -186,6 +193,7 @@ export function buildRequests(): RequestRecord[] {
   const rows7 = toPostedRows(p7, 2)
   const r7 = build({
     id: 7,
+    companyId: 2,
     pushId: 'a8d0f2b4-6c1e-4a3d-9f7b-5c3e1a9d7b07',
     status: 'posted',
     payload: p7,
@@ -325,5 +333,28 @@ export function buildRequests(): RequestRecord[] {
     email: email('Savings statement – Aug 2026 (second push)', '2026-10-27T10:55:00Z', 'statements@bank.example'),
   })
 
-  return [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13]
+  // 14: uploaded, no company matched yet (R-19, R-20)
+  const r14 = build({
+    id: 14,
+    payload: payloadOf('cc-440-2026-09', makeRows(4, 14)),
+    createdUtc: '2026-10-20T09:00:00Z',
+    email: null,
+    upload: {
+      fileName: 'Credit card 440 ; S & A CONVENIENCE MARKET LLC.pdf',
+      sizeBytes: 182_000,
+      sha256: 'c0ffee14'.repeat(8),
+      model: 'claude-sonnet',
+      promptVersion: 'v3',
+      extractedUtc: '2026-10-20T08:59:00Z',
+    },
+    companyId: null,
+    companySource: null,
+    companyMatch: { match: 'none', printedName: 'SA CONVENIENCE MARKET', dbaName: null, candidates: [] },
+  })
+  r14.source = { kind: 'user', id: 'u-editor', name: 'Eli Editor' }
+  r14.created = { utc: '2026-10-20T09:00:00Z', by: { id: 'u-editor', name: 'Eli Editor' } }
+  r14.updated = r14.created
+  r14.events[0] = { ...r14.events[0], actor: r14.created.by, detail: { source: 'upload', fileName: r14.upload!.fileName } }
+
+  return [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14]
 }

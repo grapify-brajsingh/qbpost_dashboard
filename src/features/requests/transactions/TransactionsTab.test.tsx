@@ -1,6 +1,7 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach } from 'vitest'
 import { mockControl, mockDb } from '@/mocks/db'
+import { server } from '@/mocks/server'
 import { renderApp } from '@/test/render'
 
 afterEach(() => localStorage.clear())
@@ -74,7 +75,7 @@ describe('validation', () => {
   })
 
   test('findings whose row is not found are listed in Results', async () => {
-    mockDb.requests.find((r) => r.id === 1)!.validation.validation = [{ index: 99, reason: 'ghost-row', detail: 'gone' }]
+    mockDb.requests.find((r) => r.id === 1)!.validation!.validation = [{ index: 99, reason: 'ghost-row', detail: 'gone' }]
     const { user } = open(1)
     await screen.findByRole('columnheader', { name: 'Payee' })
     await user.click(screen.getByRole('button', { name: 'Results' }))
@@ -187,5 +188,59 @@ describe('QuickBooks lists sync', () => {
     await screen.findByRole('columnheader', { name: 'Payee' })
     expect(screen.queryByRole('button', { name: 'Sync now' })).not.toBeInTheDocument()
     expect(screen.queryByText(/^Lists synced/)).not.toBeInTheDocument()
+  })
+})
+
+describe('company-scoped lists (R-19)', () => {
+  afterEach(() => server.events.removeAllListeners())
+
+  const td = (row: number, field: string) => {
+    const el = document.querySelector<HTMLElement>(`tr[data-row="${row}"] td[data-field="${field}"]`)
+    if (!el) throw new Error(`no cell ${row}:${field}`)
+    return el
+  }
+
+  function listRequests() {
+    const seen: string[] = []
+    server.events.on('request:start', ({ request }) => {
+      const u = new URL(request.url)
+      if (request.method === 'GET' && u.pathname.endsWith('/quickbooks/lists')) seen.push(u.search)
+    })
+    return seen
+  }
+
+  test('with no company the name pickers are locked with "Choose the company first" and no lists are fetched', async () => {
+    const lists = listRequests()
+    const { user } = open(14, 'u-editor')
+    await screen.findByRole('columnheader', { name: 'Payee' })
+    expect(screen.getByText('Choose the company first')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Sync now' })).not.toBeInTheDocument()
+    for (const field of ['payee', 'account', 'lineAccount']) expect(td(0, field)).toHaveAttribute('title', 'Choose the company first')
+    await user.click(td(0, 'payee'))
+    expect(screen.queryByRole('combobox', { name: 'Payee' })).not.toBeInTheDocument()
+    act(() => td(0, 'account').focus())
+    await user.keyboard('{Enter}')
+    expect(screen.queryByRole('combobox', { name: 'Account' })).not.toBeInTheDocument()
+    // Other cells still edit.
+    await user.click(td(0, 'memo'))
+    expect(screen.getByRole('textbox', { name: 'Memo' })).toBeInTheDocument()
+    expect(lists).toHaveLength(0)
+  })
+
+  test('a statement of company 2 loads company 2 lists (company=2)', async () => {
+    mockDb.requests.find((r) => r.id === 2)!.companyId = 2
+    mockDb.companies.find((c) => c.id === 2)!.access = 'approved'
+    const lists = listRequests()
+    const { user } = open(2, 'u-editor')
+    await screen.findByRole('columnheader', { name: 'Payee' })
+    await waitFor(() => expect(lists).toContain('?company=2'))
+    expect(lists.every((q) => q === '?company=2')).toBe(true)
+    expect(screen.queryByText('Choose the company first')).not.toBeInTheDocument()
+    const row = [...document.querySelectorAll<HTMLElement>('tbody tr[data-row]')].find(
+      (tr) => tr.querySelector('td[data-field="kind"]')?.textContent !== 'Deposit',
+    )!
+    await user.click(row.querySelector<HTMLElement>('td[data-field="payee"]')!)
+    await user.type(await screen.findByRole('combobox', { name: 'Payee' }), 'coastal')
+    expect(await screen.findByRole('option', { name: 'Coastal Beverage Supply' })).toBeInTheDocument()
   })
 })

@@ -13,6 +13,14 @@ export interface EmptyRow {
   recommended: TxField[]
 }
 
+/**
+ * `namesLocked`: no company is chosen yet, so the account cell cannot be filled (spec §6, 2026-11-04). An empty account
+ * then warns but does not block Save: the statement is saved on company hold, and validation reports it once a company is set.
+ */
+export interface EmptyFieldOptions {
+  namesLocked?: boolean
+}
+
 const isEmpty = (v: unknown) => v === undefined || v === null || (typeof v === 'string' && v.trim() === '')
 
 /** Rows the user is keeping, keyed by display index (loaded rows first, then added ones), as `TxTable` numbers them. */
@@ -22,11 +30,13 @@ function keptRows(d: Draft): [number, Txn][] {
 }
 
 /** Empty fields per kept row; rows with none are left out. */
-export function emptyFields(d: Draft): Map<number, EmptyRow> {
+export function emptyFields(d: Draft, opts: EmptyFieldOptions = {}): Map<number, EmptyRow> {
+  const required_: readonly TxField[] = opts.namesLocked ? REQUIRED_FIELDS.filter((f) => f !== 'account') : REQUIRED_FIELDS
+  const recommended_: readonly TxField[] = opts.namesLocked ? ['account', ...RECOMMENDED_FIELDS] : RECOMMENDED_FIELDS
   const out = new Map<number, EmptyRow>()
   for (const [index, row] of keptRows(d)) {
-    const required = REQUIRED_FIELDS.filter((f) => isEmpty(row[f]))
-    const recommended = RECOMMENDED_FIELDS.filter((f) => isEmpty(row[f]))
+    const required = required_.filter((f) => isEmpty(row[f]))
+    const recommended = recommended_.filter((f) => isEmpty(row[f]))
     if (required.length || recommended.length) out.set(index, { required, recommended })
   }
   return out
@@ -76,9 +86,9 @@ export function badValues(d: Draft): Map<number, Set<string>> {
 }
 
 /** Why Save statement is disabled, or null when it can be pressed. */
-export function saveBlocker(d: Draft, reference: string, saving: boolean): string | null {
+export function saveBlocker(d: Draft, reference: string, saving: boolean, opts: EmptyFieldOptions = {}): string | null {
   if (saving) return 'Saving…'
-  const n = requiredCount(emptyFields(d))
+  const n = requiredCount(emptyFields(d, opts))
   if (n > 0) return `Fill in ${n} empty required ${n === 1 ? 'field' : 'fields'}`
   const unreadable = [...badValues(d).values()].reduce((sum, s) => sum + s.size, 0)
   if (unreadable > 0) return `Fix ${unreadable} ${unreadable === 1 ? 'value' : 'values'} that could not be read`

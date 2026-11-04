@@ -23,14 +23,17 @@ export interface SaveUploadBody {
   reference: string
   controlTotal: number | null
   transactions: Payload['transactions']
+  /** The company the statement belongs to; sent inside `upload` only when chosen. */
+  companyId?: number
 }
 
 /** `POST /saved-requests` with `upload.extractionId` (R-14): the reviewed rows become a statement. */
 export function useSaveUpload() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ extractionId, ...payload }: SaveUploadBody) => {
-      const r = await api.post<RequestDetail>('/saved-requests', { ...payload, upload: { extractionId } })
+    mutationFn: async ({ extractionId, companyId, ...payload }: SaveUploadBody) => {
+      const upload = companyId === undefined ? { extractionId } : { extractionId, companyId }
+      const r = await api.post<RequestDetail>('/saved-requests', { ...payload, upload })
       return r.data
     },
     onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: requestKeys.all }), qc.invalidateQueries({ queryKey: ['audit'] })]),
