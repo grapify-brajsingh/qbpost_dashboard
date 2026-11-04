@@ -170,3 +170,28 @@ Verification, run 2026-11-04 after all fixes:
   **8 passed** (23.2 s).
 
 Deferred minor list above: the `filePath` tooltip focus item is now done. Task 11's live Docker run is still not done.
+
+## 7. Change 2026-11-04: save an unmatched upload before choosing a company
+
+Spec §6. **Files**: `src/features/statements/upload/emptyFields.ts` (an optional `{ namesLocked }` argument to
+`emptyFields` and `saveBlocker`: when set, `account` is listed as recommended, not required),
+`src/features/statements/upload/ReviewEditor.tsx` (pass `namesLocked`), tests in `emptyFields.test.ts` and
+`UploadPage.test.tsx`, `e2e/upload.spec.ts` only if it relied on the lock blocking Save.
+
+**Steps.** 1. Unit tests for acceptance 1 (RED). 2. Change `emptyFields`/`saveBlocker`. 3. Rewrite the upload test "saving
+without a company…" to save without deleting rows (acceptance 2) and add acceptance 3. 4. Pass the flag from
+`ReviewEditor`. 5. Run the checks.
+
+**Checks.** `npm run lint`, `npm run build`, `npx vitest run src/features/statements/upload`, full `npm test`, `npm run e2e`.
+
+- [x] Docs updated  - [x] Tests RED  - [x] Code  - [x] Checks green, results recorded below
+
+**Results (2026-11-04).** RED: the new `emptyFields.test.ts` case failed before the change. The two new or rewritten
+`UploadPage.test.tsx` cases failed against a temporarily reverted `ReviewEditor`, then passed once it was restored.
+`e2e/upload.spec.ts` asserted Save disabled while locked; it now asserts Save enabled while locked and disabled after a
+company is chosen.
+- `npm run lint`: clean.
+- `npm run build`: passes (only the existing chunk-size warning).
+- `npx vitest run --maxWorkers=2`: **68 files, 793 tests passed**.
+- `npm run e2e`: first run 1 failed (the upload flow's old expectation above), 7 passed. After updating it: **8 passed**.
+

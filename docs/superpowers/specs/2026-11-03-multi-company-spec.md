@@ -272,7 +272,8 @@ real-stack suite) has **not** been done. Where the build differs from this spec 
   are locked with "Choose the company first" (as on the statement page), Sync now and the lists status are replaced by that
   hint, and no lists are fetched. While the companies load, the lists wait too. With one assignable company (or the
   companies endpoint failing, or an older API without the block) nothing is locked and the default company's lists are used.
-  Consequence: an unmatched upload with an empty account can only be saved after choosing a company (or removing that row).
+  ~~Consequence: an unmatched upload with an empty account can only be saved after choosing a company (or removing that row).~~
+  Superseded 2026-11-04 by "Save before choosing" below.
 - **Lists and Home.** Selectors appear only when there is more than one company (Home since the final review fixes). Lists
   waits for `useCompanies` to settle before its first fetch. Home sends the id as a number to the summary and as text to stats
   and the queue list. The `CompanySelect` wrapper is `max-w-full`, so a long name cannot push a 375 px page sideways.
@@ -291,3 +292,24 @@ sentences added in Task 1; 5 `namesLocked` in `TxTable`; 6 `companyFileMessage` 
 
 **Not done / deferred**: the live real-API run (Task 11 steps 1, 2 and the hand checks; needs Docker). See plan §6 for the static
 check table's result and the deferred minor review notes.
+
+## 6. Change 2026-11-04: save an unmatched upload before choosing a company
+
+**Problem.** With the upload name lock on, an empty account counted as a required field that blocks Save statement, but the
+locked cell could not be filled. So an unmatched upload with any row missing an account could not be saved until a company
+was chosen, against §3.5 ("Choosing is optional").
+
+**Decision (owner, 2026-11-04).** Allow saving first. While the names are locked, an empty account does not block Save: it is
+marked "Empty (optional)" like payee and line account, the footer does not count it, and the statement is saved on company
+hold. The API already accepts this (the upload save does not refuse empty accounts; validation reports them as
+`missing-field` after saving, as it does for emailed statements, and the hold stops validate and post anyway). Once a
+company is chosen, on the upload or on the statement page, the account is required again. Nothing else changes: date,
+amount and kind still block, and the lock itself stays.
+
+**Acceptance.**
+1. `saveBlocker(draft, reference, saving, { namesLocked: true })` returns null for a draft whose only gap is an empty account;
+   without the option it still returns "Fill in 1 empty required field".
+2. Upload page: an unmatched PDF with two companies and rows without an account can be saved without choosing a company or
+   deleting rows; the new statement is on company hold and the body carries no `companyId`.
+3. Choosing a company on the upload makes the empty account blocking again.
+

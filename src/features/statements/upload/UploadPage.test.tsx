@@ -288,20 +288,25 @@ describe('company (R-19.5, R-20.1)', () => {
     await pickAccount(r, 2)
   }, 15_000)
 
-  it('saving without a company creates a statement on hold (rows without an account removed: their names are locked)', async () => {
+  it('saving without a company creates a statement on hold; locked empty accounts do not block Save (spec §6)', async () => {
     const bodies = recordSaveBodies()
     const r = await uploadAndReview()
     await screen.findByText('Choose the company first')
-    for (const n of [3, 10]) {
-      await r.user.click(screen.getByRole('button', { name: `Delete row ${n}` }))
-      const confirm = await screen.findByRole('alertdialog')
-      await r.user.click(within(confirm).getByRole('button', { name: 'Delete row' }))
-      await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
-    }
+    expect(screen.queryByText(/empty required field/)).not.toBeInTheDocument()
+    expect(saveButton()).toBeEnabled()
     await r.user.click(saveButton())
     await screen.findByRole('heading', { level: 1, name: 'chase-sep-2026.pdf' }, { timeout: 4000 })
     expect(bodies[0].upload).not.toHaveProperty('companyId')
     expect(mockDb.requests[mockDb.requests.length - 1]?.companyId ?? null).toBeNull()
     expect(await screen.findByRole('alert', { name: 'Company hold' })).toHaveTextContent('Choose the company before validating or posting.')
+  }, 15_000)
+
+  it('choosing a company makes an empty account required again', async () => {
+    const r = await uploadAndReview()
+    await screen.findByText('Choose the company first')
+    expect(saveButton()).toBeEnabled()
+    await r.user.selectOptions(await screen.findByRole('combobox', { name: 'Company' }), '2')
+    expect(await screen.findByText(/2 empty required fields/)).toBeInTheDocument()
+    expect(saveButton()).toBeDisabled()
   }, 15_000)
 })

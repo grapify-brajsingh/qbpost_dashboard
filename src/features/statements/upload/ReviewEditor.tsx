@@ -86,12 +86,12 @@ export function ReviewEditor({ extraction, onDiscard }: { extraction: Extraction
   }, [savedId, navigate])
 
   const rows = useMemo(() => displayRows(draft), [draft])
-  const empty = useMemo(() => emptyFields(draft), [draft])
+  const empty = useMemo(() => emptyFields(draft, { namesLocked }), [draft, namesLocked])
   const findings = useMemo(() => emptyFindings(empty), [empty])
   const unreadable = useMemo(() => badValues(draft), [draft])
   const stats = postStats(draft)
   const missing = requiredCount(empty)
-  const blocked = expired ? 'This upload has expired' : saveBlocker(draft, reference, save.isPending)
+  const blocked = expired ? 'This upload has expired' : saveBlocker(draft, reference, save.isPending, { namesLocked })
 
   const edit: TxEditing | undefined = save.isPending
     ? undefined

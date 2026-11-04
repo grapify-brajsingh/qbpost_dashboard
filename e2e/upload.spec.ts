@@ -29,12 +29,15 @@ test('upload a PDF, fill the empty accounts, set the total, save, and land on th
   await expect(page.getByRole('heading', { level: 2, name: PDF.name })).toBeVisible()
   await expect(page.getByRole('textbox', { name: 'Reference' })).toHaveValue('chase-sep-2026')
   const save = page.getByRole('button', { name: 'Save statement' })
-  await expect(save).toBeDisabled()
 
-  // The PDF names no company and there are several: the name cells stay locked until one is chosen.
+  // The PDF names no company and there are several: the name cells stay locked until one is chosen, but the
+  // empty accounts do not block Save meanwhile (it would save on company hold, spec §6).
   await expect(page.getByText('Choose the company first').first()).toBeVisible()
+  await expect(save).toBeEnabled()
   await page.getByRole('combobox', { name: 'Company' }).selectOption({ label: '18 · Takoma Park Grocery Store Inc' })
   await expect(page.getByText('Choose the company first')).toHaveCount(0)
+  // With a company chosen the empty accounts are required again.
+  await expect(save).toBeDisabled()
   await pickAccount(page, 2)
   await pickAccount(page, 9)
   await page.getByRole('button', { name: 'Edit control total' }).click()
