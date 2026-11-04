@@ -4,6 +4,8 @@
 #   docker compose -f docker-compose.integration.yml up -d --build
 #   open http://localhost:8080   (admin@example.com / Integration-Test-Pass-1)
 #
+# Multi-company (two company files): add -f docker-compose.companies.yml (see that file).
+#
 # BACKEND_DIR points at the API repository (default: the sibling folder ../qb_post-issue-2).
 # To use the real OpenRouter instead of the stub, set OPENROUTER_BASE_URL=https://openrouter.ai/api/v1 and
 # OPENROUTER_API_KEY. Every password and key below is a throwaway value for this local stack.

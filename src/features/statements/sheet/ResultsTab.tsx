@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useAuditEvents } from '@/api/queries/audit'
 import { useAttempt, useAttempts, useRequest } from '@/api/queries/requests'
-import type { RequestDetail, Txn } from '@/api/schema'
+import type { RequestDetail, Txn, ValidationSnapshot } from '@/api/schema'
 import { Money } from '@/components/Money'
 import { ProblemAlert } from '@/components/ProblemAlert'
 import { Timestamp } from '@/components/Timestamp'
@@ -14,7 +14,7 @@ import { formatCents, sumCents, toCents } from '@/lib/money'
 
 const FIRST = 10
 
-const STATE_TEXT: Record<RequestDetail['validation']['state'], string> = {
+const STATE_TEXT: Record<ValidationSnapshot['state'], string> = {
   ok: 'No problems',
   held: 'Held: problems to fix',
   refused: 'Refused by the checks',
@@ -31,9 +31,10 @@ function useValidatedBy(requestId: number): string | null {
 function ValidationBlock({ d }: { d: RequestDetail }) {
   const validatedBy = useValidatedBy(d.id)
   const v = d.validation
-  const findings = v.validation ?? []
-  const errors = v.errors ?? []
-  const ok = v.state === 'ok'
+  // Null: not validated since the stored validation was cleared (set-company), so nothing to show but that.
+  const findings = v?.validation ?? []
+  const errors = v?.errors ?? []
+  const ok = v?.state === 'ok'
   const rows = Array.isArray(d.payload.transactions) ? (d.payload.transactions as Txn[]) : []
   // Every row counts, including the ones switched off.
   const sum = sumCents(rows.map((r) => r?.amount))
@@ -42,9 +43,9 @@ function ValidationBlock({ d }: { d: RequestDetail }) {
   return (
     <section aria-label="Latest validation" className="space-y-2">
       <h3 className="text-sm font-semibold">Latest validation</h3>
-      <div role="status" className={`rounded-md p-3 text-sm ${ok ? 'bg-success-soft text-success' : 'bg-destructive-soft text-destructive'}`}>
-        <p className="font-medium">{STATE_TEXT[v.state]}</p>
-        {v.validatedUtc ? (
+      <div role="status" className={`rounded-md p-3 text-sm ${!v ? 'bg-muted text-muted-foreground' : ok ? 'bg-success-soft text-success' : 'bg-destructive-soft text-destructive'}`}>
+        <p className="font-medium">{v ? STATE_TEXT[v.state] : 'Not validated'}</p>
+        {v?.validatedUtc ? (
           <p className="text-xs">
             Validated <Timestamp utc={v.validatedUtc} />
             {validatedBy ? ` by ${validatedBy}` : ''}
@@ -53,7 +54,7 @@ function ValidationBlock({ d }: { d: RequestDetail }) {
         ) : (
           <p className="text-xs">Not checked yet</p>
         )}
-        {v.versionNumber !== undefined && v.versionNumber < d.currentVersion && (
+        {v?.versionNumber !== undefined && v.versionNumber < d.currentVersion && (
           <p className="text-xs font-medium">Validation is out of date</p>
         )}
       </div>

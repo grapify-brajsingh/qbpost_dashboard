@@ -70,12 +70,12 @@ export function listsFor(companyId: number | null | undefined): {
 export const current = (r: RequestRecord) => r.versions[r.versions.length - 1]
 
 export const needsAttention = (r: RequestRecord) =>
-  r.readErrors.length > 0 || ['held', 'refused', 'unreadable'].includes(r.validation.state)
+  r.readErrors.length > 0 || ['held', 'refused', 'unreadable'].includes(r.validation?.state ?? '')
 
 /** Findings plus request-level errors in the latest snapshot; `none` when it was never validated (R-8.2). */
 export function validationSummaryOf(r: RequestRecord): ValidationSummary {
   const v = r.validation
-  if (!v.validatedUtc) return { state: 'none', problemCount: 0, validatedUtc: null, versionNumber: null }
+  if (!v?.validatedUtc) return { state: 'none', problemCount: 0, validatedUtc: null, versionNumber: null }
   return {
     state: v.state,
     problemCount: (v.validation?.length ?? 0) + (v.errors?.length ?? 0),
@@ -110,8 +110,10 @@ export function toSummary(r: RequestRecord, role: Role): RequestSummary {
   const payload = current(r).payload
   const other = r.duplicate.of === null ? undefined : mockDb.requests.find((x) => x.id === r.duplicate.of)
   const last = r.attempts[r.attempts.length - 1]
-  const { validation: _findings, ...validation } = r.validation
+  // Null stays null (cleared by set-company), as on the API's list item.
+  const { validation: _findings, ...rest } = r.validation ?? {}
   void _findings
+  const validation = r.validation ? (rest as Omit<NonNullable<RequestRecord['validation']>, 'validation'>) : null
   return {
     id: r.id,
     publicRef: publicRef(r.id),
@@ -362,7 +364,7 @@ export function engineOutcome(r: RequestRecord): Outcome {
     return { status: 400, delayMs: 0, body: { code: 'payload-refused', title: 'Request refused', detail: errors.join(' '), errors } }
   }
   revalidate(r)
-  if (r.validation.validation?.length) {
+  if (r.validation?.validation?.length) {
     return {
       status: 422,
       delayMs: 0,

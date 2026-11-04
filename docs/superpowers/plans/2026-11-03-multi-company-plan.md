@@ -195,3 +195,34 @@ company is chosen.
 - `npx vitest run --maxWorkers=2`: **68 files, 793 tests passed**.
 - `npm run e2e`: first run 1 failed (the upload flow's old expectation above), 7 passed. After updating it: **8 passed**.
 
+## 8. Fix 2026-11-04: crash after choosing a company, and the live integration run
+
+Spec §7. **Files**: `src/api/schema.ts` (nullable `validation`), its readers (found by `tsc`):
+`TransactionsTab.tsx`, `ValidationProblems.tsx`, `PostDialog.tsx`, `ResultsTab.tsx`, `StatementPage.tsx` and any others.
+Also `src/mocks/handlers/requests.ts` (`set-company` gives null) and `requestHelpers.ts` (null-safe summary). Tests: a
+mock test that the detail after `set-company` has `validation: null`, and a page test that assigning a company renders
+the statement. New `e2e-integration/companies.spec.ts`; `e2e-integration/statement-flow.spec.ts` gets the new Post title.
+The OpenRouter stand-in (`docker/openrouter-stub/server.mjs`) learns `HOLDER:` / `DBA:` lines.
+
+**Steps.** 1. Failing page test (RED). 2. Nullable type, then fix every `tsc` error. 3. Mock null. 4. Checks. 5. Run the
+integration suite against the real stack with two company folders.
+
+- [x] Docs  - [x] RED  - [x] Code  - [x] Checks and integration run, results recorded below
+
+**Results (2026-11-04).** RED: with the mock clearing validation to null, the StatementPage test "choosing Takoma…"
+failed (`Cannot destructure property 'validation' of 'r.validation' as it is null`). It passes after the fix.
+- `npm run lint` clean, `npm run build` passes, `npx vitest run --maxWorkers=2` **68 files, 793 tests passed**,
+  `npm run e2e` **8 passed**.
+- **Real stack** (API branch `feature/9-addition-of-company-file` at `d483c61`, Docker, simulated QuickBooks):
+  - First run, one company, on an upgraded database: 23 passed, 1 failed. `statement-flow` expected the old Post
+    title, now `for <company>`; fixed.
+  - Multi-company overlay (`docker-compose.companies.yml`, new): `companies.spec.ts` found the crash above. After the
+    fix, **4 passed**, on both the upgraded and a fresh database:
+    - Sync lists both folders; Check access approves 440.
+    - An S & A PDF is matched by its printed name and validated against S & A's own (empty) lists.
+    - A PDF naming the default company is matched and posted to its file.
+    - An unmatched PDF is held, then assigned a company and validated.
+  - The rest of the suite assumes one company. On the multi-company stack, statements naming no company are held
+    (by design, M17 hold rule), so it is run on the plain stack: fresh database, **24 passed, 4 skipped** (the
+    companies spec skips without a root folder).
+

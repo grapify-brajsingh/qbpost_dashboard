@@ -232,7 +232,8 @@ export interface RequestSummary {
     reasons: string[]
     acknowledgedBy: Actor | null
   }
-  validation: Omit<ValidationSnapshot, 'validation'>
+  /** Null when the statement has no stored validation, e.g. after set-company cleared it (R-19.4). */
+  validation: Omit<ValidationSnapshot, 'validation'> | null
   lastAttempt: {
     id: number
     outcome: AttemptOutcome
@@ -262,7 +263,8 @@ export interface RequestDetail extends RequestSummary {
   payload: Payload
   readErrors: string[]
   otherUnpostedPushes: OtherPush[]
-  validation: ValidationSnapshot
+  /** Null when the statement has no stored validation, e.g. after set-company cleared it (R-19.4). */
+  validation: ValidationSnapshot | null
   ledgerBatch?: {
     postId: string
     status: string

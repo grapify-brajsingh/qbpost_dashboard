@@ -42,7 +42,7 @@ test('n8n push, edit payee, row off, save, validate, post, TxnIDs, audit trail',
 
   await saveBar.getByRole('button', { name: 'Post to QuickBooks' }).click()
   const dialog = page.getByRole('dialog')
-  await expect(dialog).toContainText('Post 2 rows to QuickBooks?')
+  await expect(dialog).toContainText(/Post 2 rows to QuickBooks for .+\?/)
   await dialog.getByRole('button', { name: 'Post 2 rows' }).click()
   await expect(page.getByRole('status', { name: 'Post result' })).toContainText('Posted', { timeout: 30_000 })
 

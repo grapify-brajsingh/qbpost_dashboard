@@ -220,8 +220,8 @@ describe('validate, discard, restore, resolve', () => {
   it('re-validates', async () => {
     const res = await call('/saved-requests/2/validate', { method: 'POST' })
     const body = (await res.json()) as RequestDetail
-    expect(body.validation.validation).toHaveLength(3)
-    expect(body.validation.versionNumber).toBe(body.currentVersion)
+    expect(body.validation!.validation).toHaveLength(3)
+    expect(body.validation!.versionNumber).toBe(body.currentVersion)
   })
 
   it('discards with a reason, then an admin restores', async () => {

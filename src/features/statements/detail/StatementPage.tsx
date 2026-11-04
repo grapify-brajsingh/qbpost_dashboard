@@ -150,9 +150,9 @@ export function StatementPage() {
   const onValidate = () =>
     validate.mutate(undefined, {
       onSuccess: ({ request: r }) => {
-        const held = r.validation.validation?.length ?? 0
-        if (r.validation.state === 'ok') toast.success('Validation passed')
-        else if (r.validation.state === 'held') toast.warning(`${held} ${held === 1 ? 'row needs' : 'rows need'} attention`)
+        const held = r.validation?.validation?.length ?? 0
+        if (r.validation?.state === 'ok') toast.success('Validation passed')
+        else if (r.validation?.state === 'held') toast.warning(`${held} ${held === 1 ? 'row needs' : 'rows need'} attention`)
       },
     })
 
@@ -197,7 +197,7 @@ export function StatementPage() {
       <CompanyHoldBanner request={request} onChoose={chooseCompany} />
       <ValidationProblems request={request} findings={heldFindings} />
       {(post.isPosting || request.status === 'posting') && <PostingProgress rows={request.transactionCount} />}
-      {showResult && <PostResultBanner outcome={outcome} requestId={id} shownAbove={request.validation.errors ?? []} />}
+      {showResult && <PostResultBanner outcome={outcome} requestId={id} shownAbove={request.validation?.errors ?? []} />}
       {validate.error && <ProblemAlert error={validate.error} />}
       <TransactionsTab key={request.id} request={request} etag={etag} findingsOverride={heldFindings} referenceSlot={referenceSlot} validate={validateButton} post={postButton} />
       {dialog && (

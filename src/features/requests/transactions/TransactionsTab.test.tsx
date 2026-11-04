@@ -75,7 +75,7 @@ describe('validation', () => {
   })
 
   test('findings whose row is not found are listed in Results', async () => {
-    mockDb.requests.find((r) => r.id === 1)!.validation.validation = [{ index: 99, reason: 'ghost-row', detail: 'gone' }]
+    mockDb.requests.find((r) => r.id === 1)!.validation!.validation = [{ index: 99, reason: 'ghost-row', detail: 'gone' }]
     const { user } = open(1)
     await screen.findByRole('columnheader', { name: 'Payee' })
     await user.click(screen.getByRole('button', { name: 'Results' }))

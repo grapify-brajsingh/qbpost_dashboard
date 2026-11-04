@@ -782,7 +782,8 @@ the same shapes. A check that returns 412 changes and audits nothing.
 3. A pending statement with no company: `allowedActions` has `set-company` (editors, admins) and **not** `validate` or
    `post`; `POST …/validate` and `…/post` answer `409 company-required`.
 4. `POST /saved-requests/{id}/company` (`requests:edit`, `If-Match`) body `{ companyId }`: only while `pending`;
-   clears validation; audit `company-assigned` (`from`, `to`). `400 invalid-request` for a bad body or a company that does not
+   clears validation (the statement's `validation` is then `null` in the list and the detail, with
+   `validationSummary.state` `none`, until it is validated again); audit `company-assigned` (`from`, `to`). `400 invalid-request` for a bad body or a company that does not
    exist or is `missing` or `disabled` (an `active` or `ambiguous` one is accepted); `428` without `If-Match`; `412` stale.
 5. `POST /saved-requests` with `upload` accepts optional `upload.companyId` (beside `extractionId`; a top-level
    `companyId` is ignored; a `companyId` that is not a company id, or names a missing, disabled or unknown company, is `400
@@ -842,6 +843,7 @@ the reason.
 
 | Date | Change | Requirements | Source |
 |---|---|---|---|
+| 2026-11-04 | R-19.4 clarified from the live API: after `set-company` clears validation, `validation` is `null` on the list item and the detail (`validationSummary.state` `none`). The mock now does the same. | R-19 | integration run 2026-11-04 |
 | 2026-11-04 | R-20.2 amended: Sync now refused by the company's file answers `409 company-file-open-elsewhere` / `503 company-file-unavailable` (API `SyncProblem`), recorded as a skipped attempt; the fake API follows. | R-20 | `docs/superpowers/plans/2026-11-03-multi-company-plan.md` §6 (Final review fixes) |
 | 2026-11-04 | Static check of R-18–R-20 against API M17 (read from its code and `openapi-v2.json`, no live run): amended R-18.3/18.4 (check answers incl. `412`, `503 company-file-unavailable`, `409 company-not-ready` for a missing company), R-19 (`companyMatch.candidates` are ids; set-company accepts `ambiguous`; upload `400`s; `default` beats `matched`), R-20 (unknown company id is `400` on lists and sync, an empty page on the history) and the audit `detail` shapes; the fake API follows. | R-18, R-19, R-20 | `docs/superpowers/plans/2026-11-03-multi-company-plan.md` §6 |
 | 2026-11-04 | R-18–R-20 implemented in the fake API (`src/mocks/handlers/companies.ts`, `requests.ts`, `extractions.ts`, `support.ts`, `dashboard.ts`, `audit.ts`) and used by Companies, Statements, Upload, Lists and Home. Open for the API side: audit `detail` shapes (notes on R-18, R-19). | R-18, R-19, R-20 | `docs/superpowers/plans/2026-11-03-multi-company-plan.md` §6 |

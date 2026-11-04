@@ -92,7 +92,7 @@ export function TransactionsTab({ request, etag, findingsOverride, referenceSlot
   const baseRows = useMemo(() => (shape === 'table' ? (request.payload.transactions as Txn[]) : []), [shape, request.payload])
   const company = listsCompany(request)
   const lists = useQbLists(company ?? undefined, { enabled: shape === 'table' && request.allowedActions.includes('edit') && company !== null })
-  const shown = findingsOverride ?? request.validation.validation
+  const shown = findingsOverride ?? request.validation?.validation
   const findings = useMemo(() => findingsByRow(baseRows, dropResolvedFindings(baseRows, shown ?? [], lists.data)), [baseRows, shown, lists.data])
 
   return shape === 'raw' ? (

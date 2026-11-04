@@ -186,7 +186,7 @@ describe('saving', () => {
   test('sends If-Match and {payload, note}; on 200 the tint clears and the new snapshot shows', async () => {
     const original = structuredClone(payloadOf(1))
     const { user, queryClient } = await open(1)
-    const before = (queryClient.getQueryData(['requests', 'detail', '1']) as { request: RequestDetail }).request.validation.validatedUtc
+    const before = (queryClient.getQueryData(['requests', 'detail', '1']) as { request: RequestDetail }).request.validation!.validatedUtc
     await choosePayee(user, 1, 'ABC Plumbing LLC')
     await user.type(screen.getByPlaceholderText('What did you fix? (optional)'), 'payee per PDF')
     const seen = capturePut()
@@ -203,7 +203,7 @@ describe('saving', () => {
     // The returned record (new ETag and validation snapshot) replaced the screen.
     const after = queryClient.getQueryData(['requests', 'detail', '1']) as { request: RequestDetail; etag: string }
     expect(after.etag).toBe('"5"')
-    expect(after.request.validation.validatedUtc).not.toBe(before)
+    expect(after.request.validation!.validatedUtc).not.toBe(before)
     expect(screen.getByPlaceholderText('What did you fix? (optional)')).toHaveValue('')
   })
 

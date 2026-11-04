@@ -1,0 +1,17 @@
+# Multi-company overlay for the integration stack (API M17): two company folders under Companies:RootFolder, the
+# first holding the default company's file. Run e2e-integration/companies.spec.ts against it; the rest of the
+# integration suite assumes one company and is run on the plain stack.
+#
+#   docker compose -f docker-compose.integration.yml -f docker-compose.companies.yml up -d --build
+#   npx playwright test -c playwright.integration.config.ts companies
+#
+# The .QBW files are empty placeholders: the container uses the simulated QuickBooks, which never reads them.
+services:
+  api:
+    environment:
+      QBAUTOPOST__Companies__RootFolder: /companies
+      QBAUTOPOST__Companies__DataFolder: /data/companies
+      QBAUTOPOST__Companies__RulesTemplate: /data/rules.json
+      QBAUTOPOST__Company__FilePath: "/companies/18_Takoma Park Grocery Store Inc/Takoma.QBW"
+    volumes:
+      - ./docker/companies:/companies:ro

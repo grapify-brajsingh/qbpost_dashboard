@@ -104,6 +104,10 @@ describe('company on statements (R-19)', () => {
     const res = await setCompany(14, etag, 1)
     const body = (await res.json()) as RequestDetail
     expect(body).toMatchObject({ company: { id: 1 }, companySource: 'chosen', validationSummary: { state: 'none' } })
+    // As the live API (R-19.4, found in the 2026-11-04 integration run): the cleared validation is null, on the list too.
+    expect(body.validation).toBeNull()
+    const list = (await (await call('/saved-requests?company=1&pageSize=100')).json()) as { items: { id: number; validation: unknown }[] }
+    expect(list.items.find((i) => i.id === 14)?.validation).toBeNull()
     expect(body.allowedActions).toContain('validate')
     expect(record(14).events[record(14).events.length - 1]).toMatchObject({ kind: 'company-assigned', detail: { companyId: 1, from: null, to: { id: 1 }, source: 'chosen' } })
     expect(res.headers.get('ETag')).toBe(`"${record(14).rowVersion}"`)

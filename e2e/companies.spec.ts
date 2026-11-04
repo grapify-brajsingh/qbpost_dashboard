@@ -2,7 +2,8 @@ import { expect, test, type Page } from '@playwright/test'
 
 // Multi-company: an upload whose printed name matches nothing is saved on hold, then assigned a company.
 // The mock API gives an unmatched PDF no company. With more than one company to choose from, the name cells stay
-// locked ("Choose the company first") until a company is chosen, so the rows without an account are removed here.
+// locked ("Choose the company first") until a company is chosen. Saving does not need them (spec §6); the rows without
+// an account are removed here only so the statement validates cleanly once the company is set.
 const PASSWORD = 'correct horse battery'
 const PDF = { name: 'chase-sep-2026.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n% e2e statement\n') }
 

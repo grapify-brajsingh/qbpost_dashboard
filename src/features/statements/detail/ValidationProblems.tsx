@@ -19,13 +19,13 @@ const TITLE: Record<ValidationSnapshot['state'], string> = {
 export function ValidationProblems({ request, findings }: { request: RequestDetail; findings?: Finding[] }) {
   const v = request.validation
   const rows = tableShape(request.payload) === 'table' ? (request.payload.transactions as Txn[]) : []
-  const unmatched = findingsByRow(rows, findings ?? v.validation ?? []).get(-1) ?? []
-  const errors = v.errors ?? []
+  const unmatched = findingsByRow(rows, findings ?? v?.validation ?? []).get(-1) ?? []
+  const errors = v?.errors ?? []
   if (errors.length === 0 && unmatched.length === 0) return null
   return (
     <Alert role="alert" aria-label="Validation problems" variant="destructive">
       <CircleAlertIcon aria-hidden />
-      <AlertTitle>{TITLE[v.state]}</AlertTitle>
+      <AlertTitle>{TITLE[v?.state ?? 'held']}</AlertTitle>
       <AlertDescription className="gap-1.5">
         <ul className="list-disc space-y-1 pl-5 text-foreground/85">
           {errors.map((e, i) => (
@@ -41,7 +41,7 @@ export function ValidationProblems({ request, findings }: { request: RequestDeta
             </li>
           ))}
         </ul>
-        {v.versionNumber !== undefined && v.versionNumber < request.currentVersion && (
+        {v?.versionNumber !== undefined && v.versionNumber < request.currentVersion && (
           <p className="font-medium">Validation is out of date</p>
         )}
       </AlertDescription>

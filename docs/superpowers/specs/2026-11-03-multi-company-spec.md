@@ -313,3 +313,22 @@ amount and kind still block, and the lock itself stays.
    deleting rows; the new statement is on company hold and the body carries no `companyId`.
 3. Choosing a company on the upload makes the empty account blocking again.
 
+## 7. Fix 2026-11-04: statement page crashes after choosing a company (live API)
+
+**Problem.** Found by the first run against the real API. After *Assign company* on a held statement, the statement page
+crashed: "Cannot read properties of null (reading 'validation')".
+
+**Cause.** `POST /saved-requests/{id}/company` clears validation, and the API then sends `validation: null` on the detail
+and the list item. The dashboard typed `validation` as always present, and the mock reset it to `{ state: 'ok' }`. So the
+transactions table, the validation problems, the Post dialog and the sheet's Results tab read `.validation` of null.
+A statement saved from n8n or an upload is validated on save, so only `set-company` exposed it.
+
+**Fix.** `validation` is `ValidationSnapshot | null` on `RequestDetail` and `RequestSummary` (null means "not validated").
+Every reader treats null as no findings, no errors and no state. The mock's `set-company` sets `validation` to null, as
+the API does (R-19.4, clarified).
+
+**Acceptance.**
+1. Assigning a company on a held statement shows the statement with the company, no hold banner and a Validate button,
+   both on the mock and on the real API (`e2e-integration/companies.spec.ts`).
+2. The list and the detail of a statement with `validation: null` render, and the Post dialog does not crash.
+

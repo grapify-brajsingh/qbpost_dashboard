@@ -51,7 +51,8 @@ function Body({ request, seenPayload, seenCompany, duplicate, changed, onConfirm
   const [anyway, setAnyway] = useState(false)
   const [sent, setSent] = useState(false)
   const v = request.validation
-  const outdated = v.versionNumber !== undefined && v.versionNumber < request.currentVersion
+  // Null: no stored validation (set-company cleared it); the API validates again before posting.
+  const outdated = v?.versionNumber !== undefined && v.versionNumber < request.currentVersion
   const blocked = duplicate !== null && !anyway
   // The dialog only opens on a saved (not dirty) draft, so the saved payload is what will be posted.
   const stats = postStats(createDraft(seenPayload))
@@ -76,9 +77,9 @@ function Body({ request, seenPayload, seenCompany, duplicate, changed, onConfirm
         <dd className="font-medium tabular-nums">{formatMoney(typeof seenPayload.controlTotal === 'number' ? seenPayload.controlTotal : null)}</dd>
       </dl>
       <div className="space-y-1 text-sm">
-        <p>Validation: {STATE_LABEL[v.state]}</p>
-        {v.state !== 'ok' && <p className="text-warning">Validation found problems. The API checks again before posting.</p>}
-        {v.errors && v.errors.length > 0 && (
+        <p>Validation: {v ? STATE_LABEL[v.state] : 'Not checked yet'}</p>
+        {v && v.state !== 'ok' && <p className="text-warning">Validation found problems. The API checks again before posting.</p>}
+        {v?.errors && v.errors.length > 0 && (
           <ul aria-label="Validation problems" className="list-disc pl-5 text-muted-foreground">
             {v.errors.map((e, i) => (
               <li key={i} className="break-words">

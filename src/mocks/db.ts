@@ -39,7 +39,8 @@ export interface RequestRecord {
   /** Ascending by number; the last one is current. */
   versions: Version[]
   readErrors: string[]
-  validation: ValidationSnapshot
+  /** Null when cleared (set-company), as the API sends it (R-19.4). */
+  validation: ValidationSnapshot | null
   duplicate: { of: number | null; reasons: string[]; acknowledgedBy: Actor | null }
   /** Ascending by id; the last one is the latest. */
   attempts: Attempt[]

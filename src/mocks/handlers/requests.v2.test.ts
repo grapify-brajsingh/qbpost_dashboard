@@ -58,8 +58,8 @@ describe('list summaries (R-5, R-8)', () => {
 
   it('a request that was never validated has state none and 0 problems', async () => {
     const rec = mockDb.requests.find((r) => r.id === 1)!
-    delete rec.validation.validatedUtc
-    delete rec.validation.versionNumber
+    delete rec.validation!.validatedUtc
+    delete rec.validation!.versionNumber
     const row = (await list()).find((r) => r.id === 1)!
     expect(row.validationSummary).toEqual({ state: 'none', problemCount: 0, validatedUtc: null, versionNumber: null })
   })

@@ -66,7 +66,7 @@ describe('Post button and dialog', () => {
 
   test('the dialog shows subject, rows, control total and validation state; a stale snapshot still allows posting', async () => {
     payloadOf(1).controlTotal = 4820.17
-    record(1).validation.versionNumber = 2
+    record(1).validation!.versionNumber = 2
     const { user } = await open(1)
     await user.click(postButton())
     const d = await screen.findByRole('dialog')

@@ -190,7 +190,7 @@ function applyEdit(r: RequestRecord, payload: Payload, note: string | null, user
   recheckDuplicate(r)
   touch(r, user)
   addEvent(r, 'edited', actorOf(user), { version: current(r).number, note })
-  addEvent(r, 'validated', actorOf(user), { state: r.validation.state })
+  addEvent(r, 'validated', actorOf(user), { state: r.validation?.state })
 }
 
 // ---- save (n8n push) ----
@@ -420,7 +420,7 @@ export const requestHandlers = [
     if (!allowedActionsFor(f.r.status, f.user.role, f.r.companyId).includes('validate')) return invalidState(f.r, 'validated')
     revalidate(f.r)
     touch(f.r, f.user)
-    addEvent(f.r, 'validated', actorOf(f.user), { state: f.r.validation.state })
+    addEvent(f.r, 'validated', actorOf(f.user), { state: f.r.validation?.state })
     return detailResponse(f.r, f.user)
   }),
 
@@ -442,7 +442,8 @@ export const requestHandlers = [
     const from = companyRef(f.r.companyId)
     f.r.companyId = company.id
     f.r.companySource = 'chosen'
-    f.r.validation = { state: 'ok' }
+    // As the API: the stored validation is cleared, so validation is null until it is validated again (R-19.4).
+    f.r.validation = null
     touch(f.r, f.user)
     addEvent(f.r, 'company-assigned', actorOf(f.user), { companyId: company.id, from, to: companyRef(company.id), source: 'chosen' })
     return detailResponse(f.r, f.user)
